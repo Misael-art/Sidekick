@@ -1,0 +1,201 @@
+using System.Drawing;
+using System.Runtime.InteropServices;
+using System.Windows.Automation;
+
+namespace Ajudante.Platform.UIAutomation;
+
+/// <summary>
+/// Inspects UI elements using the Windows UI Automation framework.
+/// </summary>
+public static class ElementInspector
+{
+    #region Win32 Interop
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct POINT
+    {
+        public int X;
+        public int Y;
+    }
+
+    [DllImport("user32.dll")]
+    private static extern bool GetCursorPos(out POINT lpPoint);
+
+    #endregion
+
+    /// <summary>
+    /// Gets information about the UI element at the specified screen coordinates.
+    /// </summary>
+    public static ElementInfo? GetElementAtPoint(int x, int y)
+    {
+        try
+        {
+            var point = new System.Windows.Point(x, y);
+            AutomationElement? element = AutomationElement.FromPoint(point);
+            return element is null ? null : BuildElementInfo(element);
+        }
+        catch (ElementNotAvailableException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Gets information about the UI element currently under the mouse cursor.
+    /// </summary>
+    public static ElementInfo? GetElementUnderCursor()
+    {
+        if (!GetCursorPos(out POINT pt))
+            return null;
+
+        return GetElementAtPoint(pt.X, pt.Y);
+    }
+
+    /// <summary>
+    /// Enumerates all direct child UI elements of the specified window.
+    /// </summary>
+    public static List<ElementInfo> GetWindowElements(IntPtr hwnd)
+    {
+        var results = new List<ElementInfo>();
+
+        if (hwnd == IntPtr.Zero)
+            return results;
+
+        try
+        {
+            AutomationElement? root = AutomationElement.FromHandle(hwnd);
+            if (root is null) return results;
+
+            CollectDescendants(root, results, maxDepth: 5, currentDepth: 0);
+        }
+        catch (ElementNotAvailableException)
+        {
+            // Window may have been closed
+        }
+
+        return results;
+    }
+
+    /// <summary>
+    /// Recursively collects element info from the automation tree, bounded by depth.
+    /// </summary>
+    private static void CollectDescendants(AutomationElement parent, List<ElementInfo> results, int maxDepth, int currentDepth)
+    {
+        if (currentDepth > maxDepth) return;
+
+        AutomationElement? child = TreeWalker.ControlViewWalker.GetFirstChild(parent);
+        while (child is not null)
+        {
+            try
+            {
+                results.Add(BuildElementInfo(child));
+                CollectDescendants(child, results, maxDepth, currentDepth + 1);
+                child = TreeWalker.ControlViewWalker.GetNextSibling(child);
+            }
+            catch (ElementNotAvailableException)
+            {
+                // Element disappeared; skip and try the next sibling
+                try { child = TreeWalker.ControlViewWalker.GetNextSibling(child); }
+                catch { break; }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Builds an ElementInfo from an AutomationElement, reading all relevant properties.
+    /// </summary>
+    private static ElementInfo BuildElementInfo(AutomationElement element)
+    {
+        string automationId = SafeGetProperty(element, AutomationElement.AutomationIdProperty) ?? "";
+        string name = SafeGetProperty(element, AutomationElement.NameProperty) ?? "";
+        string className = SafeGetProperty(element, AutomationElement.ClassNameProperty) ?? "";
+        int processId = SafeGetIntProperty(element, AutomationElement.ProcessIdProperty);
+
+        string controlType = "";
+        try
+        {
+            var ct = element.Current.ControlType;
+            controlType = ct?.ProgrammaticName?.Replace("ControlType.", "") ?? "";
+        }
+        catch { /* unavailable */ }
+
+        Rectangle boundingRect = Rectangle.Empty;
+        try
+        {
+            var rect = element.Current.BoundingRectangle;
+            if (!rect.IsEmpty && !double.IsInfinity(rect.Width) && !double.IsInfinity(rect.Height))
+            {
+                boundingRect = new Rectangle(
+                    (int)rect.X, (int)rect.Y,
+                    (int)rect.Width, (int)rect.Height);
+            }
+        }
+        catch { /* unavailable */ }
+
+        // Walk up to find the top-level window title
+        string windowTitle = FindWindowTitle(element);
+
+        return new ElementInfo
+        {
+            AutomationId = automationId,
+            Name = name,
+            ClassName = className,
+            ControlType = controlType,
+            BoundingRect = boundingRect,
+            ProcessId = processId,
+            WindowTitle = windowTitle
+        };
+    }
+
+    /// <summary>
+    /// Walks up the automation tree to find the nearest Window element and returns its name.
+    /// </summary>
+    private static string FindWindowTitle(AutomationElement element)
+    {
+        try
+        {
+            AutomationElement? current = element;
+            while (current is not null)
+            {
+                try
+                {
+                    if (current.Current.ControlType == ControlType.Window)
+                        return current.Current.Name ?? "";
+                }
+                catch { /* skip */ }
+
+                current = TreeWalker.ControlViewWalker.GetParent(current);
+            }
+        }
+        catch { /* unavailable */ }
+
+        return "";
+    }
+
+    private static string? SafeGetProperty(AutomationElement element, AutomationProperty property)
+    {
+        try
+        {
+            object? val = element.GetCurrentPropertyValue(property, true);
+            return val == AutomationElement.NotSupported ? null : val?.ToString();
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static int SafeGetIntProperty(AutomationElement element, AutomationProperty property)
+    {
+        try
+        {
+            object? val = element.GetCurrentPropertyValue(property, true);
+            if (val == AutomationElement.NotSupported) return 0;
+            return val is int i ? i : 0;
+        }
+        catch
+        {
+            return 0;
+        }
+    }
+}

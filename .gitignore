@@ -1,0 +1,33 @@
+## .NET
+bin/
+obj/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+.vs/
+*.nupkg
+*.snupkg
+
+## Node.js
+node_modules/
+dist/
+wwwroot/
+
+## Build outputs
+*.dll
+*.exe
+*.pdb
+
+## IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+## OS
+Thumbs.db
+.DS_Store
+
+## Ajudante specific
+src/Ajudante.App/wwwroot/
