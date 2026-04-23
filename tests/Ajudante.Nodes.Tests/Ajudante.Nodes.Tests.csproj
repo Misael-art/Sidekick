@@ -22,6 +22,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\Ajudante.App\Ajudante.App.csproj" />
     <ProjectReference Include="..\..\src\Ajudante.Core\Ajudante.Core.csproj" />
     <ProjectReference Include="..\..\src\Ajudante.Nodes\Ajudante.Nodes.csproj" />
   </ItemGroup>

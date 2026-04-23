@@ -172,7 +172,7 @@ public class WebBridge : IDisposable
         }
     }
 
-    private static BridgeMessage? DeserializeIncomingMessage(string rawJson)
+    internal static BridgeMessage? DeserializeIncomingMessage(string rawJson)
     {
         if (string.IsNullOrWhiteSpace(rawJson))
         {
