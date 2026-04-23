@@ -4,8 +4,9 @@ export interface BridgeMessage {
   type: 'command' | 'event' | 'response';
   channel: 'flow' | 'engine' | 'platform' | 'inspector' | 'registry';
   action: string;
-  requestId: string;
-  payload: any;
+  requestId?: string;
+  payload?: unknown;
+  error?: string;
 }
 
 // ── Node Registry Types ───────────────────────────────────────────
@@ -42,7 +43,7 @@ export interface PropertyDefinition {
   id: string;
   name: string;
   type: PropertyType;
-  defaultValue?: any;
+  defaultValue?: unknown;
   description?: string;
   options?: string[];
 }
@@ -66,7 +67,7 @@ export interface FlowVariable {
   id: string;
   name: string;
   type: PortDataType;
-  defaultValue?: any;
+  defaultValue?: unknown;
 }
 
 export interface FlowNodeData extends Record<string, unknown> {
@@ -77,7 +78,7 @@ export interface FlowNodeData extends Record<string, unknown> {
   inputPorts: PortDefinition[];
   outputPorts: PortDefinition[];
   properties: PropertyDefinition[];
-  propertyValues: Record<string, any>;
+  propertyValues: Record<string, unknown>;
 }
 
 export interface FlowNode {
@@ -102,12 +103,29 @@ export interface FlowData {
   connections: FlowConnection[];
   variables: FlowVariable[];
   createdAt: string;
-  updatedAt: string;
+  modifiedAt: string;
 }
 
 // ── Runtime Types ─────────────────────────────────────────────────
 
 export type NodeStatus = 'Idle' | 'Running' | 'Completed' | 'Error' | 'Skipped';
+export type WireNodeStatus = Lowercase<NodeStatus>;
+
+const nodeStatusMap: Record<string, NodeStatus> = {
+  idle: 'Idle',
+  running: 'Running',
+  completed: 'Completed',
+  error: 'Error',
+  skipped: 'Skipped',
+};
+
+export function normalizeNodeStatus(status: string | null | undefined): NodeStatus {
+  if (!status) {
+    return 'Idle';
+  }
+
+  return nodeStatusMap[status.toLowerCase()] ?? 'Idle';
+}
 
 export interface LogEntry {
   timestamp: string;

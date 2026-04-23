@@ -1,10 +1,19 @@
 import { create } from 'zustand';
 import type { NodeStatus, LogEntry, InspectorMode } from '../bridge/types';
 
+export interface UserMessage {
+  type: 'info' | 'success' | 'error';
+  text: string;
+}
+
 export interface AppState {
   // Engine status
   isRunning: boolean;
   setRunning: (running: boolean) => void;
+  runningFlowId: string | null;
+  runningFlowName: string | null;
+  setRunningFlow: (flowId: string | null, flowName: string | null) => void;
+  clearRunningFlow: () => void;
 
   // Per-node execution status
   nodeStatuses: Record<string, NodeStatus>;
@@ -19,8 +28,8 @@ export interface AppState {
   // Inspector
   inspectorMode: InspectorMode;
   setInspectorMode: (mode: InspectorMode) => void;
-  capturedElement: any | null;
-  setCapturedElement: (el: any | null) => void;
+  capturedElement: unknown | null;
+  setCapturedElement: (el: unknown | null) => void;
   capturedRegion: { image: string; bounds: { x: number; y: number; width: number; height: number } } | null;
   setCapturedRegion: (region: { image: string; bounds: { x: number; y: number; width: number; height: number } } | null) => void;
 
@@ -29,6 +38,8 @@ export interface AppState {
   togglePalette: () => void;
   isLogsExpanded: boolean;
   toggleLogsExpanded: () => void;
+  userMessage: UserMessage | null;
+  setUserMessage: (message: UserMessage | null) => void;
 }
 
 const MAX_LOGS = 1000;
@@ -37,6 +48,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   // ── Engine ──────────────────────────────────────────────────────
   isRunning: false,
   setRunning: (running) => set({ isRunning: running }),
+  runningFlowId: null,
+  runningFlowName: null,
+  setRunningFlow: (flowId, flowName) => set({ runningFlowId: flowId, runningFlowName: flowName }),
+  clearRunningFlow: () => set({ runningFlowId: null, runningFlowName: null }),
 
   // ── Node Statuses ───────────────────────────────────────────────
   nodeStatuses: {},
@@ -68,4 +83,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   togglePalette: () => set({ isPaletteOpen: !get().isPaletteOpen }),
   isLogsExpanded: false,
   toggleLogsExpanded: () => set({ isLogsExpanded: !get().isLogsExpanded }),
+  userMessage: null,
+  setUserMessage: (message) => set({ userMessage: message }),
 }));

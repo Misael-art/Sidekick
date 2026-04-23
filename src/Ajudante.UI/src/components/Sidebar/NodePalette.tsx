@@ -26,7 +26,9 @@ export default function NodePalette() {
     const filtered = nodeDefinitions.filter(
       (d) =>
         d.displayName.toLowerCase().includes(lowerFilter) ||
-        d.category.toLowerCase().includes(lowerFilter),
+        d.category.toLowerCase().includes(lowerFilter) ||
+        d.description.toLowerCase().includes(lowerFilter) ||
+        d.typeId.toLowerCase().includes(lowerFilter),
     );
 
     const groups: Record<NodeCategory, typeof filtered> = {
@@ -37,6 +39,10 @@ export default function NodePalette() {
 
     for (const def of filtered) {
       groups[def.category]?.push(def);
+    }
+
+    for (const category of Object.keys(groups) as NodeCategory[]) {
+      groups[category].sort((a, b) => a.displayName.localeCompare(b.displayName));
     }
 
     return groups;

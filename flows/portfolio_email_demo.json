@@ -1,0 +1,89 @@
+{
+  "id": "portfolio-email-demo",
+  "name": "Portfolio - Email Demo",
+  "version": 1,
+  "variables": [],
+  "nodes": [
+    {
+      "id": "start",
+      "typeId": "trigger.manualStart",
+      "position": {
+        "x": 80,
+        "y": 200
+      },
+      "properties": {}
+    },
+    {
+      "id": "mail",
+      "typeId": "action.sendEmail",
+      "position": {
+        "x": 360,
+        "y": 200
+      },
+      "properties": {
+        "from": "demo@ajudante.local",
+        "to": "portfolio@example.local",
+        "subject": "Demo local do Ajudante",
+        "body": "Email salvo localmente em pickup directory.",
+        "host": "",
+        "port": 25,
+        "username": "",
+        "password": "",
+        "enableSsl": false,
+        "pickupDirectory": "F:\\Projects\\Ajudante\\demo-output\\maildrop",
+        "attachments": ""
+      }
+    },
+    {
+      "id": "notify",
+      "typeId": "action.showNotification",
+      "position": {
+        "x": 700,
+        "y": 140
+      },
+      "properties": {
+        "title": "Email preparado",
+        "message": "Arquivo .eml salvo em F:\\Projects\\Ajudante\\demo-output\\maildrop",
+        "timeoutMs": 4000
+      }
+    },
+    {
+      "id": "logError",
+      "typeId": "action.logMessage",
+      "position": {
+        "x": 700,
+        "y": 280
+      },
+      "properties": {
+        "message": "Falha ao gravar o email no pickup directory.",
+        "level": "error",
+        "storeInVariable": ""
+      }
+    }
+  ],
+  "connections": [
+    {
+      "id": "c1",
+      "sourceNodeId": "start",
+      "sourcePort": "triggered",
+      "targetNodeId": "mail",
+      "targetPort": "in"
+    },
+    {
+      "id": "c2",
+      "sourceNodeId": "mail",
+      "sourcePort": "success",
+      "targetNodeId": "notify",
+      "targetPort": "in"
+    },
+    {
+      "id": "c3",
+      "sourceNodeId": "mail",
+      "sourcePort": "error",
+      "targetNodeId": "logError",
+      "targetPort": "in"
+    }
+  ],
+  "createdAt": "2026-04-22T00:00:00Z",
+  "modifiedAt": "2026-04-22T00:00:00Z"
+}

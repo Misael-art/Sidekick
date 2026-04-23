@@ -20,11 +20,89 @@
     <ApplicationIcon>icon.ico</ApplicationIcon>
     <AssemblyName>Sidekick</AssemblyName>
     <RootNamespace>Sidekick</RootNamespace>
+    <FrontendProjectDir>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)\..\Ajudante.UI'))</FrontendProjectDir>
+    <FrontendWwwrootDir>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)\wwwroot'))</FrontendWwwrootDir>
+    <FrontendPackageJsonPath>$([System.IO.Path]::Combine('$(FrontendProjectDir)', 'package.json'))</FrontendPackageJsonPath>
+    <FrontendPackageLockPath>$([System.IO.Path]::Combine('$(FrontendProjectDir)', 'package-lock.json'))</FrontendPackageLockPath>
+    <FrontendNodeModulesDir>$([System.IO.Path]::Combine('$(FrontendProjectDir)', 'node_modules'))</FrontendNodeModulesDir>
+    <NpmCommand Condition="'$(OS)' == 'Windows_NT'">npm.cmd</NpmCommand>
+    <NpmCommand Condition="'$(NpmCommand)' == ''">npm</NpmCommand>
+    <RunFrontendBuildOnPublish Condition="'$(RunFrontendBuildOnPublish)' == ''">true</RunFrontendBuildOnPublish>
+    <SyncFrontendAssetsOnPublish Condition="'$(SyncFrontendAssetsOnPublish)' == ''">true</SyncFrontendAssetsOnPublish>
   </PropertyGroup>
+
+  <Target Name="PrepareFrontendAssetsForPublish" BeforeTargets="Publish" Condition="'$(RunFrontendBuildOnPublish)' == 'true'">
+    <PropertyGroup>
+      <ResolvedPublishDir Condition="'$(PublishDir)' != ''">$([System.IO.Path]::GetFullPath('$(PublishDir)'))</ResolvedPublishDir>
+      <ResolvedPublishDir Condition="'$(ResolvedPublishDir)' == ''">$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)\bin\$(Configuration)\$(TargetFramework)\publish\'))</ResolvedPublishDir>
+      <PublishedExePath>$([System.IO.Path]::Combine('$(ResolvedPublishDir)', '$(AssemblyName).exe'))</PublishedExePath>
+    </PropertyGroup>
+
+    <Error
+      Condition="'$(SyncFrontendAssetsOnPublish)' != 'true'"
+      Text="RunFrontendBuildOnPublish=true requires SyncFrontendAssetsOnPublish=true to ensure publish output stays aligned with freshly built hashed frontend assets." />
+
+    <Error Condition="!Exists('$(FrontendProjectDir)')" Text="Frontend project directory not found: $(FrontendProjectDir)" />
+    <Error Condition="!Exists('$(FrontendPackageJsonPath)')" Text="Frontend package manifest not found: $(FrontendPackageJsonPath)" />
+    <Error
+      Condition="!Exists('$(FrontendNodeModulesDir)') and !Exists('$(FrontendPackageLockPath)')"
+      Text="Frontend dependencies are missing and the lockfile was not found: $(FrontendPackageLockPath). Restore dependencies manually before publishing." />
+
+    <Exec
+      Condition="'$(OS)' == 'Windows_NT'"
+      Command="where.exe $(NpmCommand) &gt;nul 2&gt;nul"
+      IgnoreExitCode="true"
+      ContinueOnError="true">
+      <Output TaskParameter="ExitCode" PropertyName="NpmResolveExitCode" />
+    </Exec>
+
+    <Error
+      Condition="'$(OS)' == 'Windows_NT' and '$(NpmResolveExitCode)' != '0'"
+      Text="npm was not found on PATH. Install Node.js and ensure npm is available before publishing." />
+
+    <Message
+      Condition="!Exists('$(FrontendNodeModulesDir)') and Exists('$(FrontendPackageLockPath)')"
+      Text="Frontend dependencies not found. Restoring with npm ci in $(FrontendProjectDir)"
+      Importance="high" />
+    <Exec
+      Condition="!Exists('$(FrontendNodeModulesDir)') and Exists('$(FrontendPackageLockPath)')"
+      WorkingDirectory="$(FrontendProjectDir)"
+      Command="$(NpmCommand) ci" />
+
+    <Exec
+      Condition="'$(OS)' == 'Windows_NT'"
+      Command="powershell -NoProfile -ExecutionPolicy Bypass -Command &quot;$target = '$(PublishedExePath)'; if (Test-Path $target) { try { $stream = [System.IO.File]::Open($target, [System.IO.FileMode]::Open, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None); $stream.Dispose() } catch { throw 'Stop the published Sidekick.exe before publishing again.' } }&quot;" />
+
+    <Message Text="Building frontend assets in $(FrontendProjectDir)" Importance="high" />
+    <Exec WorkingDirectory="$(FrontendProjectDir)" Command="$(NpmCommand) run build" />
+  </Target>
+
+  <Target Name="SyncFrontendAssetsAfterPublish" AfterTargets="Publish" Condition="'$(SyncFrontendAssetsOnPublish)' == 'true'">
+    <PropertyGroup>
+      <ResolvedPublishDir Condition="'$(PublishDir)' != ''">$([System.IO.Path]::GetFullPath('$(PublishDir)'))</ResolvedPublishDir>
+      <ResolvedPublishDir Condition="'$(ResolvedPublishDir)' == ''">$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)\bin\$(Configuration)\$(TargetFramework)\publish\'))</ResolvedPublishDir>
+      <PublishedWwwrootDir>$([System.IO.Path]::Combine('$(ResolvedPublishDir)', 'wwwroot'))</PublishedWwwrootDir>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <PublishedFrontendFiles Include="$(FrontendWwwrootDir)\**\*" />
+    </ItemGroup>
+
+    <RemoveDir Directories="$(PublishedWwwrootDir)" />
+    <MakeDir Directories="$(PublishedWwwrootDir)" />
+    <Copy
+      SourceFiles="@(PublishedFrontendFiles)"
+      DestinationFiles="@(PublishedFrontendFiles->'$(PublishedWwwrootDir)\%(RecursiveDir)%(Filename)%(Extension)')" />
+  </Target>
 
   <ItemGroup>
     <Resource Include="icon.ico" />
     <Content Include="wwwroot\**" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\flows\*.json">
+      <Link>seed-flows\%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
   </ItemGroup>
 
 </Project>

@@ -2,6 +2,7 @@ using System.IO;
 using System.Threading;
 using System.Windows;
 using System.Windows.Threading;
+using Ajudante.Core.Serialization;
 
 namespace Ajudante.App;
 
@@ -55,6 +56,7 @@ public partial class App : Application
         Directory.CreateDirectory(FlowsDirectory);
         Directory.CreateDirectory(LogsDirectory);
         Directory.CreateDirectory(PluginsDirectory);
+        SeedBundledFlows();
 
         // Global exception handling
         DispatcherUnhandledException += OnDispatcherUnhandledException;
@@ -110,6 +112,59 @@ public partial class App : Application
         {
             // Last resort: write to debug output
             System.Diagnostics.Debug.WriteLine($"[{source}] {ex}");
+        }
+    }
+
+    private static void SeedBundledFlows()
+    {
+        try
+        {
+            var bundledFlowsDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "seed-flows");
+            if (!Directory.Exists(bundledFlowsDirectory))
+            {
+                return;
+            }
+
+            var existingIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var filePath in Directory.EnumerateFiles(FlowsDirectory, "*.json", SearchOption.TopDirectoryOnly))
+            {
+                try
+                {
+                    var flow = FlowSerializer.Deserialize(File.ReadAllText(filePath));
+                    if (!string.IsNullOrWhiteSpace(flow?.Id))
+                    {
+                        existingIds.Add(flow.Id);
+                    }
+                }
+                catch
+                {
+                    // Ignore malformed user files while seeding bundled samples.
+                }
+            }
+
+            foreach (var sourcePath in Directory.EnumerateFiles(bundledFlowsDirectory, "*.json", SearchOption.TopDirectoryOnly))
+            {
+                try
+                {
+                    var flow = FlowSerializer.Deserialize(File.ReadAllText(sourcePath));
+                    if (string.IsNullOrWhiteSpace(flow?.Id) || existingIds.Contains(flow.Id))
+                    {
+                        continue;
+                    }
+
+                    var destinationPath = Path.Combine(FlowsDirectory, Path.GetFileName(sourcePath));
+                    File.Copy(sourcePath, destinationPath, overwrite: false);
+                    existingIds.Add(flow.Id);
+                }
+                catch
+                {
+                    // Keep startup resilient even if a bundled sample is malformed.
+                }
+            }
+        }
+        catch
+        {
+            // Seeding sample flows is best-effort only.
         }
     }
 }

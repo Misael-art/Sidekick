@@ -8,7 +8,7 @@
 #define MyAppName "Sidekick"
 #define MyAppVersion "1.0.0"
 #define MyAppPublisher "Misael"
-#define MyAppExeName "Ajudante.App.exe"
+#define MyAppExeName "Sidekick.exe"
 #define MyAppURL "https://github.com/Misael-art/Sidekick"
 
 [Setup]

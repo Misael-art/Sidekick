@@ -3,13 +3,28 @@ import { useFlowStore } from '../../store/flowStore';
 import { sendCommand } from '../../bridge/bridge';
 import { toBackendFlow } from '../../bridge/flowConverter';
 
+function getErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+
+  return fallback;
+}
+
 export default function ExecutionStatus() {
   const isRunning = useAppStore((s) => s.isRunning);
   const setRunning = useAppStore((s) => s.setRunning);
+  const runningFlowId = useAppStore((s) => s.runningFlowId);
+  const runningFlowName = useAppStore((s) => s.runningFlowName);
+  const setRunningFlow = useAppStore((s) => s.setRunningFlow);
+  const clearRunningFlow = useAppStore((s) => s.clearRunningFlow);
   const logs = useAppStore((s) => s.logs);
   const clearLogs = useAppStore((s) => s.clearLogs);
   const isLogsExpanded = useAppStore((s) => s.isLogsExpanded);
   const toggleLogsExpanded = useAppStore((s) => s.toggleLogsExpanded);
+  const userMessage = useAppStore((s) => s.userMessage);
+  const setUserMessage = useAppStore((s) => s.setUserMessage);
+  const addLog = useAppStore((s) => s.addLog);
   const clearNodeStatuses = useAppStore((s) => s.clearNodeStatuses);
   const flowId = useFlowStore((s) => s.flowId);
   const flowName = useFlowStore((s) => s.flowName);
@@ -18,17 +33,37 @@ export default function ExecutionStatus() {
 
   const errorCount = logs.filter((l) => l.level === 'error').length;
   const warningCount = logs.filter((l) => l.level === 'warning').length;
+  const activeFlowName = isRunning ? (runningFlowName || flowName) : flowName;
+  const isShowingRestoredFlow = isRunning && !!runningFlowName && runningFlowName !== flowName;
 
   const handlePlay = async () => {
-    setRunning(true);
-    clearNodeStatuses();
-    const backendFlow = toBackendFlow(flowId, flowName, nodes, edges);
-    await sendCommand('engine', 'runFlow', backendFlow);
+    try {
+      setUserMessage(null);
+      setRunning(true);
+      setRunningFlow(flowId || null, flowName);
+      clearNodeStatuses();
+      const backendFlow = toBackendFlow(flowId, flowName, nodes, edges);
+      await sendCommand('engine', 'runFlow', backendFlow);
+    } catch (error) {
+      const message = getErrorMessage(error, 'Nao foi possivel executar o fluxo.');
+      setRunning(false);
+      clearRunningFlow();
+      addLog({ timestamp: new Date().toISOString(), level: 'error', message });
+      setUserMessage({ type: 'error', text: message });
+    }
   };
 
   const handleStop = async () => {
-    await sendCommand('engine', 'stopFlow', {});
-    setRunning(false);
+    try {
+      setUserMessage(null);
+      await sendCommand('engine', 'stopFlow', {});
+      setRunning(false);
+      clearRunningFlow();
+    } catch (error) {
+      const message = getErrorMessage(error, 'Nao foi possivel interromper o fluxo.');
+      addLog({ timestamp: new Date().toISOString(), level: 'error', message });
+      setUserMessage({ type: 'error', text: message });
+    }
   };
 
   const levelClass = (level: string) => {
@@ -48,7 +83,10 @@ export default function ExecutionStatus() {
     <div className={`exec-status ${isLogsExpanded ? 'exec-status--expanded' : ''}`}>
       <div className="exec-status__bar">
         <div className="exec-status__left">
-          <span className="exec-status__flow-name">{flowName}</span>
+          <span className="exec-status__flow-name">
+            {activeFlowName}
+            {isShowingRestoredFlow && runningFlowId ? ` (${runningFlowId})` : ''}
+          </span>
           <span
             className={`exec-status__indicator ${isRunning ? 'exec-status__indicator--running' : 'exec-status__indicator--stopped'}`}
           />
@@ -99,6 +137,19 @@ export default function ExecutionStatus() {
           </button>
         </div>
       </div>
+
+      {userMessage && (
+        <div className={`exec-status__message exec-status__message--${userMessage.type}`}>
+          <span>{userMessage.text}</span>
+          <button
+            className="exec-status__message-close"
+            onClick={() => setUserMessage(null)}
+            title="Dismiss message"
+          >
+            x
+          </button>
+        </div>
+      )}
 
       {isLogsExpanded && (
         <div className="exec-status__logs">

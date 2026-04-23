@@ -1,0 +1,80 @@
+{
+  "id": "portfolio-notification-demo",
+  "name": "Portfolio - Notification Demo",
+  "version": 1,
+  "variables": [],
+  "nodes": [
+    {
+      "id": "start",
+      "typeId": "trigger.manualStart",
+      "position": {
+        "x": 80,
+        "y": 180
+      },
+      "properties": {}
+    },
+    {
+      "id": "template",
+      "typeId": "logic.textTemplate",
+      "position": {
+        "x": 320,
+        "y": 180
+      },
+      "properties": {
+        "template": "Bem-vindo ao portfolio do Ajudante.",
+        "storeInVariable": "welcomeText"
+      }
+    },
+    {
+      "id": "log",
+      "typeId": "action.logMessage",
+      "position": {
+        "x": 580,
+        "y": 180
+      },
+      "properties": {
+        "message": "{{welcomeText}}",
+        "level": "info",
+        "storeInVariable": ""
+      }
+    },
+    {
+      "id": "notify",
+      "typeId": "action.showNotification",
+      "position": {
+        "x": 840,
+        "y": 180
+      },
+      "properties": {
+        "title": "Ajudante",
+        "message": "{{welcomeText}}",
+        "timeoutMs": 3000
+      }
+    }
+  ],
+  "connections": [
+    {
+      "id": "c1",
+      "sourceNodeId": "start",
+      "sourcePort": "triggered",
+      "targetNodeId": "template",
+      "targetPort": "in"
+    },
+    {
+      "id": "c2",
+      "sourceNodeId": "template",
+      "sourcePort": "out",
+      "targetNodeId": "log",
+      "targetPort": "in"
+    },
+    {
+      "id": "c3",
+      "sourceNodeId": "log",
+      "sourcePort": "out",
+      "targetNodeId": "notify",
+      "targetPort": "in"
+    }
+  ],
+  "createdAt": "2026-04-22T00:00:00Z",
+  "modifiedAt": "2026-04-22T00:00:00Z"
+}

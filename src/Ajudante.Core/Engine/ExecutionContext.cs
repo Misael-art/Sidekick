@@ -55,16 +55,37 @@ public class FlowExecutionContext
         return null;
     }
 
+    public object? ResolveReference(string reference)
+    {
+        if (string.IsNullOrWhiteSpace(reference))
+            return null;
+
+        if (reference.StartsWith("var:", StringComparison.OrdinalIgnoreCase))
+            return GetVariable(reference[4..]);
+
+        var dotIndex = reference.IndexOf('.');
+        if (dotIndex > 0 && dotIndex < reference.Length - 1)
+        {
+            var nodeId = reference[..dotIndex];
+            var outputId = reference[(dotIndex + 1)..];
+            var outputValue = GetNodeOutput(nodeId, outputId);
+            if (outputValue is not null)
+                return outputValue;
+        }
+
+        return GetVariable(reference);
+    }
+
     public string ResolveTemplate(string template)
     {
         if (string.IsNullOrEmpty(template)) return template;
 
         return System.Text.RegularExpressions.Regex.Replace(
-            template, @"\{\{(\w+)\}\}",
+            template, @"\{\{([\w\.\-:]+)\}\}",
             match =>
             {
-                var varName = match.Groups[1].Value;
-                return GetVariable(varName)?.ToString() ?? match.Value;
+                var reference = match.Groups[1].Value;
+                return ResolveReference(reference)?.ToString() ?? match.Value;
             });
     }
 }

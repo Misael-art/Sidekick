@@ -251,6 +251,43 @@ public class FlowExecutionContextTests
     }
 
     [Fact]
+    public void ResolveReference_ReturnsVariableByVarPrefix()
+    {
+        var flow = CreateFlowWithVariables(
+            new FlowVariable { Name = "customer", Type = VariableType.String, Default = "Alice" }
+        );
+        var context = new FlowExecutionContext(flow, CancellationToken.None);
+
+        var result = context.ResolveReference("var:customer");
+
+        Assert.Equal("Alice", result);
+    }
+
+    [Fact]
+    public void ResolveReference_ReturnsNodeOutputByQualifiedName()
+    {
+        var flow = CreateFlowWithVariables();
+        var context = new FlowExecutionContext(flow, CancellationToken.None);
+        context.SetNodeOutputs("node-1", new Dictionary<string, object?> { ["text"] = "Done" });
+
+        var result = context.ResolveReference("node-1.text");
+
+        Assert.Equal("Done", result);
+    }
+
+    [Fact]
+    public void ResolveTemplate_ReplacesNodeOutputReferences()
+    {
+        var flow = CreateFlowWithVariables();
+        var context = new FlowExecutionContext(flow, CancellationToken.None);
+        context.SetNodeOutputs("builder", new Dictionary<string, object?> { ["text"] = "Report Ready" });
+
+        var result = context.ResolveTemplate("Status: {{builder.text}}");
+
+        Assert.Equal("Status: Report Ready", result);
+    }
+
+    [Fact]
     public void ResolveTemplate_HandlesEmptyString()
     {
         var flow = CreateFlowWithVariables();

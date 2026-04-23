@@ -1,6 +1,7 @@
 using System.IO;
 using System.Net.Http;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Input;
 using Ajudante.App.Bridge;
@@ -23,6 +24,8 @@ public partial class MainWindow : Window
     private NodeRegistry? _registry;
     private FlowExecutor? _executor;
     private SystemTrayManager? _trayManager;
+    private bool _isCloseConfirmed;
+    private bool _isHandlingCloseRequest;
 
     public MainWindow()
     {
@@ -37,11 +40,13 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
+            LogStartupFailure(ex);
             MessageBox.Show(
                 $"Failed to initialize application:\n\n{ex.Message}",
                 "Sidekick - Startup Error",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
+            Application.Current.Shutdown();
         }
     }
 
@@ -62,6 +67,7 @@ public partial class MainWindow : Window
         _bridge.LogMessage += OnLogMessage;
 
         var wwwrootPath = GetWwwrootPath();
+        ValidateWebAssets(wwwrootPath);
         await _bridge.InitializeAsync(wwwrootPath);
 
 #if DEBUG
@@ -100,7 +106,6 @@ public partial class MainWindow : Window
         _trayManager.ShowWindowRequested += () => { };
         _trayManager.QuitRequested += () =>
         {
-            _trayManager?.Dispose();
             Application.Current.Shutdown();
         };
         _trayManager.StartFlowRequested += () =>
@@ -176,6 +181,17 @@ public partial class MainWindow : Window
     private void OnLogMessage(string message)
     {
         System.Diagnostics.Debug.WriteLine(message);
+        try
+        {
+            Directory.CreateDirectory(App.LogsDirectory);
+            var logFile = Path.Combine(App.LogsDirectory, $"app_{DateTime.Now:yyyyMMdd}.log");
+            var entry = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {message}{Environment.NewLine}";
+            File.AppendAllText(logFile, entry);
+        }
+        catch
+        {
+            // Keep logging non-fatal.
+        }
     }
 
     private async void OnWebViewNavigationCompleted(object? sender, CoreWebView2NavigationCompletedEventArgs e)
@@ -234,15 +250,87 @@ public partial class MainWindow : Window
         }
     }
 
-    private void Window_Closing(object sender, System.ComponentModel.CancelEventArgs e)
+    private async void Window_Closing(object sender, System.ComponentModel.CancelEventArgs e)
     {
-        // Clean up resources
+        if (_isCloseConfirmed)
+        {
+            CleanupResources();
+            return;
+        }
+
+        if (_isHandlingCloseRequest)
+        {
+            e.Cancel = true;
+            return;
+        }
+
+        e.Cancel = true;
+        _isHandlingCloseRequest = true;
+
+        try
+        {
+            if (!await ConfirmCloseAsync())
+            {
+                return;
+            }
+
+            _isCloseConfirmed = true;
+            _isHandlingCloseRequest = false;
+            Close();
+            return;
+        }
+        finally
+        {
+            _isHandlingCloseRequest = false;
+        }
+    }
+
+    // ── Helpers ──────────────────────────────────────────────────────────
+
+    private void CleanupResources()
+    {
         _executor?.Cancel();
         _bridge?.Dispose();
         _trayManager?.Dispose();
     }
 
-    // ── Helpers ──────────────────────────────────────────────────────────
+    private async Task<bool> ConfirmCloseAsync()
+    {
+        if (!await HasUnsavedChangesAsync())
+        {
+            return true;
+        }
+
+        var result = MessageBox.Show(
+            this,
+            "Existem alteracoes nao salvas no fluxo atual.\n\nDeseja sair e descartalas?",
+            "Sidekick",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning);
+
+        return result == MessageBoxResult.Yes;
+    }
+
+    private async Task<bool> HasUnsavedChangesAsync()
+    {
+        if (_bridge == null || WebView.CoreWebView2 == null)
+        {
+            return false;
+        }
+
+        try
+        {
+            var result = await WebView.CoreWebView2.ExecuteScriptAsync(
+                "window.__sidekickHasUnsavedChanges === true");
+
+            return string.Equals(result, "true", StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception ex)
+        {
+            OnLogMessage($"Failed to query unsaved changes state: {ex.Message}");
+            return false;
+        }
+    }
 
     private static string GetWwwrootPath()
     {
@@ -269,6 +357,78 @@ public partial class MainWindow : Window
         var defaultPath = Path.Combine(exeDir, "wwwroot");
         Directory.CreateDirectory(defaultPath);
         return defaultPath;
+    }
+
+    private static void ValidateWebAssets(string wwwrootPath)
+    {
+        var indexPath = Path.Combine(wwwrootPath, "index.html");
+        if (!File.Exists(indexPath))
+        {
+            throw new InvalidOperationException(
+                $"Web assets not found at '{wwwrootPath}'. Run 'npm run build' in 'src\\Ajudante.UI' and publish again.");
+        }
+
+        var missingAssets = GetMissingWebAssets(indexPath, wwwrootPath);
+        if (missingAssets.Count == 0)
+        {
+            return;
+        }
+
+        throw new InvalidOperationException(
+            "Web assets are incomplete. Missing files referenced by index.html: "
+            + string.Join(", ", missingAssets)
+            + ". This usually happens after a failed publish or an outdated frontend build.");
+    }
+
+    private static List<string> GetMissingWebAssets(string indexPath, string wwwrootPath)
+    {
+        var html = File.ReadAllText(indexPath);
+        var matches = Regex.Matches(
+            html,
+            "(?:src|href)\\s*=\\s*[\"'](?<path>[^\"'#?]+)[\"']",
+            RegexOptions.IgnoreCase);
+
+        var missingAssets = new List<string>();
+        foreach (Match match in matches)
+        {
+            var assetPath = match.Groups["path"].Value;
+            if (string.IsNullOrWhiteSpace(assetPath)
+                || assetPath.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+                || assetPath.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
+                || assetPath.StartsWith("//", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var relativePath = assetPath.TrimStart('.', '/', '\\')
+                .Replace('/', Path.DirectorySeparatorChar)
+                .Replace('\\', Path.DirectorySeparatorChar);
+            var fullPath = Path.Combine(wwwrootPath, relativePath);
+            if (!File.Exists(fullPath))
+            {
+                missingAssets.Add(assetPath);
+            }
+        }
+
+        return missingAssets
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private static void LogStartupFailure(Exception ex)
+    {
+        try
+        {
+            Directory.CreateDirectory(App.LogsDirectory);
+            var logFile = Path.Combine(App.LogsDirectory, $"startup_{DateTime.Now:yyyyMMdd}.log");
+            var entry = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {ex}\n\n";
+            File.AppendAllText(logFile, entry);
+        }
+        catch
+        {
+            System.Diagnostics.Debug.WriteLine(ex);
+        }
     }
 
 #if DEBUG

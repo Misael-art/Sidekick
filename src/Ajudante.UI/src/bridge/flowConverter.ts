@@ -26,7 +26,7 @@ export interface BackendNodeInstance {
   id: string;
   typeId: string;
   position: { x: number; y: number };
-  properties: Record<string, any>;
+  properties: Record<string, unknown>;
 }
 
 export interface BackendConnection {
@@ -40,7 +40,7 @@ export interface BackendConnection {
 export interface BackendVariable {
   name: string;
   type: string;
-  default?: any;
+  default?: unknown;
 }
 
 // ── Frontend → Backend ───────────────────────────────────────────
@@ -124,8 +124,8 @@ export function fromBackendFlow(
 
 // ── Helpers ──────────────────────────────────────────────────────
 
-function buildDefaults(def: NodeDefinition): Record<string, any> {
-  const defaults: Record<string, any> = {};
+function buildDefaults(def: NodeDefinition): Record<string, unknown> {
+  const defaults: Record<string, unknown> = {};
   for (const prop of def.properties) {
     defaults[prop.id] = prop.defaultValue ?? '';
   }

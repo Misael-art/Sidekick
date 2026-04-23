@@ -55,18 +55,23 @@ public class WebBridge : IDisposable
         settings.AreDefaultContextMenusEnabled = false;
         settings.IsZoomControlEnabled = false;
         settings.AreHostObjectsAllowed = false;
+        settings.AreDevToolsEnabled =
 #if DEBUG
-        settings.AreDevToolsEnabled = true;
-        settings.AreDefaultContextMenusEnabled = true;
+            true;
 #else
-        settings.AreDevToolsEnabled = false;
+            false;
 #endif
+
+        await _webView.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(GetConsoleForwarderScript());
 
         // Listen for messages from JS
         _webView.CoreWebView2.WebMessageReceived += OnWebMessageReceived;
 
         // Navigate to the app entry point
         _webView.CoreWebView2.Navigate("https://app.local/index.html");
+#if DEBUG
+        _webView.CoreWebView2.OpenDevToolsWindow();
+#endif
 
         _isInitialized = true;
         Log("WebView2 initialized and navigating to app.local");
@@ -139,6 +144,15 @@ public class WebBridge : IDisposable
                 return;
             }
 
+            if (string.Equals(message.Type, "console", StringComparison.OrdinalIgnoreCase))
+            {
+                var consoleMessage = GetPayloadString(message.Payload, "message") ?? "(empty console message)";
+                var href = GetPayloadString(message.Payload, "href");
+                var location = string.IsNullOrWhiteSpace(href) ? "" : $" @ {href}";
+                Log($"Browser console [{message.Action}]{location} - {consoleMessage}");
+                return;
+            }
+
             Log($"Received: [{message.Channel}] {message.Action} (id: {message.RequestId})");
 
             if (_router == null)
@@ -157,6 +171,20 @@ public class WebBridge : IDisposable
         {
             Log($"Error processing web message: {ex.Message}");
         }
+    }
+
+    private static string GetPayloadString(JsonElement? payload, string propertyName)
+    {
+        if (payload == null) return "";
+        if (payload.Value.ValueKind != JsonValueKind.Object) return "";
+
+        if (payload.Value.TryGetProperty(propertyName, out var prop) &&
+            prop.ValueKind == JsonValueKind.String)
+        {
+            return prop.GetString() ?? "";
+        }
+
+        return "";
     }
 
     private async Task PostMessageAsync(BridgeMessage message)
@@ -195,6 +223,49 @@ public class WebBridge : IDisposable
     {
         var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
         return Path.Combine(appData, "Sidekick", "WebView2Data");
+    }
+
+    private static string GetConsoleForwarderScript()
+    {
+        return """
+(() => {
+  const host = window.chrome && window.chrome.webview;
+  if (!host || window.__sidekickConsoleForwarderInstalled) {
+    return;
+  }
+
+  window.__sidekickConsoleForwarderInstalled = true;
+
+  const levels = ['log', 'info', 'warn', 'error', 'debug'];
+  const stringifyArg = (value) => {
+    if (typeof value === 'string') return value;
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
+  };
+
+  for (const level of levels) {
+    const original = typeof console[level] === 'function' ? console[level].bind(console) : null;
+    console[level] = (...args) => {
+      try {
+        host.postMessage(JSON.stringify({
+          type: 'console',
+          action: level,
+          payload: {
+            message: args.map(stringifyArg).join(' '),
+            href: window.location.href
+          }
+        }));
+      } catch {
+      }
+
+      original?.(...args);
+    };
+  }
+})();
+""";
     }
 
     private void Log(string message)

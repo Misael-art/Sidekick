@@ -51,22 +51,6 @@ public class BridgeRouter
 
         Directory.CreateDirectory(_flowsDirectory);
 
-        // Wire executor events to push status to the frontend
-        _executor.NodeStatusChanged += (nodeId, status) =>
-            _ = _bridge.SendEventAsync(BridgeMessage.Channels.Engine, "nodeStatusChanged",
-                new { nodeId, status = status.ToString() });
-
-        _executor.LogMessage += (nodeId, msg) =>
-            _ = _bridge.SendEventAsync(BridgeMessage.Channels.Engine, "logMessage",
-                new { nodeId, message = msg });
-
-        _executor.FlowCompleted += (flowId) =>
-            _ = _bridge.SendEventAsync(BridgeMessage.Channels.Engine, "flowCompleted",
-                new { flowId });
-
-        _executor.FlowError += (flowId, error) =>
-            _ = _bridge.SendEventAsync(BridgeMessage.Channels.Engine, "flowError",
-                new { flowId, error });
     }
 
     /// <summary>
@@ -155,27 +139,34 @@ public class BridgeRouter
             return;
         }
 
-        var filePath = GetFlowFilePath(flow.Id);
+        if (string.IsNullOrWhiteSpace(flow.Name))
+        {
+            flow.Name = "Untitled Flow";
+        }
+
+        var matchingFilePaths = await FindFlowFilePathsAsync(flow.Id);
+        var filePath = matchingFilePaths.FirstOrDefault() ?? GetFlowFilePath(flow.Id);
         await FlowSerializer.SaveAsync(flow, filePath);
+        DeleteDuplicateFlowFiles(matchingFilePaths, filePath);
 
         Log($"Flow saved: {flow.Name} ({flow.Id})");
 
         if (message.RequestId != null)
         {
-            await _bridge.SendResponseAsync(message.RequestId, new { success = true, flowId = flow.Id });
+            await _bridge.SendResponseAsync(message.RequestId, new { success = true, id = flow.Id, flowId = flow.Id });
         }
     }
 
     private async Task HandleLoadFlowAsync(BridgeMessage message)
     {
-        var flowId = GetPayloadString(message.Payload, "flowId");
+        var flowId = GetPayloadString(message.Payload, "flowId") ?? GetPayloadString(message.Payload, "id");
         if (string.IsNullOrEmpty(flowId))
         {
             await SendErrorIfRequested(message, "No flowId specified");
             return;
         }
 
-        var filePath = GetFlowFilePath(flowId);
+        var filePath = await FindFlowFilePathAsync(flowId);
         var flow = await FlowSerializer.LoadAsync(filePath);
 
         if (flow == null)
@@ -196,7 +187,13 @@ public class BridgeRouter
     {
         var flows = await FlowSerializer.LoadAllAsync(_flowsDirectory);
 
-        var summaries = flows.Select(f => new
+        var summaries = flows
+        .Where(f => !string.IsNullOrWhiteSpace(f.Id))
+        .GroupBy(f => f.Id, StringComparer.OrdinalIgnoreCase)
+        .Select(group => group
+            .OrderByDescending(f => f.ModifiedAt)
+            .First())
+        .Select(f => new
         {
             id = f.Id,
             name = f.Name,
@@ -214,7 +211,7 @@ public class BridgeRouter
 
     private async Task HandleNewFlowAsync(BridgeMessage message)
     {
-        var name = GetPayloadString(message.Payload, "name") ?? "New Flow";
+        var name = GetPayloadString(message.Payload, "name") ?? "Untitled Flow";
 
         var flow = new Flow
         {
@@ -237,18 +234,17 @@ public class BridgeRouter
 
     private async Task HandleDeleteFlowAsync(BridgeMessage message)
     {
-        var flowId = GetPayloadString(message.Payload, "flowId");
+        var flowId = GetPayloadString(message.Payload, "flowId") ?? GetPayloadString(message.Payload, "id");
         if (string.IsNullOrEmpty(flowId))
         {
             await SendErrorIfRequested(message, "No flowId specified");
             return;
         }
 
-        var filePath = GetFlowFilePath(flowId);
-        if (File.Exists(filePath))
+        var deletedPaths = DeleteFlowFiles(await FindFlowFilePathsAsync(flowId));
+        if (deletedPaths > 0)
         {
-            File.Delete(filePath);
-            Log($"Flow deleted: {flowId}");
+            Log($"Flow deleted: {flowId} ({deletedPaths} file(s))");
         }
         else
         {
@@ -313,7 +309,7 @@ public class BridgeRouter
                 var flowId = GetPayloadString(message.Payload, "flowId");
                 if (!string.IsNullOrEmpty(flowId))
                 {
-                    flow = await FlowSerializer.LoadAsync(GetFlowFilePath(flowId));
+                    flow = await FlowSerializer.LoadAsync(await FindFlowFilePathAsync(flowId));
                 }
             }
         }
@@ -555,6 +551,89 @@ public class BridgeRouter
         // Sanitize the flow ID to prevent path traversal
         var safeId = Path.GetFileNameWithoutExtension(flowId);
         return Path.Combine(_flowsDirectory, $"{safeId}.json");
+    }
+
+    private async Task<string> FindFlowFilePathAsync(string flowId)
+    {
+        var matchingPaths = await FindFlowFilePathsAsync(flowId);
+        if (matchingPaths.Count > 0)
+        {
+            return matchingPaths[0];
+        }
+
+        return GetFlowFilePath(flowId);
+    }
+
+    private async Task<List<string>> FindFlowFilePathsAsync(string flowId)
+    {
+        var matches = new List<string>();
+        var seenPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        void AddPath(string path)
+        {
+            var normalizedPath = Path.GetFullPath(path);
+            if (seenPaths.Add(normalizedPath))
+            {
+                matches.Add(normalizedPath);
+            }
+        }
+
+        var exactPath = GetFlowFilePath(flowId);
+        if (File.Exists(exactPath))
+        {
+            AddPath(exactPath);
+        }
+
+        foreach (var candidatePath in Directory.EnumerateFiles(_flowsDirectory, "*.json", SearchOption.TopDirectoryOnly))
+        {
+            var flow = await FlowSerializer.LoadAsync(candidatePath);
+            if (flow?.Id != null && string.Equals(flow.Id, flowId, StringComparison.OrdinalIgnoreCase))
+            {
+                AddPath(candidatePath);
+            }
+        }
+
+        return matches;
+    }
+
+    private static void DeleteDuplicateFlowFiles(IEnumerable<string> candidatePaths, string keptPath)
+    {
+        var normalizedKeptPath = Path.GetFullPath(keptPath);
+
+        foreach (var candidatePath in candidatePaths)
+        {
+            if (string.Equals(candidatePath, normalizedKeptPath, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            try
+            {
+                File.Delete(candidatePath);
+            }
+            catch
+            {
+                // Keep save successful even if best-effort duplicate cleanup fails.
+            }
+        }
+    }
+
+    private static int DeleteFlowFiles(IEnumerable<string> candidatePaths)
+    {
+        var deletedCount = 0;
+
+        foreach (var candidatePath in candidatePaths)
+        {
+            if (!File.Exists(candidatePath))
+            {
+                continue;
+            }
+
+            File.Delete(candidatePath);
+            deletedCount++;
+        }
+
+        return deletedCount;
     }
 
     private static string? GetPayloadString(JsonElement? payload, string propertyName)
