@@ -31,3 +31,7 @@ Thumbs.db
 
 ## Ajudante specific
 src/Ajudante.App/wwwroot/
+artifacts/
+TestApp/
+src/Ajudante.Tests/
+test.cs
