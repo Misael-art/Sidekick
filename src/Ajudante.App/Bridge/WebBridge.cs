@@ -135,8 +135,7 @@ public class WebBridge : IDisposable
     {
         try
         {
-            var json = e.WebMessageAsJson;
-            var message = JsonSerializer.Deserialize<BridgeMessage>(json, JsonOptions);
+            var message = DeserializeIncomingMessage(e.WebMessageAsJson);
 
             if (message == null)
             {
@@ -171,6 +170,25 @@ public class WebBridge : IDisposable
         {
             Log($"Error processing web message: {ex.Message}");
         }
+    }
+
+    private static BridgeMessage? DeserializeIncomingMessage(string rawJson)
+    {
+        if (string.IsNullOrWhiteSpace(rawJson))
+        {
+            return null;
+        }
+
+        using var document = JsonDocument.Parse(rawJson);
+        if (document.RootElement.ValueKind == JsonValueKind.String)
+        {
+            var nestedJson = document.RootElement.GetString();
+            return string.IsNullOrWhiteSpace(nestedJson)
+                ? null
+                : JsonSerializer.Deserialize<BridgeMessage>(nestedJson, JsonOptions);
+        }
+
+        return JsonSerializer.Deserialize<BridgeMessage>(rawJson, JsonOptions);
     }
 
     private static string GetPayloadString(JsonElement? payload, string propertyName)
