@@ -1,5 +1,7 @@
 using System.Drawing;
+using System.Runtime.InteropServices;
 using System.Windows;
+using System.Windows.Threading;
 using Hardcodet.Wpf.TaskbarNotification;
 
 namespace Ajudante.App.TrayIcon;
@@ -7,11 +9,13 @@ namespace Ajudante.App.TrayIcon;
 /// <summary>
 /// Manages the system tray icon, context menu, and tray interactions.
 /// Uses Hardcodet.NotifyIcon.Wpf for WPF-native tray icon support.
+/// All UI access is marshalled to the dispatcher thread.
 /// </summary>
 public class SystemTrayManager : IDisposable
 {
     private TaskbarIcon? _trayIcon;
     private readonly Window _mainWindow;
+    private readonly Dispatcher _dispatcher;
     private bool _isDisposed;
 
     public event Action? ShowWindowRequested;
@@ -19,24 +23,21 @@ public class SystemTrayManager : IDisposable
     public event Action? StartFlowRequested;
     public event Action? StopFlowRequested;
 
-    /// <summary>
-    /// Gets or sets whether a flow is currently running.
-    /// Updates the tray icon tooltip and context menu accordingly.
-    /// </summary>
     public bool IsFlowRunning
     {
         get => _isFlowRunning;
         set
         {
             _isFlowRunning = value;
-            UpdateTrayState();
+            RunOnUI(() => UpdateTrayState());
         }
     }
-    private bool _isFlowRunning;
+    private volatile bool _isFlowRunning;
 
     public SystemTrayManager(Window mainWindow)
     {
         _mainWindow = mainWindow ?? throw new ArgumentNullException(nameof(mainWindow));
+        _dispatcher = mainWindow.Dispatcher;
     }
 
     /// <summary>
@@ -62,12 +63,9 @@ public class SystemTrayManager : IDisposable
         UpdateTrayState();
     }
 
-    /// <summary>
-    /// Shows a balloon tip notification from the tray icon.
-    /// </summary>
     public void ShowBalloon(string title, string message, BalloonIcon icon = BalloonIcon.Info)
     {
-        _trayIcon?.ShowBalloonTip(title, message, icon);
+        RunOnUI(() => _trayIcon?.ShowBalloonTip(title, message, icon));
     }
 
     private System.Windows.Controls.ContextMenu BuildContextMenu()
@@ -124,9 +122,12 @@ public class SystemTrayManager : IDisposable
 
     private void OnShowWindow()
     {
-        _mainWindow.Show();
-        _mainWindow.WindowState = WindowState.Normal;
-        _mainWindow.Activate();
+        RunOnUI(() =>
+        {
+            _mainWindow.Show();
+            _mainWindow.WindowState = WindowState.Normal;
+            _mainWindow.Activate();
+        });
         ShowWindowRequested?.Invoke();
     }
 
@@ -149,7 +150,15 @@ public class SystemTrayManager : IDisposable
         g.DrawLine(pen, 11, 18, 21, 18);
 
         var handle = bitmap.GetHicon();
-        return Icon.FromHandle(handle);
+        try
+        {
+            using var icon = Icon.FromHandle(handle);
+            return (Icon)icon.Clone();
+        }
+        finally
+        {
+            DestroyIcon(handle);
+        }
     }
 
     public void Dispose()
@@ -157,11 +166,25 @@ public class SystemTrayManager : IDisposable
         if (_isDisposed) return;
         _isDisposed = true;
 
-        if (_trayIcon != null)
+        RunOnUI(() =>
         {
-            _trayIcon.TrayMouseDoubleClick -= OnTrayDoubleClick;
-            _trayIcon.Dispose();
-            _trayIcon = null;
-        }
+            if (_trayIcon != null)
+            {
+                _trayIcon.TrayMouseDoubleClick -= OnTrayDoubleClick;
+                _trayIcon.Dispose();
+                _trayIcon = null;
+            }
+        });
     }
+
+    private void RunOnUI(Action action)
+    {
+        if (_dispatcher.CheckAccess())
+            action();
+        else
+            _dispatcher.InvokeAsync(action);
+    }
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool DestroyIcon(nint hIcon);
 }

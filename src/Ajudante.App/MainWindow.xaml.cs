@@ -124,36 +124,35 @@ public partial class MainWindow : Window
 
     // ── Executor Event Handlers (forward to React UI via bridge) ─────────
 
-    private async void OnNodeStatusChanged(string nodeId, NodeStatus status)
+    private void OnNodeStatusChanged(string nodeId, NodeStatus status)
     {
         if (_bridge == null) return;
 
-        await _bridge.SendEventAsync(
-            BridgeMessage.Channels.Engine, "nodeStatusChanged",
+        _ = ForwardBridgeEventAsync(
+            BridgeMessage.Channels.Engine,
+            "nodeStatusChanged",
             new { nodeId, status = status.ToString().ToLowerInvariant() });
 
-        // Update tray icon state
-        if (_trayManager != null)
-        {
-            _trayManager.IsFlowRunning = _executor?.IsRunning ?? false;
-        }
+        UpdateTrayRunningState();
     }
 
-    private async void OnExecutorLogMessage(string nodeId, string message)
+    private void OnExecutorLogMessage(string nodeId, string message)
     {
         if (_bridge == null) return;
 
-        await _bridge.SendEventAsync(
-            BridgeMessage.Channels.Engine, "logMessage",
+        _ = ForwardBridgeEventAsync(
+            BridgeMessage.Channels.Engine,
+            "logMessage",
             new { nodeId, message, timestamp = DateTime.UtcNow });
     }
 
-    private async void OnFlowCompleted(string flowId)
+    private void OnFlowCompleted(string flowId)
     {
         if (_bridge == null) return;
 
-        await _bridge.SendEventAsync(
-            BridgeMessage.Channels.Engine, "flowCompleted",
+        _ = ForwardBridgeEventAsync(
+            BridgeMessage.Channels.Engine,
+            "flowCompleted",
             new { flowId });
 
         if (_trayManager != null)
@@ -163,18 +162,39 @@ public partial class MainWindow : Window
         }
     }
 
-    private async void OnFlowError(string flowId, string error)
+    private void OnFlowError(string flowId, string error)
     {
         if (_bridge == null) return;
 
-        await _bridge.SendEventAsync(
-            BridgeMessage.Channels.Engine, "flowError",
+        _ = ForwardBridgeEventAsync(
+            BridgeMessage.Channels.Engine,
+            "flowError",
             new { flowId, error });
 
         if (_trayManager != null)
         {
             _trayManager.IsFlowRunning = false;
             _trayManager.ShowBalloon("Flow Error", error, Hardcodet.Wpf.TaskbarNotification.BalloonIcon.Error);
+        }
+    }
+
+    private void UpdateTrayRunningState()
+    {
+        if (_trayManager != null)
+            _trayManager.IsFlowRunning = _executor?.IsRunning ?? false;
+    }
+
+    private async Task ForwardBridgeEventAsync(string channel, string action, object payload)
+    {
+        if (_bridge == null) return;
+
+        try
+        {
+            await _bridge.SendEventAsync(channel, action, payload);
+        }
+        catch (Exception ex)
+        {
+            OnLogMessage($"[MainWindow] Failed to forward {channel}/{action}: {ex.Message}");
         }
     }
 
@@ -194,15 +214,16 @@ public partial class MainWindow : Window
         }
     }
 
-    private async void OnWebViewNavigationCompleted(object? sender, CoreWebView2NavigationCompletedEventArgs e)
+    private void OnWebViewNavigationCompleted(object? sender, CoreWebView2NavigationCompletedEventArgs e)
     {
         if (!e.IsSuccess || _bridge == null || _registry == null) return;
 
         // Unsubscribe so we only push once on the initial navigation
         WebView.NavigationCompleted -= OnWebViewNavigationCompleted;
 
-        await _bridge.SendEventAsync(
-            BridgeMessage.Channels.Registry, "nodeDefinitions",
+        _ = ForwardBridgeEventAsync(
+            BridgeMessage.Channels.Registry,
+            "nodeDefinitions",
             _registry.GetAllDefinitions());
     }
 

@@ -305,6 +305,30 @@ public class FlowExecutorTests
     }
 
     [Fact]
+    public async Task ExecuteAsync_WhenEntryNodeIsMissing_FiresSingleFlowError_AndDoesNotComplete()
+    {
+        var registry = CreateDefaultRegistry();
+        var executor = new FlowExecutor(registry);
+
+        var flowErrorCount = 0;
+        var flowCompletedCount = 0;
+
+        executor.FlowError += (_, _) => flowErrorCount++;
+        executor.FlowCompleted += _ => flowCompletedCount++;
+
+        var flow = new Flow
+        {
+            Id = "empty-flow",
+            Nodes = new List<NodeInstance>()
+        };
+
+        await executor.ExecuteAsync(flow);
+
+        Assert.Equal(1, flowErrorCount);
+        Assert.Equal(0, flowCompletedCount);
+    }
+
+    [Fact]
     public async Task ExecuteAsync_NodeError_FiresErrorStatus()
     {
         var registry = new MockNodeRegistry();

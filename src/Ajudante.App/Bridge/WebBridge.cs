@@ -207,20 +207,29 @@ public class WebBridge : IDisposable
 
     private async Task PostMessageAsync(BridgeMessage message)
     {
-        if (!_isInitialized || _webView.CoreWebView2 == null) return;
+        if (!_isInitialized) return;
 
         var json = JsonSerializer.Serialize(message, JsonOptions);
 
-        // WebView2 calls must happen on the UI thread
         if (_webView.Dispatcher.CheckAccess())
         {
+            if (_webView.CoreWebView2 == null)
+            {
+                return;
+            }
+
             _webView.CoreWebView2.PostWebMessageAsJson(json);
         }
         else
         {
             await _webView.Dispatcher.InvokeAsync(() =>
             {
-                _webView.CoreWebView2?.PostWebMessageAsJson(json);
+                if (_webView.CoreWebView2 == null)
+                {
+                    return;
+                }
+
+                _webView.CoreWebView2.PostWebMessageAsJson(json);
             });
         }
     }
@@ -293,6 +302,12 @@ public class WebBridge : IDisposable
 
     public void Dispose()
     {
+        if (!_webView.Dispatcher.CheckAccess())
+        {
+            _webView.Dispatcher.Invoke(Dispose);
+            return;
+        }
+
         if (_webView.CoreWebView2 != null)
         {
             _webView.CoreWebView2.WebMessageReceived -= OnWebMessageReceived;

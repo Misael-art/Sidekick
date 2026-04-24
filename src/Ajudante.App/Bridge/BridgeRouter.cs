@@ -338,9 +338,10 @@ public class BridgeRouter
             }
             catch (Exception ex)
             {
+                // FlowExecutor already publishes flowError for execution failures.
+                // Keep this catch for defensive logging so unexpected exceptions
+                // do not surface as duplicate UI error events.
                 Log($"Flow execution failed: {ex.Message}");
-                await _bridge.SendEventAsync(BridgeMessage.Channels.Engine, "flowError",
-                    new { flowId = flow.Id, error = ex.Message });
             }
             finally
             {
