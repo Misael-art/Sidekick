@@ -5,6 +5,7 @@ import type { NodeDefinition } from './bridge/types';
 export function getDevNodeDefinitions(): NodeDefinition[] {
   const flowIn = { id: 'in', name: 'In', dataType: 'Flow' as const };
   const flowOut = { id: 'out', name: 'Out', dataType: 'Flow' as const };
+  const notFoundOut = { id: 'notFound', name: 'Not Found', dataType: 'Flow' as const };
   const triggeredOut = { id: 'triggered', name: 'Triggered', dataType: 'Flow' as const };
 
   const define = (
@@ -25,6 +26,24 @@ export function getDevNodeDefinitions(): NodeDefinition[] {
     outputPorts,
     properties,
   });
+
+  const selectorProps = (defaultControlType = ''): NodeDefinition['properties'] => [
+    { id: 'windowTitle', name: 'Window Title', type: 'String', defaultValue: '' },
+    { id: 'windowTitleMatch', name: 'Window Title Match', type: 'Dropdown', defaultValue: 'equals', options: ['equals', 'contains', 'regex'] },
+    { id: 'processName', name: 'Process Name', type: 'String', defaultValue: '' },
+    { id: 'processPath', name: 'Process Path', type: 'FilePath', defaultValue: '' },
+    { id: 'automationId', name: 'Automation ID', type: 'String', defaultValue: '' },
+    { id: 'elementName', name: 'Element Name', type: 'String', defaultValue: '' },
+    { id: 'controlType', name: 'Control Type', type: 'String', defaultValue: defaultControlType },
+    { id: 'timeoutMs', name: 'Timeout (ms)', type: 'Integer', defaultValue: 5000 },
+  ];
+
+  const triggerGuardProps = (): NodeDefinition['properties'] => [
+    { id: 'intervalMs', name: 'Poll Interval (ms)', type: 'Integer', defaultValue: 1000 },
+    { id: 'cooldownMs', name: 'Cooldown (ms)', type: 'Integer', defaultValue: 5000 },
+    { id: 'debounceMs', name: 'Debounce (ms)', type: 'Integer', defaultValue: 250 },
+    { id: 'maxRepeat', name: 'Max Repeat', type: 'Integer', defaultValue: 0 },
+  ];
 
   return [
     define('trigger.manualStart', 'Start Manual', 'Trigger', 'Explicit flow entry point for manually started automations', [], [triggeredOut], []),
@@ -48,6 +67,36 @@ export function getDevNodeDefinitions(): NodeDefinition[] {
     define('trigger.pixelChange', 'Pixel Change', 'Trigger', 'Triggers when pixels change in a region', [
       { id: 'region', name: 'Region', type: 'Point', defaultValue: '' },
       { id: 'threshold', name: 'Threshold', type: 'Float', defaultValue: 0.1 },
+    ], [triggeredOut], []),
+    define('trigger.desktopElementAppeared', 'Desktop Element Appeared', 'Trigger', 'Triggers when a desktop UI element appears', [
+      ...selectorProps('button'),
+      ...triggerGuardProps(),
+    ], [triggeredOut, { id: 'found', name: 'Found', dataType: 'Any' }], []),
+    define('trigger.desktopElementTextChanged', 'Desktop Text Changed', 'Trigger', 'Triggers when text on a desktop element changes', [
+      ...selectorProps('text'),
+      { id: 'intervalMs', name: 'Poll Interval (ms)', type: 'Integer', defaultValue: 1000 },
+      { id: 'cooldownMs', name: 'Cooldown (ms)', type: 'Integer', defaultValue: 1000 },
+      { id: 'fireInitial', name: 'Fire Initial Value', type: 'Boolean', defaultValue: false },
+    ], [
+      triggeredOut,
+      { id: 'oldText', name: 'Old Text', dataType: 'String' },
+      { id: 'newText', name: 'New Text', dataType: 'String' },
+    ], []),
+    define('trigger.scheduleTime', 'Schedule Time', 'Trigger', 'Triggers once per day at a local time', [
+      { id: 'timeOfDay', name: 'Time of Day', type: 'String', defaultValue: '09:00' },
+      { id: 'pollIntervalMs', name: 'Poll Interval (ms)', type: 'Integer', defaultValue: 1000 },
+    ], [triggeredOut], []),
+    define('trigger.interval', 'Interval', 'Trigger', 'Triggers repeatedly at a fixed interval', [
+      { id: 'intervalMs', name: 'Interval (ms)', type: 'Integer', defaultValue: 60000 },
+      { id: 'fireImmediately', name: 'Fire Immediately', type: 'Boolean', defaultValue: false },
+      { id: 'maxRepeat', name: 'Max Repeat', type: 'Integer', defaultValue: 0 },
+    ], [triggeredOut], []),
+    define('trigger.processEvent', 'Process Event', 'Trigger', 'Triggers when a process starts or stops', [
+      { id: 'processName', name: 'Process Name', type: 'String', defaultValue: '' },
+      { id: 'processPath', name: 'Process Path', type: 'FilePath', defaultValue: '' },
+      { id: 'eventType', name: 'Event Type', type: 'Dropdown', defaultValue: 'started', options: ['started', 'stopped'] },
+      { id: 'intervalMs', name: 'Poll Interval (ms)', type: 'Integer', defaultValue: 1000 },
+      { id: 'cooldownMs', name: 'Cooldown (ms)', type: 'Integer', defaultValue: 1000 },
     ], [triggeredOut], []),
     define('logic.ifElse', 'If / Else', 'Logic', 'Branch based on a condition', [
       { id: 'left', name: 'Left Value', type: 'String', defaultValue: '' },
@@ -84,6 +133,14 @@ export function getDevNodeDefinitions(): NodeDefinition[] {
     ], [
       flowOut,
       { id: 'value', name: 'Value', dataType: 'Any' },
+    ]),
+    define('logic.cooldown', 'Cooldown', 'Logic', 'Routes execution through cooldown when a run is too soon', [
+      { id: 'key', name: 'Key', type: 'String', defaultValue: 'default' },
+      { id: 'cooldownMs', name: 'Cooldown (ms)', type: 'Integer', defaultValue: 5000 },
+    ], [
+      { id: 'passthrough', name: 'Pass', dataType: 'Flow' },
+      { id: 'cooldown', name: 'Cooldown', dataType: 'Flow' },
+      { id: 'remainingMs', name: 'Remaining (ms)', dataType: 'Number' },
     ]),
     define('logic.textTemplate', 'Text Template', 'Logic', 'Builds text from variables and node outputs', [
       { id: 'template', name: 'Template', type: 'String', defaultValue: '' },
@@ -229,6 +286,62 @@ export function getDevNodeDefinitions(): NodeDefinition[] {
     define('action.deleteFile', 'Delete File', 'Action', 'Delete a file from disk', [
       { id: 'filePath', name: 'File Path', type: 'FilePath', defaultValue: '' },
     ]),
+    define('action.desktopWaitElement', 'Desktop Wait Element', 'Action', 'Waits for a desktop UI element with process-aware selectors', [
+      ...selectorProps(),
+    ], [
+      flowOut,
+      notFoundOut,
+      { id: 'found', name: 'Found', dataType: 'Any' },
+    ]),
+    define('action.desktopClickElement', 'Desktop Click Element', 'Action', 'Clicks a desktop UI element, using coordinates only as fallback', [
+      ...selectorProps('button'),
+      { id: 'clickType', name: 'Click Type', type: 'Dropdown', defaultValue: 'single', options: ['single', 'double'] },
+    ], [
+      flowOut,
+      notFoundOut,
+      { id: 'clickedName', name: 'Clicked Name', dataType: 'String' },
+      { id: 'fallbackUsed', name: 'Fallback Used', dataType: 'Boolean' },
+    ]),
+    define('action.desktopReadElementText', 'Desktop Read Element Text', 'Action', 'Reads text from a desktop UI element', [
+      ...selectorProps('text'),
+      { id: 'storeInVariable', name: 'Store In Variable', type: 'String', defaultValue: '' },
+    ], [
+      flowOut,
+      notFoundOut,
+      { id: 'text', name: 'Text', dataType: 'String' },
+    ]),
+    define('action.clickImageMatch', 'Click Image Match', 'Action', 'Finds an image on screen and clicks the match center', [
+      { id: 'templateImage', name: 'Template Image', type: 'ImageTemplate', defaultValue: '' },
+      { id: 'templatePath', name: 'Template Path', type: 'FilePath', defaultValue: '' },
+      { id: 'threshold', name: 'Threshold', type: 'Float', defaultValue: 0.8 },
+      { id: 'timeoutMs', name: 'Timeout (ms)', type: 'Integer', defaultValue: 5000 },
+      { id: 'intervalMs', name: 'Poll Interval (ms)', type: 'Integer', defaultValue: 500 },
+      { id: 'clickType', name: 'Click Type', type: 'Dropdown', defaultValue: 'single', options: ['single', 'double'] },
+    ], [
+      flowOut,
+      notFoundOut,
+      { id: 'x', name: 'X', dataType: 'Number' },
+      { id: 'y', name: 'Y', dataType: 'Number' },
+      { id: 'confidence', name: 'Confidence', dataType: 'Number' },
+    ]),
+    define('action.windowControl', 'Window Control', 'Action', 'Focuses, brings forward, minimizes, maximizes, or restores a desktop window', [
+      ...selectorProps(),
+      { id: 'operation', name: 'Operation', type: 'Dropdown', defaultValue: 'focus', options: ['focus', 'bringToFront', 'minimize', 'maximize', 'restore'] },
+    ], [
+      flowOut,
+      notFoundOut,
+    ]),
+    define('action.waitProcess', 'Wait Process', 'Action', 'Waits for a process to start or stop', [
+      { id: 'processName', name: 'Process Name', type: 'String', defaultValue: '' },
+      { id: 'processPath', name: 'Process Path', type: 'FilePath', defaultValue: '' },
+      { id: 'eventType', name: 'Event Type', type: 'Dropdown', defaultValue: 'started', options: ['started', 'stopped'] },
+      { id: 'timeoutMs', name: 'Timeout (ms)', type: 'Integer', defaultValue: 30000 },
+      { id: 'intervalMs', name: 'Poll Interval (ms)', type: 'Integer', defaultValue: 1000 },
+    ], [
+      flowOut,
+      { id: 'timeout', name: 'Timeout', dataType: 'Flow' },
+      { id: 'processId', name: 'Process ID', dataType: 'Number' },
+    ]),
     define('action.browserOpenUrl', 'Browser Open URL', 'Action', 'Opens a URL in the browser', [
       { id: 'url', name: 'URL', type: 'String', defaultValue: '' },
       { id: 'browserPath', name: 'Browser Path', type: 'FilePath', defaultValue: '' },
@@ -236,27 +349,31 @@ export function getDevNodeDefinitions(): NodeDefinition[] {
     define('action.browserClick', 'Browser Click', 'Action', 'Clicks a browser element found by locator', [
       { id: 'windowTitle', name: 'Window Title', type: 'String', defaultValue: '' },
       { id: 'automationId', name: 'Automation Id', type: 'String', defaultValue: '' },
-      { id: 'name', name: 'Name', type: 'String', defaultValue: '' },
-      { id: 'timeoutMs', name: 'Timeout (ms)', type: 'Integer', defaultValue: 3000 },
+      { id: 'elementName', name: 'Element Name', type: 'String', defaultValue: '' },
+      { id: 'controlType', name: 'Control Type', type: 'String', defaultValue: '' },
+      { id: 'timeoutMs', name: 'Timeout (ms)', type: 'Integer', defaultValue: 5000 },
     ]),
     define('action.browserType', 'Browser Type', 'Action', 'Types text into a browser element', [
       { id: 'windowTitle', name: 'Window Title', type: 'String', defaultValue: '' },
       { id: 'automationId', name: 'Automation Id', type: 'String', defaultValue: '' },
-      { id: 'name', name: 'Name', type: 'String', defaultValue: '' },
+      { id: 'elementName', name: 'Element Name', type: 'String', defaultValue: '' },
+      { id: 'controlType', name: 'Control Type', type: 'String', defaultValue: '' },
       { id: 'text', name: 'Text', type: 'String', defaultValue: '' },
-      { id: 'timeoutMs', name: 'Timeout (ms)', type: 'Integer', defaultValue: 3000 },
+      { id: 'timeoutMs', name: 'Timeout (ms)', type: 'Integer', defaultValue: 5000 },
     ]),
     define('action.browserWaitElement', 'Browser Wait Element', 'Action', 'Waits until a browser element is available', [
       { id: 'windowTitle', name: 'Window Title', type: 'String', defaultValue: '' },
       { id: 'automationId', name: 'Automation Id', type: 'String', defaultValue: '' },
-      { id: 'name', name: 'Name', type: 'String', defaultValue: '' },
-      { id: 'timeoutMs', name: 'Timeout (ms)', type: 'Integer', defaultValue: 3000 },
+      { id: 'elementName', name: 'Element Name', type: 'String', defaultValue: '' },
+      { id: 'controlType', name: 'Control Type', type: 'String', defaultValue: '' },
+      { id: 'timeoutMs', name: 'Timeout (ms)', type: 'Integer', defaultValue: 5000 },
     ]),
     define('action.browserExtractText', 'Browser Extract Text', 'Action', 'Reads text from a browser element', [
       { id: 'windowTitle', name: 'Window Title', type: 'String', defaultValue: '' },
       { id: 'automationId', name: 'Automation Id', type: 'String', defaultValue: '' },
-      { id: 'name', name: 'Name', type: 'String', defaultValue: '' },
-      { id: 'timeoutMs', name: 'Timeout (ms)', type: 'Integer', defaultValue: 3000 },
+      { id: 'elementName', name: 'Element Name', type: 'String', defaultValue: '' },
+      { id: 'controlType', name: 'Control Type', type: 'String', defaultValue: '' },
+      { id: 'timeoutMs', name: 'Timeout (ms)', type: 'Integer', defaultValue: 5000 },
       { id: 'storeInVariable', name: 'Store In Variable', type: 'String', defaultValue: '' },
     ], [
       flowOut,

@@ -1,9 +1,19 @@
+using System.Diagnostics;
+using System.IO;
+using System.Text.RegularExpressions;
 using System.Windows.Automation;
 
 namespace Ajudante.Platform.UIAutomation;
 
 public static class AutomationElementLocator
 {
+    public enum TitleMatch
+    {
+        Equals,
+        Contains,
+        Regex
+    }
+
     public static AutomationElement? FindElement(
         string? windowTitle,
         string? automationId,
@@ -11,11 +21,39 @@ public static class AutomationElementLocator
         string? controlType,
         int timeoutMs = 0)
     {
+        return FindElement(
+            windowTitle,
+            automationId,
+            name,
+            controlType,
+            timeoutMs,
+            processName: null,
+            processPath: null,
+            titleMatch: TitleMatch.Equals);
+    }
+
+    public static AutomationElement? FindElement(
+        string? windowTitle,
+        string? automationId,
+        string? name,
+        string? controlType,
+        int timeoutMs,
+        string? processName,
+        string? processPath,
+        TitleMatch titleMatch)
+    {
         var startedAt = Environment.TickCount64;
 
         do
         {
-            var element = FindElementOnce(windowTitle, automationId, name, controlType);
+            var element = FindElementOnce(
+                windowTitle,
+                automationId,
+                name,
+                controlType,
+                processName,
+                processPath,
+                titleMatch);
             if (element is not null)
                 return element;
 
@@ -27,6 +65,33 @@ public static class AutomationElementLocator
         while (Environment.TickCount64 - startedAt < timeoutMs);
 
         return null;
+    }
+
+    public static TitleMatch ParseTitleMatch(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return TitleMatch.Equals;
+
+        return value.Trim().ToLowerInvariant() switch
+        {
+            "contains" or "substring" => TitleMatch.Contains,
+            "regex" or "pattern" => TitleMatch.Regex,
+            _ => TitleMatch.Equals
+        };
+    }
+
+    public static bool TitleMatches(string? candidate, string? pattern, TitleMatch mode)
+    {
+        if (string.IsNullOrWhiteSpace(pattern))
+            return true;
+
+        candidate ??= "";
+        return mode switch
+        {
+            TitleMatch.Contains => candidate.Contains(pattern, StringComparison.OrdinalIgnoreCase),
+            TitleMatch.Regex => SafeRegexMatch(candidate, pattern),
+            _ => string.Equals(candidate, pattern, StringComparison.OrdinalIgnoreCase)
+        };
     }
 
     public static string ExtractText(AutomationElement element)
@@ -88,7 +153,10 @@ public static class AutomationElementLocator
         string? windowTitle,
         string? automationId,
         string? name,
-        string? controlType)
+        string? controlType,
+        string? processName,
+        string? processPath,
+        TitleMatch titleMatch)
     {
         try
         {
@@ -96,7 +164,7 @@ public static class AutomationElementLocator
             if (root is null)
                 return null;
 
-            var window = FindWindow(root, windowTitle);
+            var window = FindWindow(root, windowTitle, processName, processPath, titleMatch);
             if (window is null)
                 return null;
 
@@ -127,14 +195,134 @@ public static class AutomationElementLocator
         }
     }
 
-    private static AutomationElement? FindWindow(AutomationElement root, string? windowTitle)
+    private static AutomationElement? FindWindow(
+        AutomationElement root,
+        string? windowTitle,
+        string? processName,
+        string? processPath,
+        TitleMatch titleMatch)
     {
-        if (string.IsNullOrWhiteSpace(windowTitle))
+        var hasTitle = !string.IsNullOrWhiteSpace(windowTitle);
+        var hasProcessName = !string.IsNullOrWhiteSpace(processName);
+        var hasProcessPath = !string.IsNullOrWhiteSpace(processPath);
+
+        if (!hasTitle && !hasProcessName && !hasProcessPath)
             return root;
 
-        return root.FindFirst(
+        var windows = root.FindAll(
             TreeScope.Children,
-            new PropertyCondition(AutomationElement.NameProperty, windowTitle));
+            Condition.TrueCondition);
+
+        if (windows is null || windows.Count == 0)
+            return null;
+
+        AutomationElement? fallback = null;
+        foreach (AutomationElement candidate in windows)
+        {
+            if (!MatchesProcess(candidate, processName, processPath))
+                continue;
+
+            string candidateTitle;
+            try
+            {
+                candidateTitle = candidate.Current.Name ?? "";
+            }
+            catch
+            {
+                continue;
+            }
+
+            if (hasTitle && !TitleMatches(candidateTitle, windowTitle, titleMatch))
+                continue;
+
+            if (!hasTitle && string.IsNullOrWhiteSpace(candidateTitle))
+            {
+                fallback ??= candidate;
+                continue;
+            }
+
+            return candidate;
+        }
+
+        return fallback;
+    }
+
+    private static bool MatchesProcess(AutomationElement candidate, string? processName, string? processPath)
+    {
+        if (string.IsNullOrWhiteSpace(processName) && string.IsNullOrWhiteSpace(processPath))
+            return true;
+
+        int processId;
+        try
+        {
+            processId = (int)candidate.GetCurrentPropertyValue(AutomationElement.ProcessIdProperty);
+        }
+        catch
+        {
+            return false;
+        }
+
+        if (processId <= 0)
+            return false;
+
+        try
+        {
+            using var process = Process.GetProcessById(processId);
+
+            if (!string.IsNullOrWhiteSpace(processName))
+            {
+                var expectedProcessName = processName.Trim();
+                if (expectedProcessName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+                    expectedProcessName = expectedProcessName[..^4];
+
+                if (!string.Equals(process.ProcessName, expectedProcessName, StringComparison.OrdinalIgnoreCase))
+                    return false;
+            }
+
+            if (!string.IsNullOrWhiteSpace(processPath))
+            {
+                string? actualPath = null;
+                try
+                {
+                    actualPath = process.MainModule?.FileName;
+                }
+                catch
+                {
+                    return false;
+                }
+
+                if (string.IsNullOrWhiteSpace(actualPath))
+                    return false;
+
+                if (!string.Equals(
+                        Path.GetFullPath(actualPath),
+                        Path.GetFullPath(processPath),
+                        StringComparison.OrdinalIgnoreCase))
+                    return false;
+            }
+
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool SafeRegexMatch(string input, string pattern)
+    {
+        try
+        {
+            return Regex.IsMatch(input, pattern, RegexOptions.IgnoreCase, TimeSpan.FromMilliseconds(250));
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+        catch (RegexMatchTimeoutException)
+        {
+            return false;
+        }
     }
 
     private static bool TryParseControlType(string value, out ControlType controlType)

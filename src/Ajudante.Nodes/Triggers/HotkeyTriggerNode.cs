@@ -11,7 +11,7 @@ namespace Ajudante.Nodes.Triggers;
     Category = NodeCategory.Trigger,
     Description = "Fires when a global hotkey combination is pressed",
     Color = "#EF4444")]
-public class HotkeyTriggerNode : ITriggerNode
+public class HotkeyTriggerNode : ITriggerNode, IDisposable
 {
     private GlobalHotkeyManager? _hotkeyManager;
     private int _hotkeyId;
@@ -70,6 +70,11 @@ public class HotkeyTriggerNode : ITriggerNode
 
     public Task StartWatchingAsync(CancellationToken ct)
     {
+        if (_hotkeyId != 0)
+        {
+            return Task.CompletedTask;
+        }
+
         _hotkeyManager ??= new GlobalHotkeyManager();
 
         var modifiers = ParseModifiers(_modifiers);
@@ -103,6 +108,13 @@ public class HotkeyTriggerNode : ITriggerNode
             _hotkeyManager.UnregisterAll();
         }
         return Task.CompletedTask;
+    }
+
+    public void Dispose()
+    {
+        StopWatchingAsync().GetAwaiter().GetResult();
+        _hotkeyManager?.Dispose();
+        _hotkeyManager = null;
     }
 
     private static HotkeyModifiers ParseModifiers(string modifier) => modifier switch

@@ -30,6 +30,7 @@ public class BrowserClickNode : IActionNode
         OutputPorts = new List<PortDefinition>
         {
             new() { Id = "out", Name = "Out", DataType = PortDataType.Flow },
+            new() { Id = "notFound", Name = "Not Found", DataType = PortDataType.Flow },
             new() { Id = "clickedName", Name = "Clicked Name", DataType = PortDataType.String }
         },
         Properties = BrowserPropertyDefinitions()
@@ -44,7 +45,7 @@ public class BrowserClickNode : IActionNode
     {
         var selector = BrowserSelectorHelper.ResolveSelector(context, _properties);
         var clickType = NodeValueHelper.GetString(_properties, "clickType", "single");
-        var element = AutomationElementLocator.FindElement(selector.windowTitle, selector.automationId, selector.elementName, selector.controlType, selector.timeoutMs);
+        var element = BrowserSelectorHelper.FindElement(selector);
         if (element is null)
             return Task.FromResult(NodeResult.Fail("Browser element not found"));
 
@@ -71,7 +72,10 @@ public class BrowserClickNode : IActionNode
     {
         return new List<PropertyDefinition>
         {
-            new() { Id = "windowTitle", Name = "Window Title", Type = PropertyType.String, DefaultValue = "", Description = "Optional browser window title" },
+            new() { Id = "windowTitle", Name = "Window Title", Type = PropertyType.String, DefaultValue = "", Description = "Optional desktop window title" },
+            new() { Id = "windowTitleMatch", Name = "Window Title Match", Type = PropertyType.Dropdown, DefaultValue = "equals", Description = "How to match the window title", Options = new[] { "equals", "contains", "regex" } },
+            new() { Id = "processName", Name = "Process Name", Type = PropertyType.String, DefaultValue = "", Description = "Optional process name, with or without .exe" },
+            new() { Id = "processPath", Name = "Process Path", Type = PropertyType.FilePath, DefaultValue = "", Description = "Optional full executable path for the target process" },
             new() { Id = "automationId", Name = "Automation ID", Type = PropertyType.String, DefaultValue = "", Description = "Optional automation id" },
             new() { Id = "elementName", Name = "Element Name", Type = PropertyType.String, DefaultValue = "", Description = "Visible element name/text" },
             new() { Id = "controlType", Name = "Control Type", Type = PropertyType.String, DefaultValue = "", Description = "Optional UIAutomation control type" },

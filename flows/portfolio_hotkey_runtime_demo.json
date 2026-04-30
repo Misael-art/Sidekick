@@ -1,0 +1,64 @@
+{
+  "id": "portfolio-hotkey-runtime-demo",
+  "name": "Sidekick - Hotkey Runtime Demo",
+  "version": 1,
+  "variables": [],
+  "nodes": [
+    {
+      "id": "hotkey",
+      "typeId": "trigger.hotkey",
+      "position": {
+        "x": 80,
+        "y": 180
+      },
+      "properties": {
+        "key": "F8",
+        "modifiers": "Ctrl"
+      }
+    },
+    {
+      "id": "log",
+      "typeId": "action.logMessage",
+      "position": {
+        "x": 340,
+        "y": 180
+      },
+      "properties": {
+        "message": "Ctrl+F8 triggered the Sidekick runtime demo.",
+        "level": "info",
+        "storeInVariable": ""
+      }
+    },
+    {
+      "id": "notify",
+      "typeId": "action.showNotification",
+      "position": {
+        "x": 620,
+        "y": 180
+      },
+      "properties": {
+        "title": "Sidekick",
+        "message": "Hotkey trigger executed successfully.",
+        "timeoutMs": 3000
+      }
+    }
+  ],
+  "connections": [
+    {
+      "id": "c1",
+      "sourceNodeId": "hotkey",
+      "sourcePort": "triggered",
+      "targetNodeId": "log",
+      "targetPort": "in"
+    },
+    {
+      "id": "c2",
+      "sourceNodeId": "log",
+      "sourcePort": "out",
+      "targetNodeId": "notify",
+      "targetPort": "in"
+    }
+  ],
+  "createdAt": "2026-04-24T00:00:00Z",
+  "modifiedAt": "2026-04-24T00:00:00Z"
+}

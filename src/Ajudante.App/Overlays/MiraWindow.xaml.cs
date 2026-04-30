@@ -2,6 +2,7 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Threading;
 using Ajudante.Platform.UIAutomation;
 
@@ -29,10 +30,24 @@ public partial class MiraWindow : Window
     [DllImport("user32.dll")]
     private static extern int GetSystemMetrics(int nIndex);
 
+    [DllImport("user32.dll", EntryPoint = "GetWindowLong")]
+    private static extern int GetWindowLong32(IntPtr hWnd, int nIndex);
+
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongPtr")]
+    private static extern IntPtr GetWindowLongPtr64(IntPtr hWnd, int nIndex);
+
+    [DllImport("user32.dll", EntryPoint = "SetWindowLong")]
+    private static extern int SetWindowLong32(IntPtr hWnd, int nIndex, int dwNewLong);
+
+    [DllImport("user32.dll", EntryPoint = "SetWindowLongPtr")]
+    private static extern IntPtr SetWindowLongPtr64(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
+
     private const int SM_XVIRTUALSCREEN = 76;
     private const int SM_YVIRTUALSCREEN = 77;
     private const int SM_CXVIRTUALSCREEN = 78;
     private const int SM_CYVIRTUALSCREEN = 79;
+    private const int GWL_EXSTYLE = -20;
+    private const int WS_EX_TRANSPARENT = 0x00000020;
 
     #endregion
 
@@ -80,7 +95,7 @@ public partial class MiraWindow : Window
     {
         try
         {
-            ElementInfo? element = ElementInspector.GetElementUnderCursor();
+            ElementInfo? element = GetElementUnderCursorIgnoringOverlay();
 
             if (element is null)
             {
@@ -104,6 +119,47 @@ public partial class MiraWindow : Window
         catch
         {
             // Swallow exceptions from UI Automation to keep the overlay stable
+        }
+    }
+
+    private ElementInfo? GetElementUnderCursorIgnoringOverlay()
+    {
+        var hwnd = new WindowInteropHelper(this).Handle;
+        if (hwnd == IntPtr.Zero)
+        {
+            return ElementInspector.GetElementUnderCursor();
+        }
+
+        var originalStyle = GetWindowExStyle(hwnd);
+        var transparentStyle = new IntPtr(originalStyle.ToInt64() | WS_EX_TRANSPARENT);
+
+        try
+        {
+            SetWindowExStyle(hwnd, transparentStyle);
+            return ElementInspector.GetElementUnderCursor();
+        }
+        finally
+        {
+            SetWindowExStyle(hwnd, originalStyle);
+        }
+    }
+
+    private static IntPtr GetWindowExStyle(IntPtr hwnd)
+    {
+        return IntPtr.Size == 8
+            ? GetWindowLongPtr64(hwnd, GWL_EXSTYLE)
+            : new IntPtr(GetWindowLong32(hwnd, GWL_EXSTYLE));
+    }
+
+    private static void SetWindowExStyle(IntPtr hwnd, IntPtr style)
+    {
+        if (IntPtr.Size == 8)
+        {
+            _ = SetWindowLongPtr64(hwnd, GWL_EXSTYLE, style);
+        }
+        else
+        {
+            _ = SetWindowLong32(hwnd, GWL_EXSTYLE, style.ToInt32());
         }
     }
 
@@ -136,6 +192,21 @@ public partial class MiraWindow : Window
         AutomationIdText.Text = string.IsNullOrEmpty(element.AutomationId) ? "(none)" : element.AutomationId;
         BoundsText.Text = $"{element.BoundingRect.X}, {element.BoundingRect.Y} " +
                           $"({element.BoundingRect.Width} x {element.BoundingRect.Height})";
+        RelativeBoundsText.Text = element.RelativeBoundingRect.IsEmpty
+            ? "(none)"
+            : $"{element.RelativeBoundingRect.X}, {element.RelativeBoundingRect.Y} " +
+              $"({element.RelativeBoundingRect.Width} x {element.RelativeBoundingRect.Height})";
+        WindowTitleText.Text = string.IsNullOrEmpty(element.WindowTitle) ? "(none)" : element.WindowTitle;
+        ProcessText.Text = string.IsNullOrEmpty(element.ProcessName)
+            ? $"PID {element.ProcessId}"
+            : $"{element.ProcessName} (PID {element.ProcessId})";
+        ProcessPathText.Text = string.IsNullOrEmpty(element.ProcessPath) ? "(unavailable)" : element.ProcessPath;
+        CursorText.Text = $"{element.CursorScreen.X}, {element.CursorScreen.Y}"
+            + (string.IsNullOrWhiteSpace(element.CursorPixelColor) ? "" : $"  {element.CursorPixelColor}");
+        StateText.Text = $"focused={element.IsFocused} enabled={element.IsEnabled} visible={!element.IsOffscreen}";
+        var strength = SelectorStrengthEvaluator.Evaluate(element);
+        var strategy = SelectorStrengthEvaluator.SuggestStrategy(element);
+        SelectorText.Text = $"{SelectorStrengthEvaluator.ToPublicLabel(strength)} / {SelectorStrengthEvaluator.ToPublicStrategy(strategy)}";
 
         // Position the info panel near the cursor, but keep it on screen
         if (!GetCursorPos(out POINT cursor))

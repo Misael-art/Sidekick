@@ -13,7 +13,11 @@ namespace Ajudante.Nodes.Triggers;
 public class ManualStartTriggerNode : ITriggerNode
 {
     public string Id { get; set; } = "";
-    public event Action<TriggerEventArgs>? Triggered;
+    public event Action<TriggerEventArgs>? Triggered
+    {
+        add { }
+        remove { }
+    }
 
     public NodeDefinition Definition => new()
     {

@@ -1,0 +1,79 @@
+{
+  "id": "recipe-popup-auto-confirm",
+  "name": "Recipe - Popup Auto Confirm",
+  "version": 1,
+  "variables": [],
+  "nodes": [
+    {
+      "id": "watch-confirm",
+      "typeId": "trigger.desktopElementAppeared",
+      "position": {
+        "x": 80,
+        "y": 160
+      },
+      "properties": {
+        "windowTitle": "",
+        "windowTitleMatch": "contains",
+        "processName": "",
+        "processPath": "",
+        "automationId": "",
+        "elementName": "OK",
+        "controlType": "button",
+        "timeoutMs": 1000,
+        "intervalMs": 1000,
+        "cooldownMs": 5000,
+        "debounceMs": 300,
+        "maxRepeat": 25
+      }
+    },
+    {
+      "id": "click-confirm",
+      "typeId": "action.desktopClickElement",
+      "position": {
+        "x": 420,
+        "y": 160
+      },
+      "properties": {
+        "windowTitle": "",
+        "windowTitleMatch": "contains",
+        "processName": "",
+        "processPath": "",
+        "automationId": "",
+        "elementName": "OK",
+        "controlType": "button",
+        "timeoutMs": 3000,
+        "clickType": "single"
+      }
+    },
+    {
+      "id": "log-click",
+      "typeId": "action.logMessage",
+      "position": {
+        "x": 760,
+        "y": 160
+      },
+      "properties": {
+        "message": "Popup confirmation clicked.",
+        "level": "info"
+      }
+    }
+  ],
+  "connections": [
+    {
+      "id": "c1",
+      "sourceNodeId": "watch-confirm",
+      "sourcePort": "triggered",
+      "targetNodeId": "click-confirm",
+      "targetPort": "in"
+    },
+    {
+      "id": "c2",
+      "sourceNodeId": "click-confirm",
+      "sourcePort": "out",
+      "targetNodeId": "log-click",
+      "targetPort": "in"
+    }
+  ],
+  "createdAt": "2026-04-29T00:00:00Z",
+  "modifiedAt": "2026-04-29T00:00:00Z"
+}

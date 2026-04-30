@@ -1,0 +1,145 @@
+{
+  "id": "trae-auto-continue",
+  "name": "Trae - Auto Continue",
+  "version": 1,
+  "variables": [
+    {
+      "name": "traeProcess",
+      "type": "String",
+      "default": "Trae"
+    },
+    {
+      "name": "traeProcessPath",
+      "type": "String",
+      "default": "C:\\Users\\misae\\AppData\\Local\\Programs\\Trae\\Trae.exe"
+    },
+    {
+      "name": "traeWindowTitle",
+      "type": "String",
+      "default": "Trae"
+    },
+    {
+      "name": "continueButton",
+      "type": "String",
+      "default": "Continue"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "watch-continue",
+      "typeId": "trigger.desktopElementAppeared",
+      "position": {
+        "x": 80,
+        "y": 160
+      },
+      "properties": {
+        "windowTitle": "Trae",
+        "windowTitleMatch": "contains",
+        "processName": "Trae",
+        "processPath": "C:\\Users\\misae\\AppData\\Local\\Programs\\Trae\\Trae.exe",
+        "automationId": "",
+        "elementName": "Continue",
+        "controlType": "button",
+        "timeoutMs": 1000,
+        "intervalMs": 1000,
+        "cooldownMs": 7000,
+        "debounceMs": 500,
+        "maxRepeat": 20
+      }
+    },
+    {
+      "id": "focus-trae",
+      "typeId": "action.windowControl",
+      "position": {
+        "x": 420,
+        "y": 160
+      },
+      "properties": {
+        "windowTitle": "Trae",
+        "windowTitleMatch": "contains",
+        "processName": "Trae",
+        "processPath": "C:\\Users\\misae\\AppData\\Local\\Programs\\Trae\\Trae.exe",
+        "automationId": "",
+        "elementName": "",
+        "controlType": "",
+        "timeoutMs": 1500,
+        "operation": "focus"
+      }
+    },
+    {
+      "id": "click-continue",
+      "typeId": "action.desktopClickElement",
+      "position": {
+        "x": 760,
+        "y": 160
+      },
+      "properties": {
+        "windowTitle": "Trae",
+        "windowTitleMatch": "contains",
+        "processName": "Trae",
+        "processPath": "C:\\Users\\misae\\AppData\\Local\\Programs\\Trae\\Trae.exe",
+        "automationId": "",
+        "elementName": "Continue",
+        "controlType": "button",
+        "timeoutMs": 2500,
+        "clickType": "single"
+      }
+    },
+    {
+      "id": "log-click",
+      "typeId": "action.logMessage",
+      "position": {
+        "x": 1100,
+        "y": 160
+      },
+      "properties": {
+        "message": "Trae Continue clicked by desktop selector.",
+        "level": "info"
+      }
+    },
+    {
+      "id": "log-missing",
+      "typeId": "action.logMessage",
+      "position": {
+        "x": 760,
+        "y": 340
+      },
+      "properties": {
+        "message": "Trae Continue trigger fired, but click selector did not find the element. Recapture with Mira or use visual fallback.",
+        "level": "warning"
+      }
+    }
+  ],
+  "connections": [
+    {
+      "id": "c1",
+      "sourceNodeId": "watch-continue",
+      "sourcePort": "triggered",
+      "targetNodeId": "focus-trae",
+      "targetPort": "in"
+    },
+    {
+      "id": "c2",
+      "sourceNodeId": "focus-trae",
+      "sourcePort": "out",
+      "targetNodeId": "click-continue",
+      "targetPort": "in"
+    },
+    {
+      "id": "c3",
+      "sourceNodeId": "click-continue",
+      "sourcePort": "out",
+      "targetNodeId": "log-click",
+      "targetPort": "in"
+    },
+    {
+      "id": "c4",
+      "sourceNodeId": "click-continue",
+      "sourcePort": "notFound",
+      "targetNodeId": "log-missing",
+      "targetPort": "in"
+    }
+  ],
+  "createdAt": "2026-04-29T00:00:00Z",
+  "modifiedAt": "2026-04-29T00:00:00Z"
+}

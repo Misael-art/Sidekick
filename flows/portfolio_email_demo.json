@@ -21,16 +21,16 @@
         "y": 200
       },
       "properties": {
-        "from": "demo@ajudante.local",
+        "from": "demo@sidekick.local",
         "to": "portfolio@example.local",
-        "subject": "Demo local do Ajudante",
+        "subject": "Demo local do Sidekick",
         "body": "Email salvo localmente em pickup directory.",
         "host": "",
         "port": 25,
         "username": "",
         "password": "",
         "enableSsl": false,
-        "pickupDirectory": "F:\\Projects\\Ajudante\\demo-output\\maildrop",
+        "pickupDirectory": "C:\\Users\\Public\\Documents\\Sidekick\\demo-output\\maildrop",
         "attachments": ""
       }
     },
@@ -43,7 +43,7 @@
       },
       "properties": {
         "title": "Email preparado",
-        "message": "Arquivo .eml salvo em F:\\Projects\\Ajudante\\demo-output\\maildrop",
+        "message": "Arquivo .eml salvo em C:\\Users\\Public\\Documents\\Sidekick\\demo-output\\maildrop",
         "timeoutMs": 4000
       }
     },

@@ -21,7 +21,7 @@
         "y": 220
       },
       "properties": {
-        "template": "Arquivo demo criado pelo Ajudante.",
+        "template": "Arquivo demo criado pelo Sidekick.",
         "storeInVariable": "fileText"
       }
     },
@@ -33,7 +33,7 @@
         "y": 220
       },
       "properties": {
-        "filePath": "F:\\Projects\\Ajudante\\demo-output\\portfolio-note.txt",
+        "filePath": "C:\\Users\\Public\\Documents\\Sidekick\\demo-output\\portfolio-note.txt",
         "content": "{{fileText}}",
         "append": false
       }
@@ -46,7 +46,7 @@
         "y": 220
       },
       "properties": {
-        "filePath": "F:\\Projects\\Ajudante\\demo-output\\portfolio-note.txt",
+        "filePath": "C:\\Users\\Public\\Documents\\Sidekick\\demo-output\\portfolio-note.txt",
         "storeInVariable": "fileContent"
       }
     },

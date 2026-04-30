@@ -11,7 +11,7 @@ namespace Ajudante.Nodes.Triggers;
     Category = NodeCategory.Trigger,
     Description = "Fires when a window is opened, closed, or focused",
     Color = "#EF4444")]
-public class WindowEventTriggerNode : ITriggerNode
+public class WindowEventTriggerNode : ITriggerNode, IDisposable
 {
     private readonly WindowWatcher _windowWatcher = new();
     private string _eventType = "Opened";
@@ -71,6 +71,11 @@ public class WindowEventTriggerNode : ITriggerNode
 
     public Task StartWatchingAsync(CancellationToken ct)
     {
+        if (_watching)
+        {
+            return Task.CompletedTask;
+        }
+
         _watching = true;
 
         switch (_eventType)
@@ -86,6 +91,7 @@ public class WindowEventTriggerNode : ITriggerNode
                 break;
         }
 
+        _windowWatcher.Start();
         return Task.CompletedTask;
     }
 
@@ -93,6 +99,7 @@ public class WindowEventTriggerNode : ITriggerNode
     {
         if (_watching)
         {
+            _windowWatcher.Stop();
             _windowWatcher.WindowOpened -= OnWindowEvent;
             _windowWatcher.WindowClosed -= OnWindowEvent;
             _windowWatcher.WindowFocused -= OnWindowEvent;
@@ -119,5 +126,11 @@ public class WindowEventTriggerNode : ITriggerNode
             },
             Timestamp = DateTime.UtcNow
         });
+    }
+
+    public void Dispose()
+    {
+        StopWatchingAsync().GetAwaiter().GetResult();
+        _windowWatcher.Dispose();
     }
 }

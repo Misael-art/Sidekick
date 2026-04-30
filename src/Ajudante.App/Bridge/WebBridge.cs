@@ -1,6 +1,7 @@
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Ajudante.App.Configuration;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.Wpf;
 
@@ -248,8 +249,7 @@ public class WebBridge : IDisposable
 
     private static string GetWebView2DataFolder()
     {
-        var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-        return Path.Combine(appData, "Sidekick", "WebView2Data");
+        return AppPaths.Current.WebView2DataDirectory;
     }
 
     private static string GetConsoleForwarderScript()

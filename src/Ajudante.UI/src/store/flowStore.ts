@@ -10,7 +10,7 @@ import {
   addEdge,
   type Connection,
 } from '@xyflow/react';
-import type { FlowNodeData, NodeDefinition } from '../bridge/types';
+import type { FlowNodeData, FlowValidationResult, NodeDefinition } from '../bridge/types';
 import { sendCommand } from '../bridge/bridge';
 import { toBackendFlow, fromBackendFlow, type BackendFlow } from '../bridge/flowConverter';
 
@@ -32,6 +32,7 @@ function createEmptyFlowState(flowId: string, flowName: string) {
     nodes: [],
     edges: [],
     selectedNodeId: null,
+    validationResult: null,
   };
 }
 
@@ -63,6 +64,8 @@ function createFlowSnapshot(
         id: node.id,
         typeId: node.data.typeId,
         position: { x: node.position.x, y: node.position.y },
+        nodeAlias: node.data.nodeAlias ?? '',
+        nodeComment: node.data.nodeComment ?? '',
         propertyValues: normalizeRecord(node.data.propertyValues ?? {}),
       }))
       .sort((a, b) => a.id.localeCompare(b.id)),
@@ -97,6 +100,7 @@ export interface FlowState {
   flowName: string;
   isDirty: boolean;
   lastPersistedSnapshot: string;
+  validationResult: FlowValidationResult | null;
   setFlowName: (name: string) => void;
 
   // React Flow elements
@@ -111,14 +115,17 @@ export interface FlowState {
   setSelectedNodeId: (id: string | null) => void;
 
   // Node CRUD
-  addNode: (typeId: string, position: { x: number; y: number }) => void;
+  addNode: (typeId: string, position: { x: number; y: number }, propertyOverrides?: Record<string, unknown>) => string | null;
   removeNode: (id: string) => void;
   updateNodeProperty: (nodeId: string, propertyId: string, value: unknown) => void;
+  updateNodeProperties: (nodeId: string, propertyValues: Record<string, unknown>) => void;
+  updateNodeMetadata: (nodeId: string, metadata: { nodeAlias?: string; nodeComment?: string }) => void;
 
   // Persistence
   saveFlow: () => Promise<void>;
   loadFlow: (id: string) => Promise<void>;
   newFlow: () => Promise<void>;
+  validateFlow: () => Promise<FlowValidationResult>;
 
   // Registry
   nodeDefinitions: NodeDefinition[];
@@ -137,6 +144,7 @@ export const useFlowStore = create<FlowState>((set, get) => ({
       return {
         flowName: name,
         isDirty: nextSnapshot !== state.lastPersistedSnapshot,
+        validationResult: null,
       };
     }),
 
@@ -151,6 +159,7 @@ export const useFlowStore = create<FlowState>((set, get) => ({
       return {
         nodes: nextNodes,
         isDirty: nextSnapshot !== state.lastPersistedSnapshot,
+        validationResult: null,
       };
     });
 
@@ -169,6 +178,7 @@ export const useFlowStore = create<FlowState>((set, get) => ({
       return {
         edges: nextEdges,
         isDirty: nextSnapshot !== state.lastPersistedSnapshot,
+        validationResult: null,
       };
     });
   },
@@ -186,20 +196,22 @@ export const useFlowStore = create<FlowState>((set, get) => ({
       return {
         edges: nextEdges,
         isDirty: nextSnapshot !== state.lastPersistedSnapshot,
+        validationResult: null,
       };
     });
   },
 
   // ── Selection ───────────────────────────────────────────────────
   selectedNodeId: null,
+  validationResult: null,
   setSelectedNodeId: (id) => set({ selectedNodeId: id }),
 
   // ── Node CRUD ───────────────────────────────────────────────────
-  addNode: (typeId, position) => {
+  addNode: (typeId, position, propertyOverrides = {}) => {
     const def = get().nodeDefinitions.find((d) => d.typeId === typeId);
     if (!def) {
       console.warn(`[flowStore] Unknown node typeId: ${typeId}`);
-      return;
+      return null;
     }
 
     const categoryToType: Record<string, string> = {
@@ -214,13 +226,23 @@ export const useFlowStore = create<FlowState>((set, get) => ({
       propertyValues[prop.id] = prop.defaultValue ?? '';
     }
 
+    for (const [key, value] of Object.entries(propertyOverrides)) {
+      if (def.properties.some((property) => property.id === key)) {
+        propertyValues[key] = value;
+      }
+    }
+
+    const nodeId = nextNodeId();
+
     const newNode: Node<FlowNodeData> = {
-      id: nextNodeId(),
+      id: nodeId,
       type: categoryToType[def.category] ?? 'actionNode',
       position,
       data: {
         typeId: def.typeId,
         displayName: def.displayName,
+        nodeAlias: '',
+        nodeComment: '',
         category: def.category,
         color: def.color,
         inputPorts: def.inputPorts,
@@ -235,9 +257,13 @@ export const useFlowStore = create<FlowState>((set, get) => ({
       const nextSnapshot = createFlowSnapshot(state.flowId, state.flowName, nextNodes, state.edges);
       return {
         nodes: nextNodes,
+        selectedNodeId: newNode.id,
         isDirty: nextSnapshot !== state.lastPersistedSnapshot,
+        validationResult: null,
       };
     });
+
+    return nodeId;
   },
 
   removeNode: (id) => {
@@ -250,6 +276,7 @@ export const useFlowStore = create<FlowState>((set, get) => ({
         edges: nextEdges,
         selectedNodeId: state.selectedNodeId === id ? null : state.selectedNodeId,
         isDirty: nextSnapshot !== state.lastPersistedSnapshot,
+        validationResult: null,
       };
     });
   },
@@ -273,6 +300,53 @@ export const useFlowStore = create<FlowState>((set, get) => ({
       return {
         nodes: nextNodes,
         isDirty: nextSnapshot !== state.lastPersistedSnapshot,
+        validationResult: null,
+      };
+    });
+  },
+
+  updateNodeProperties: (nodeId, propertyValues) => {
+    set((state) => {
+      const nextNodes = state.nodes.map((n) => {
+        if (n.id !== nodeId) return n;
+        return {
+          ...n,
+          data: {
+            ...n.data,
+            propertyValues: {
+              ...n.data.propertyValues,
+              ...propertyValues,
+            },
+          },
+        };
+      });
+      const nextSnapshot = createFlowSnapshot(state.flowId, state.flowName, nextNodes, state.edges);
+      return {
+        nodes: nextNodes,
+        isDirty: nextSnapshot !== state.lastPersistedSnapshot,
+        validationResult: null,
+      };
+    });
+  },
+
+  updateNodeMetadata: (nodeId, metadata) => {
+    set((state) => {
+      const nextNodes = state.nodes.map((n) => {
+        if (n.id !== nodeId) return n;
+        return {
+          ...n,
+          data: {
+            ...n.data,
+            nodeAlias: metadata.nodeAlias ?? n.data.nodeAlias ?? '',
+            nodeComment: metadata.nodeComment ?? n.data.nodeComment ?? '',
+          },
+        };
+      });
+      const nextSnapshot = createFlowSnapshot(state.flowId, state.flowName, nextNodes, state.edges);
+      return {
+        nodes: nextNodes,
+        isDirty: nextSnapshot !== state.lastPersistedSnapshot,
+        validationResult: null,
       };
     });
   },
@@ -280,7 +354,7 @@ export const useFlowStore = create<FlowState>((set, get) => ({
   // ── Persistence ─────────────────────────────────────────────────
   saveFlow: async () => {
     const { flowId, flowName, nodes, edges } = get();
-    const backendFlow = toBackendFlow(flowId, flowName, nodes, edges);
+    const backendFlow = toBackendFlow(flowId, flowName, nodes, edges, { persistUiMetadata: true });
     const result = await sendCommand('flow', 'saveFlow', backendFlow) as FlowResponse;
     const resolvedFlowId = result?.flowId ?? result?.id ?? backendFlow.id;
     set({
@@ -303,6 +377,7 @@ export const useFlowStore = create<FlowState>((set, get) => ({
       selectedNodeId: null,
       lastPersistedSnapshot: createFlowSnapshot(data.id ?? id, data.name ?? 'Untitled Flow', nodes, edges),
       isDirty: false,
+      validationResult: null,
     });
   },
 
@@ -319,6 +394,14 @@ export const useFlowStore = create<FlowState>((set, get) => ({
       lastPersistedSnapshot: createFlowSnapshot(resolvedFlowId, resolvedFlowName, [], []),
       isDirty: false,
     });
+  },
+
+  validateFlow: async () => {
+    const { flowId, flowName, nodes, edges } = get();
+    const backendFlow = toBackendFlow(flowId, flowName, nodes, edges);
+    const result = await sendCommand<FlowValidationResult>('engine', 'validateFlow', backendFlow);
+    set({ validationResult: result });
+    return result;
   },
 
   // ── Registry ────────────────────────────────────────────────────

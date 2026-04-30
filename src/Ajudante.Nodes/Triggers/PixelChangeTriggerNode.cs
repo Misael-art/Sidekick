@@ -11,7 +11,7 @@ namespace Ajudante.Nodes.Triggers;
     Category = NodeCategory.Trigger,
     Description = "Fires when a pixel at a specific location changes color",
     Color = "#EF4444")]
-public class PixelChangeTriggerNode : ITriggerNode
+public class PixelChangeTriggerNode : ITriggerNode, IDisposable
 {
     private CancellationTokenSource? _pollCts;
     private int _x;
@@ -83,6 +83,11 @@ public class PixelChangeTriggerNode : ITriggerNode
 
     public Task StartWatchingAsync(CancellationToken ct)
     {
+        if (_pollCts != null)
+        {
+            return Task.CompletedTask;
+        }
+
         _pollCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         var token = _pollCts.Token;
 
@@ -135,5 +140,10 @@ public class PixelChangeTriggerNode : ITriggerNode
         _pollCts?.Dispose();
         _pollCts = null;
         return Task.CompletedTask;
+    }
+
+    public void Dispose()
+    {
+        StopWatchingAsync().GetAwaiter().GetResult();
     }
 }

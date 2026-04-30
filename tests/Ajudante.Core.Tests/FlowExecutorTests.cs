@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Text.Json;
 using Ajudante.Core;
 using Ajudante.Core.Engine;
 using Ajudante.Core.Interfaces;
@@ -541,6 +542,128 @@ public class FlowExecutorTests
         Assert.NotNull(configuredProps);
         Assert.Equal(100, configuredProps["x"]);
         Assert.Equal(200, configuredProps["y"]);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_NormalizesJsonElementPropertiesBeforeConfigure()
+    {
+        var registry = new MockNodeRegistry();
+        Dictionary<string, object?>? configuredProps = null;
+
+        var configDef = new NodeDefinition
+        {
+            TypeId = "test.jsonConfig",
+            DisplayName = "Json Config Node",
+            Category = NodeCategory.Action,
+            InputPorts = new List<PortDefinition> { new() { Id = "in", Name = "In" } },
+            OutputPorts = new List<PortDefinition> { new() { Id = "out", Name = "Out" } }
+        };
+
+        registry.Register("test.jsonConfig", configDef, () =>
+        {
+            var node = new ConfigurableMockNode
+            {
+                Definition = configDef,
+                OnConfigure = props => configuredProps = new Dictionary<string, object?>(props)
+            };
+            return node;
+        });
+
+        using var document = JsonDocument.Parse("""{ "count": 7, "nested": { "name": "sidekick" } }""");
+
+        var executor = new FlowExecutor(registry);
+        var flow = new Flow
+        {
+            Nodes = new List<NodeInstance>
+            {
+                new()
+                {
+                    Id = "n1",
+                    TypeId = "test.jsonConfig",
+                    Properties = new Dictionary<string, object?>
+                    {
+                        ["count"] = document.RootElement.GetProperty("count").Clone(),
+                        ["nested"] = document.RootElement.GetProperty("nested").Clone()
+                    }
+                }
+            }
+        };
+
+        await executor.ExecuteAsync(flow);
+
+        Assert.NotNull(configuredProps);
+        Assert.Equal(7, configuredProps["count"]);
+        var nested = Assert.IsType<Dictionary<string, object?>>(configuredProps["nested"]);
+        Assert.Equal("sidekick", nested["name"]);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_NormalizesStructuredSnipAssetPayloadBeforeConfigure()
+    {
+        var registry = new MockNodeRegistry();
+        Dictionary<string, object?>? configuredProps = null;
+
+        var configDef = new NodeDefinition
+        {
+            TypeId = "test.snipConfig",
+            DisplayName = "Snip Config Node",
+            Category = NodeCategory.Action,
+            InputPorts = new List<PortDefinition> { new() { Id = "in", Name = "In" } },
+            OutputPorts = new List<PortDefinition> { new() { Id = "out", Name = "Out" } }
+        };
+
+        registry.Register("test.snipConfig", configDef, () =>
+        {
+            var node = new ConfigurableMockNode
+            {
+                Definition = configDef,
+                OnConfigure = props => configuredProps = new Dictionary<string, object?>(props)
+            };
+            return node;
+        });
+
+        using var document = JsonDocument.Parse("""
+        {
+          "templateImage": {
+            "kind": "snipAsset",
+            "assetId": "asset-123",
+            "displayName": "Header Button",
+            "imagePath": "assets/snips/asset-123.png",
+            "imageBase64": "AQIDBA=="
+          },
+          "threshold": 0.9
+        }
+        """);
+
+        var executor = new FlowExecutor(registry);
+        var flow = new Flow
+        {
+            Nodes = new List<NodeInstance>
+            {
+                new()
+                {
+                    Id = "n1",
+                    TypeId = "test.snipConfig",
+                    Properties = new Dictionary<string, object?>
+                    {
+                        ["templateImage"] = document.RootElement.GetProperty("templateImage").Clone(),
+                        ["threshold"] = document.RootElement.GetProperty("threshold").Clone()
+                    }
+                }
+            }
+        };
+
+        await executor.ExecuteAsync(flow);
+
+        Assert.NotNull(configuredProps);
+        Assert.Equal(0.9, configuredProps["threshold"]);
+
+        var templateImage = Assert.IsType<Dictionary<string, object?>>(configuredProps["templateImage"]);
+        Assert.Equal("snipAsset", templateImage["kind"]);
+        Assert.Equal("asset-123", templateImage["assetId"]);
+        Assert.Equal("Header Button", templateImage["displayName"]);
+        Assert.Equal("assets/snips/asset-123.png", templateImage["imagePath"]);
+        Assert.Equal("AQIDBA==", templateImage["imageBase64"]);
     }
 
     [Fact]

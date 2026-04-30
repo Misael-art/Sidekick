@@ -21,7 +21,7 @@
         "y": 180
       },
       "properties": {
-        "template": "Bem-vindo ao portfolio do Ajudante.",
+        "template": "Bem-vindo ao portfolio do Sidekick.",
         "storeInVariable": "welcomeText"
       }
     },
@@ -46,7 +46,7 @@
         "y": 180
       },
       "properties": {
-        "title": "Ajudante",
+        "title": "Sidekick",
         "message": "{{welcomeText}}",
         "timeoutMs": 3000
       }

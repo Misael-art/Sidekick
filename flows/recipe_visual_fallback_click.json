@@ -1,0 +1,88 @@
+{
+  "id": "recipe-visual-fallback-click",
+  "name": "Recipe - Visual Fallback Click",
+  "version": 1,
+  "variables": [
+    {
+      "name": "templatePath",
+      "type": "String",
+      "default": ""
+    }
+  ],
+  "nodes": [
+    {
+      "id": "start",
+      "typeId": "trigger.manualStart",
+      "position": {
+        "x": 80,
+        "y": 160
+      },
+      "properties": {}
+    },
+    {
+      "id": "click-image",
+      "typeId": "action.clickImageMatch",
+      "position": {
+        "x": 400,
+        "y": 160
+      },
+      "properties": {
+        "templateImage": "",
+        "templatePath": "{{templatePath}}",
+        "threshold": 0.86,
+        "timeoutMs": 8000,
+        "intervalMs": 500,
+        "clickType": "single"
+      }
+    },
+    {
+      "id": "log-match",
+      "typeId": "action.logMessage",
+      "position": {
+        "x": 740,
+        "y": 160
+      },
+      "properties": {
+        "message": "Visual fallback clicked an image match.",
+        "level": "warning"
+      }
+    },
+    {
+      "id": "log-not-found",
+      "typeId": "action.logMessage",
+      "position": {
+        "x": 400,
+        "y": 340
+      },
+      "properties": {
+        "message": "Visual fallback did not find the image. Re-capture the snip and confirm the target scale.",
+        "level": "warning"
+      }
+    }
+  ],
+  "connections": [
+    {
+      "id": "c1",
+      "sourceNodeId": "start",
+      "sourcePort": "triggered",
+      "targetNodeId": "click-image",
+      "targetPort": "in"
+    },
+    {
+      "id": "c2",
+      "sourceNodeId": "click-image",
+      "sourcePort": "out",
+      "targetNodeId": "log-match",
+      "targetPort": "in"
+    },
+    {
+      "id": "c3",
+      "sourceNodeId": "click-image",
+      "sourcePort": "notFound",
+      "targetNodeId": "log-not-found",
+      "targetPort": "in"
+    }
+  ],
+  "createdAt": "2026-04-29T00:00:00Z",
+  "modifiedAt": "2026-04-29T00:00:00Z"
+}

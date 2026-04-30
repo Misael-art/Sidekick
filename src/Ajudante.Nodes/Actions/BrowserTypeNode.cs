@@ -31,18 +31,16 @@ public class BrowserTypeNode : IActionNode
         OutputPorts = new List<PortDefinition>
         {
             new() { Id = "out", Name = "Out", DataType = PortDataType.Flow },
+            new() { Id = "notFound", Name = "Not Found", DataType = PortDataType.Flow },
             new() { Id = "typedText", Name = "Typed Text", DataType = PortDataType.String }
         },
-        Properties = new List<PropertyDefinition>
-        {
-            new() { Id = "windowTitle", Name = "Window Title", Type = PropertyType.String, DefaultValue = "", Description = "Optional browser window title" },
-            new() { Id = "automationId", Name = "Automation ID", Type = PropertyType.String, DefaultValue = "", Description = "Optional automation id" },
-            new() { Id = "elementName", Name = "Element Name", Type = PropertyType.String, DefaultValue = "", Description = "Visible element name/text" },
-            new() { Id = "controlType", Name = "Control Type", Type = PropertyType.String, DefaultValue = "edit", Description = "Optional UIAutomation control type" },
-            new() { Id = "timeoutMs", Name = "Timeout (ms)", Type = PropertyType.Integer, DefaultValue = 5000, Description = "Maximum wait time for the element" },
-            new() { Id = "text", Name = "Text", Type = PropertyType.String, DefaultValue = "", Description = "Text to type (supports {{variable}} templates)" },
-            new() { Id = "clearExisting", Name = "Clear Existing", Type = PropertyType.Boolean, DefaultValue = false, Description = "Clear existing content before typing" }
-        }
+        Properties = BrowserSelectorHelper.SelectorPropertyDefinitions("edit")
+            .Concat(new[]
+            {
+                new PropertyDefinition { Id = "text", Name = "Text", Type = PropertyType.String, DefaultValue = "", Description = "Text to type (supports {{variable}} templates)" },
+                new PropertyDefinition { Id = "clearExisting", Name = "Clear Existing", Type = PropertyType.Boolean, DefaultValue = false, Description = "Clear existing content before typing" }
+            })
+            .ToList()
     };
 
     public void Configure(Dictionary<string, object?> properties)
@@ -56,7 +54,7 @@ public class BrowserTypeNode : IActionNode
         var resolvedText = context.ResolveTemplate(NodeValueHelper.GetString(_properties, "text"));
         var clearExisting = NodeValueHelper.GetBool(_properties, "clearExisting");
 
-        var element = AutomationElementLocator.FindElement(selector.windowTitle, selector.automationId, selector.elementName, selector.controlType, selector.timeoutMs);
+        var element = BrowserSelectorHelper.FindElement(selector);
         if (element is null)
             return Task.FromResult(NodeResult.Fail("Browser element not found"));
 

@@ -1,0 +1,88 @@
+{
+  "id": "portfolio-browser-mira-text-demo",
+  "name": "Portfolio - Browser Mira Text Demo",
+  "version": 1,
+  "variables": [],
+  "nodes": [
+    {
+      "id": "start",
+      "typeId": "trigger.manualStart",
+      "position": {
+        "x": 80,
+        "y": 180
+      },
+      "properties": {}
+    },
+    {
+      "id": "type-search",
+      "typeId": "action.browserType",
+      "position": {
+        "x": 340,
+        "y": 180
+      },
+      "properties": {
+        "windowTitle": "Portal",
+        "automationId": "search-box",
+        "elementName": "Search",
+        "controlType": "Edit",
+        "timeoutMs": 5000,
+        "text": "status:open",
+        "clearExisting": true
+      }
+    },
+    {
+      "id": "extract-result",
+      "typeId": "action.browserExtractText",
+      "position": {
+        "x": 640,
+        "y": 180
+      },
+      "properties": {
+        "windowTitle": "Portal",
+        "automationId": "result-count",
+        "elementName": "Results",
+        "controlType": "Text",
+        "timeoutMs": 5000,
+        "storeInVariable": "resultCount"
+      }
+    },
+    {
+      "id": "log",
+      "typeId": "action.logMessage",
+      "position": {
+        "x": 940,
+        "y": 180
+      },
+      "properties": {
+        "message": "Browser typing and text extraction selectors were populated from Mira asset bindings.",
+        "level": "info",
+        "storeInVariable": ""
+      }
+    }
+  ],
+  "connections": [
+    {
+      "id": "c1",
+      "sourceNodeId": "start",
+      "sourcePort": "triggered",
+      "targetNodeId": "type-search",
+      "targetPort": "in"
+    },
+    {
+      "id": "c2",
+      "sourceNodeId": "type-search",
+      "sourcePort": "out",
+      "targetNodeId": "extract-result",
+      "targetPort": "in"
+    },
+    {
+      "id": "c3",
+      "sourceNodeId": "extract-result",
+      "sourcePort": "out",
+      "targetNodeId": "log",
+      "targetPort": "in"
+    }
+  ],
+  "createdAt": "2026-04-26T00:00:00Z",
+  "modifiedAt": "2026-04-26T00:00:00Z"
+}

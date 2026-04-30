@@ -25,10 +25,13 @@ function BaseNode({ id, data, selected }: BaseNodeProps) {
   const status = useAppStore((s) => s.nodeStatuses[id] ?? 'Idle');
 
   const headerColor = data.color ?? '#6b7280';
+  const displayTitle = data.nodeAlias?.trim() || data.displayName;
+  const hoverComment = data.nodeComment?.trim();
 
   return (
     <div
       className={`base-node ${selected ? 'base-node--selected' : ''}`}
+      title={hoverComment || undefined}
       style={{
         borderColor: selected ? headerColor : 'transparent',
         boxShadow: selected
@@ -39,7 +42,7 @@ function BaseNode({ id, data, selected }: BaseNodeProps) {
       {/* Header */}
       <div className="base-node__header" style={{ backgroundColor: headerColor }}>
         <span className="base-node__category">{data.category}</span>
-        <span className="base-node__title">{data.displayName}</span>
+        <span className="base-node__title">{displayTitle}</span>
         {status !== 'Idle' && (
           <span
             className="base-node__status"

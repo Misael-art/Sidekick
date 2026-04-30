@@ -1,5 +1,6 @@
 using Ajudante.Core;
 using Ajudante.Core.Serialization;
+using System.Text.Json;
 
 namespace Ajudante.Core.Tests;
 
@@ -287,5 +288,48 @@ public class FlowSerializerTests : IDisposable
         Assert.NotNull(result);
         Assert.Equal(123.45, result.Nodes[0].Position.X);
         Assert.Equal(678.90, result.Nodes[0].Position.Y);
+    }
+
+    [Fact]
+    public void Serialize_Deserialize_PreservesStructuredImageTemplatePayload()
+    {
+        var flow = new Flow
+        {
+            Nodes = new List<NodeInstance>
+            {
+                new()
+                {
+                    Id = "image-trigger",
+                    TypeId = "trigger.imageDetected",
+                    Position = new NodePosition { X = 10, Y = 20 },
+                    Properties = new Dictionary<string, object?>
+                    {
+                        ["templateImage"] = new Dictionary<string, object?>
+                        {
+                            ["kind"] = "snipAsset",
+                            ["assetId"] = "asset-123",
+                            ["displayName"] = "Header Button",
+                            ["imagePath"] = "assets/snips/asset-123.png",
+                            ["imageBase64"] = Convert.ToBase64String([1, 2, 3, 4])
+                        }
+                    }
+                }
+            }
+        };
+
+        var json = FlowSerializer.Serialize(flow);
+        var result = FlowSerializer.Deserialize(json);
+
+        Assert.Contains("\"templateImage\":", json);
+        Assert.Contains("\"assetId\": \"asset-123\"", json);
+        Assert.NotNull(result);
+
+        var templateImage = Assert.IsType<JsonElement>(result.Nodes[0].Properties["templateImage"]);
+        Assert.Equal(JsonValueKind.Object, templateImage.ValueKind);
+        Assert.Equal("snipAsset", templateImage.GetProperty("kind").GetString());
+        Assert.Equal("asset-123", templateImage.GetProperty("assetId").GetString());
+        Assert.Equal("Header Button", templateImage.GetProperty("displayName").GetString());
+        Assert.Equal("assets/snips/asset-123.png", templateImage.GetProperty("imagePath").GetString());
+        Assert.Equal(Convert.ToBase64String([1, 2, 3, 4]), templateImage.GetProperty("imageBase64").GetString());
     }
 }

@@ -89,6 +89,103 @@ public class FlowValidatorTests
             }
         });
 
+        registry.RegisterDefinition(new NodeDefinition
+        {
+            TypeId = "action.writeFile",
+            DisplayName = "Write File",
+            Category = NodeCategory.Action,
+            InputPorts = new List<PortDefinition>
+            {
+                new() { Id = "in", Name = "In" }
+            },
+            OutputPorts = new List<PortDefinition>
+            {
+                new() { Id = "out", Name = "Out" }
+            },
+            Properties = new List<PropertyDefinition>
+            {
+                new() { Id = "filePath", Name = "File Path", Type = PropertyType.FilePath, DefaultValue = "" },
+                new() { Id = "content", Name = "Content", Type = PropertyType.String, DefaultValue = "" }
+            }
+        });
+
+        registry.RegisterDefinition(new NodeDefinition
+        {
+            TypeId = "action.browserClick",
+            DisplayName = "Browser Click",
+            Category = NodeCategory.Action,
+            InputPorts = new List<PortDefinition>
+            {
+                new() { Id = "in", Name = "In" }
+            },
+            OutputPorts = new List<PortDefinition>
+            {
+                new() { Id = "out", Name = "Out" }
+            },
+            Properties = new List<PropertyDefinition>
+            {
+                new() { Id = "windowTitle", Name = "Window Title", Type = PropertyType.String, DefaultValue = "" },
+                new() { Id = "automationId", Name = "Automation Id", Type = PropertyType.String, DefaultValue = "" },
+                new() { Id = "elementName", Name = "Element Name", Type = PropertyType.String, DefaultValue = "" },
+                new() { Id = "controlType", Name = "Control Type", Type = PropertyType.String, DefaultValue = "" },
+                new() { Id = "timeoutMs", Name = "Timeout", Type = PropertyType.Integer, DefaultValue = 5000 }
+            }
+        });
+
+        registry.RegisterDefinition(new NodeDefinition
+        {
+            TypeId = "trigger.imageDetected",
+            DisplayName = "Image Trigger",
+            Category = NodeCategory.Trigger,
+            OutputPorts = new List<PortDefinition>
+            {
+                new() { Id = "triggered", Name = "Triggered" }
+            },
+            Properties = new List<PropertyDefinition>
+            {
+                new() { Id = "templateImage", Name = "Template Image", Type = PropertyType.ImageTemplate, DefaultValue = "" }
+            }
+        });
+
+        registry.RegisterDefinition(new NodeDefinition
+        {
+            TypeId = "logic.textTemplate",
+            DisplayName = "Text Template",
+            Category = NodeCategory.Logic,
+            InputPorts = new List<PortDefinition>
+            {
+                new() { Id = "in", Name = "In" }
+            },
+            OutputPorts = new List<PortDefinition>
+            {
+                new() { Id = "out", Name = "Out" }
+            },
+            Properties = new List<PropertyDefinition>
+            {
+                new() { Id = "template", Name = "Template", Type = PropertyType.String, DefaultValue = "" },
+                new() { Id = "storeInVariable", Name = "Store In Variable", Type = PropertyType.String, DefaultValue = "" }
+            }
+        });
+
+        registry.RegisterDefinition(new NodeDefinition
+        {
+            TypeId = "action.logMessage",
+            DisplayName = "Log Message",
+            Category = NodeCategory.Action,
+            InputPorts = new List<PortDefinition>
+            {
+                new() { Id = "in", Name = "In" }
+            },
+            OutputPorts = new List<PortDefinition>
+            {
+                new() { Id = "out", Name = "Out" }
+            },
+            Properties = new List<PropertyDefinition>
+            {
+                new() { Id = "message", Name = "Message", Type = PropertyType.String, DefaultValue = "" }
+            }
+        });
+
         return registry;
     }
 
@@ -408,5 +505,211 @@ public class FlowValidatorTests
         var result = validator.Validate(flow);
 
         Assert.DoesNotContain(result.Warnings, w => w.Contains("cycle"));
+    }
+
+    [Fact]
+    public void Validate_MissingRequiredFilePath_ProducesError()
+    {
+        var registry = CreateRegistryWithStandardTypes();
+        var validator = new FlowValidator(registry);
+        var flow = new Flow
+        {
+            Nodes = new List<NodeInstance>
+            {
+                new() { Id = "n1", TypeId = "trigger.hotkey" },
+                new() { Id = "n2", TypeId = "action.writeFile", Properties = new Dictionary<string, object?> { ["content"] = "demo" } }
+            },
+            Connections = new List<Connection>
+            {
+                new() { Id = "c1", SourceNodeId = "n1", SourcePort = "triggered", TargetNodeId = "n2", TargetPort = "in" }
+            }
+        };
+
+        var result = validator.Validate(flow);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.Contains("required property") && e.Contains("File Path"));
+    }
+
+    [Fact]
+    public void Validate_InvalidConnectionPorts_ProducesErrors()
+    {
+        var registry = CreateRegistryWithStandardTypes();
+        var validator = new FlowValidator(registry);
+        var flow = new Flow
+        {
+            Nodes = new List<NodeInstance>
+            {
+                new() { Id = "n1", TypeId = "trigger.hotkey" },
+                new() { Id = "n2", TypeId = "action.writeFile", Properties = new Dictionary<string, object?> { ["filePath"] = "C:\\temp\\demo.txt" } }
+            },
+            Connections = new List<Connection>
+            {
+                new() { Id = "c1", SourceNodeId = "n1", SourcePort = "invalid-out", TargetNodeId = "n2", TargetPort = "invalid-in" }
+            }
+        };
+
+        var result = validator.Validate(flow);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.Contains("invalid source port"));
+        Assert.Contains(result.Errors, e => e.Contains("invalid target port"));
+    }
+
+    [Fact]
+    public void Validate_UnresolvedTemplateReference_ProducesError()
+    {
+        var registry = CreateRegistryWithStandardTypes();
+        var validator = new FlowValidator(registry);
+        var flow = new Flow
+        {
+            Nodes = new List<NodeInstance>
+            {
+                new() { Id = "n1", TypeId = "trigger.hotkey" },
+                new()
+                {
+                    Id = "n2",
+                    TypeId = "action.logMessage",
+                    Properties = new Dictionary<string, object?> { ["message"] = "Hello {{missingValue}}" }
+                }
+            },
+            Connections = new List<Connection>
+            {
+                new() { Id = "c1", SourceNodeId = "n1", SourcePort = "triggered", TargetNodeId = "n2", TargetPort = "in" }
+            }
+        };
+
+        var result = validator.Validate(flow);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.Contains("unresolved reference 'missingValue'"));
+    }
+
+    [Fact]
+    public void Validate_TemplateReferenceProducedByNode_IsAccepted()
+    {
+        var registry = CreateRegistryWithStandardTypes();
+        var validator = new FlowValidator(registry);
+        var flow = new Flow
+        {
+            Nodes = new List<NodeInstance>
+            {
+                new() { Id = "start", TypeId = "trigger.hotkey" },
+                new()
+                {
+                    Id = "template",
+                    TypeId = "logic.textTemplate",
+                    Properties = new Dictionary<string, object?>
+                    {
+                        ["template"] = "demo",
+                        ["storeInVariable"] = "generatedText"
+                    }
+                },
+                new()
+                {
+                    Id = "log",
+                    TypeId = "action.logMessage",
+                    Properties = new Dictionary<string, object?> { ["message"] = "Value {{generatedText}}" }
+                }
+            },
+            Connections = new List<Connection>
+            {
+                new() { Id = "c1", SourceNodeId = "start", SourcePort = "triggered", TargetNodeId = "template", TargetPort = "in" },
+                new() { Id = "c2", SourceNodeId = "template", SourcePort = "out", TargetNodeId = "log", TargetPort = "in" }
+            }
+        };
+
+        var result = validator.Validate(flow);
+
+        Assert.True(result.IsValid);
+        Assert.DoesNotContain(result.Errors, e => e.Contains("generatedText"));
+    }
+
+    [Fact]
+    public void Validate_IncompleteBrowserSelector_ProducesError()
+    {
+        var registry = CreateRegistryWithStandardTypes();
+        var validator = new FlowValidator(registry);
+        var flow = new Flow
+        {
+            Nodes = new List<NodeInstance>
+            {
+                new() { Id = "n1", TypeId = "trigger.hotkey" },
+                new()
+                {
+                    Id = "n2",
+                    TypeId = "action.browserClick",
+                    Properties = new Dictionary<string, object?>
+                    {
+                        ["windowTitle"] = "",
+                        ["automationId"] = "",
+                        ["elementName"] = "",
+                        ["controlType"] = "",
+                        ["timeoutMs"] = 5000
+                    }
+                }
+            },
+            Connections = new List<Connection>
+            {
+                new() { Id = "c1", SourceNodeId = "n1", SourcePort = "triggered", TargetNodeId = "n2", TargetPort = "in" }
+            }
+        };
+
+        var result = validator.Validate(flow);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.Contains("incomplete selector"));
+    }
+
+    [Fact]
+    public void Validate_InvalidImageTemplate_ProducesError()
+    {
+        var registry = CreateRegistryWithStandardTypes();
+        var validator = new FlowValidator(registry);
+        var flow = new Flow
+        {
+            Nodes = new List<NodeInstance>
+            {
+                new() { Id = "n1", TypeId = "trigger.imageDetected", Properties = new Dictionary<string, object?> { ["templateImage"] = new Dictionary<string, object?>() } }
+            }
+        };
+
+        var result = validator.Validate(flow);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.Contains("valid image template"));
+    }
+
+    [Fact]
+    public void Validate_InvalidTimeout_ProducesError()
+    {
+        var registry = CreateRegistryWithStandardTypes();
+        var validator = new FlowValidator(registry);
+        var flow = new Flow
+        {
+            Nodes = new List<NodeInstance>
+            {
+                new() { Id = "n1", TypeId = "trigger.hotkey" },
+                new()
+                {
+                    Id = "n2",
+                    TypeId = "action.browserClick",
+                    Properties = new Dictionary<string, object?>
+                    {
+                        ["elementName"] = "Submit",
+                        ["timeoutMs"] = 0
+                    }
+                }
+            },
+            Connections = new List<Connection>
+            {
+                new() { Id = "c1", SourceNodeId = "n1", SourcePort = "triggered", TargetNodeId = "n2", TargetPort = "in" }
+            }
+        };
+
+        var result = validator.Validate(flow);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.Contains("invalid timeout"));
     }
 }

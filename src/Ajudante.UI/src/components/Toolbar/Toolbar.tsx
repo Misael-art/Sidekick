@@ -1,8 +1,40 @@
-import { useState, useRef, useEffect, useMemo, type KeyboardEvent } from 'react';
-import { useFlowStore } from '../../store/flowStore';
-import { useAppStore } from '../../store/appStore';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { sendCommand } from '../../bridge/bridge';
 import { toBackendFlow } from '../../bridge/flowConverter';
+import type {
+  CapturedElement,
+  FlowValidationResult,
+  FlowNodeData,
+  FlowRuntimeSnapshot,
+  InspectionAsset,
+  InspectionAssetTestResult,
+  StopFlowMode,
+} from '../../bridge/types';
+import { useAppStore } from '../../store/appStore';
+import { useFlowStore } from '../../store/flowStore';
+
+interface FlowSummary {
+  id: string;
+  name?: string;
+  modifiedAt?: string;
+  nodeCount?: number;
+  isNative?: boolean;
+}
+
+interface FlowActivationResponse {
+  armed?: boolean;
+  flow?: FlowRuntimeSnapshot;
+  warnings?: string[];
+  validation?: FlowValidationResult;
+}
+
+interface RunFlowResponse {
+  queued?: boolean;
+  flowId?: string;
+  queueLength?: number;
+  queuePending?: boolean;
+  validation?: FlowValidationResult;
+}
 
 function getErrorMessage(error: unknown, fallback: string): string {
   if (error instanceof Error && error.message.trim()) {
@@ -10,13 +42,6 @@ function getErrorMessage(error: unknown, fallback: string): string {
   }
 
   return fallback;
-}
-
-interface FlowSummary {
-  id: string;
-  name?: string;
-  modifiedAt?: string;
-  nodeCount?: number;
 }
 
 function formatModifiedAt(value?: string): string {
@@ -47,6 +72,89 @@ function isDemoFlow(flow: FlowSummary): boolean {
   return haystack.includes('demo');
 }
 
+function formatBounds(bounds?: { x: number; y: number; width: number; height: number } | null): string {
+  if (!bounds) {
+    return 'Posicao indisponivel';
+  }
+
+  return `${bounds.x}, ${bounds.y} • ${bounds.width}x${bounds.height}`;
+}
+
+function formatInspectionCapturedAt(value?: string): string {
+  if (!value) {
+    return 'Data indisponivel';
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+
+  return parsed.toLocaleString('pt-BR');
+}
+
+function buildInspectionSearchText(asset: InspectionAsset): string {
+  return normalizeSearchText([
+    asset.displayName,
+    asset.content.name,
+    asset.content.automationId,
+    asset.content.className,
+    asset.content.controlType,
+    asset.source.windowTitle,
+    asset.source.processName,
+    asset.source.processPath,
+    asset.locator.strength,
+    asset.locator.strategy,
+    ...asset.tags,
+  ].filter(Boolean).join(' '));
+}
+
+function buildInspectionSummary(asset: InspectionAsset): string {
+  const summaryParts = [
+    asset.content.controlType,
+    asset.content.name,
+    asset.content.automationId,
+    asset.locator.strength,
+    asset.locator.strategy,
+  ].filter(Boolean);
+
+  return summaryParts.length > 0 ? summaryParts.join(' • ') : 'Metadados basicos indisponiveis';
+}
+
+function hasContinuousTriggers(nodes: Array<{ data: FlowNodeData }>): boolean {
+  return nodes.some((node) => node.data.category === 'Trigger' && node.data.typeId !== 'trigger.manualStart');
+}
+
+function buildStopMessage(mode: StopFlowMode, queueLength: number): string {
+  return mode === 'cancelAll'
+    ? `Execucao atual interrompida e ${queueLength} item(ns) removido(s) da fila.`
+    : 'Execucao atual interrompida.';
+}
+
+function summarizeIssues(messages: string[], maxItems = 2): string {
+  if (messages.length === 0) {
+    return '';
+  }
+
+  const visible = messages.slice(0, maxItems).join(' | ');
+  const remaining = messages.length - maxItems;
+  return remaining > 0 ? `${visible} | +${remaining} restante(s)` : visible;
+}
+
+function buildValidationErrorMessage(validation: FlowValidationResult): string {
+  const details = summarizeIssues(validation.errors);
+  return details
+    ? `Corrija ${validation.errors.length} erro(s) antes de continuar: ${details}`
+    : 'Corrija os erros de validacao antes de continuar.';
+}
+
+function buildValidationWarningMessage(validation: FlowValidationResult, successLabel: string): string {
+  const details = summarizeIssues(validation.warnings);
+  return details
+    ? `${successLabel} com ${validation.warnings.length} aviso(s): ${details}`
+    : successLabel;
+}
+
 export default function Toolbar() {
   const flowName = useFlowStore((s) => s.flowName);
   const flowId = useFlowStore((s) => s.flowId);
@@ -57,13 +165,17 @@ export default function Toolbar() {
   const saveFlow = useFlowStore((s) => s.saveFlow);
   const newFlow = useFlowStore((s) => s.newFlow);
   const loadFlow = useFlowStore((s) => s.loadFlow);
+  const validateFlow = useFlowStore((s) => s.validateFlow);
+
   const isRunning = useAppStore((s) => s.isRunning);
-  const setRunning = useAppStore((s) => s.setRunning);
-  const setRunningFlow = useAppStore((s) => s.setRunningFlow);
-  const clearRunningFlow = useAppStore((s) => s.clearRunningFlow);
+  const queueLength = useAppStore((s) => s.queueLength);
+  const currentRun = useAppStore((s) => s.currentRun);
+  const flowRuntimes = useAppStore((s) => s.flowRuntimes);
   const clearNodeStatuses = useAppStore((s) => s.clearNodeStatuses);
   const inspectorMode = useAppStore((s) => s.inspectorMode);
   const setInspectorMode = useAppStore((s) => s.setInspectorMode);
+  const capturedElement = useAppStore((s) => s.capturedElement);
+  const inspectionAssets = useAppStore((s) => s.inspectionAssets);
   const addLog = useAppStore((s) => s.addLog);
   const setUserMessage = useAppStore((s) => s.setUserMessage);
 
@@ -75,8 +187,17 @@ export default function Toolbar() {
   const [loadFilter, setLoadFilter] = useState('');
   const [isLoadingFlowList, setIsLoadingFlowList] = useState(false);
   const [isApplyingLoadedFlow, setIsApplyingLoadedFlow] = useState(false);
+  const [deletingFlowId, setDeletingFlowId] = useState<string | null>(null);
+  const [isStopDialogOpen, setIsStopDialogOpen] = useState(false);
+  const [isStoppingFlow, setIsStoppingFlow] = useState(false);
+  const [isInspectionLibraryOpen, setIsInspectionLibraryOpen] = useState(false);
+  const [inspectionFilter, setInspectionFilter] = useState('');
+  const [selectedInspectionAssetId, setSelectedInspectionAssetId] = useState<string | null>(null);
+  const [inspectionAssetBusyId, setInspectionAssetBusyId] = useState<string | null>(null);
+  const [inspectionAssetTestResult, setInspectionAssetTestResult] = useState<string>('');
   const inputRef = useRef<HTMLInputElement>(null);
   const loadSearchInputRef = useRef<HTMLInputElement>(null);
+  const inspectionSearchInputRef = useRef<HTMLInputElement>(null);
 
   const filteredFlows = useMemo(() => {
     const normalizedFilter = normalizeSearchText(loadFilter);
@@ -90,6 +211,26 @@ export default function Toolbar() {
       return normalizedName.includes(normalizedFilter) || normalizedId.includes(normalizedFilter);
     });
   }, [availableFlows, loadFilter]);
+
+  const filteredInspectionAssets = useMemo(() => {
+    const normalizedFilter = normalizeSearchText(inspectionFilter);
+    if (!normalizedFilter) {
+      return inspectionAssets;
+    }
+
+    return inspectionAssets.filter((asset) => buildInspectionSearchText(asset).includes(normalizedFilter));
+  }, [inspectionAssets, inspectionFilter]);
+
+  const selectedInspectionAsset = useMemo(() => (
+    filteredInspectionAssets.find((asset) => asset.id === selectedInspectionAssetId)
+      ?? filteredInspectionAssets[0]
+      ?? null
+  ), [filteredInspectionAssets, selectedInspectionAssetId]);
+
+  const currentFlowRuntime = flowRuntimes[flowId] ?? null;
+  const isCurrentFlowArmed = Boolean(currentFlowRuntime?.isArmed);
+  const canArmCurrentFlow = hasContinuousTriggers(nodes);
+  const canStop = isRunning || queueLength > 0;
 
   useEffect(() => {
     if (isEditing && inputRef.current) {
@@ -106,17 +247,54 @@ export default function Toolbar() {
     loadSearchInputRef.current?.focus();
     loadSearchInputRef.current?.select();
 
-    const handleKeyDown = (event: KeyboardEvent) => {
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
       if (event.key === 'Escape' && !isApplyingLoadedFlow) {
         setIsLoadDialogOpen(false);
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown as unknown as EventListener);
+    window.addEventListener('keydown', handleKeyDown);
     return () => {
-      window.removeEventListener('keydown', handleKeyDown as unknown as EventListener);
+      window.removeEventListener('keydown', handleKeyDown);
     };
   }, [isLoadDialogOpen, isApplyingLoadedFlow]);
+
+  useEffect(() => {
+    if (!isStopDialogOpen) {
+      return;
+    }
+
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape' && !isStoppingFlow) {
+        setIsStopDialogOpen(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isStopDialogOpen, isStoppingFlow]);
+
+  useEffect(() => {
+    if (!isInspectionLibraryOpen) {
+      return;
+    }
+
+    inspectionSearchInputRef.current?.focus();
+    inspectionSearchInputRef.current?.select();
+
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsInspectionLibraryOpen(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isInspectionLibraryOpen]);
 
   useEffect(() => {
     if (!isLoadDialogOpen) {
@@ -133,17 +311,43 @@ export default function Toolbar() {
     }
   }, [filteredFlows, isLoadDialogOpen, selectedFlowId]);
 
+  useEffect(() => {
+    if (queueLength === 0 && !isRunning) {
+      setIsStopDialogOpen(false);
+      setIsStoppingFlow(false);
+    }
+  }, [isRunning, queueLength]);
+
+  useEffect(() => {
+    if (!isInspectionLibraryOpen) {
+      return;
+    }
+
+    if (filteredInspectionAssets.length === 0) {
+      setSelectedInspectionAssetId(null);
+      return;
+    }
+
+    if (!selectedInspectionAssetId || !filteredInspectionAssets.some((asset) => asset.id === selectedInspectionAssetId)) {
+      setSelectedInspectionAssetId(filteredInspectionAssets[0].id);
+    }
+  }, [filteredInspectionAssets, isInspectionLibraryOpen, selectedInspectionAssetId]);
+
   const commitName = () => {
     const trimmed = editName.trim();
     if (trimmed) {
       setFlowName(trimmed);
     }
+
     setIsEditing(false);
   };
 
-  const handleNameKeyDown = (e: KeyboardEvent) => {
-    if (e.key === 'Enter') commitName();
-    if (e.key === 'Escape') {
+  const handleNameKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Enter') {
+      commitName();
+    }
+
+    if (event.key === 'Escape') {
       setEditName(flowName);
       setIsEditing(false);
     }
@@ -152,39 +356,126 @@ export default function Toolbar() {
   const handlePlay = async () => {
     try {
       setUserMessage(null);
-      setRunning(true);
-      setRunningFlow(flowId || null, flowName);
+      const validation = await validateFlow();
+      if (!validation.isValid) {
+        const message = buildValidationErrorMessage(validation);
+        addLog({ timestamp: new Date().toISOString(), level: 'error', message });
+        setUserMessage({ type: 'error', text: message });
+        return;
+      }
+
       clearNodeStatuses();
       const backendFlow = toBackendFlow(flowId, flowName, nodes, edges);
-      await sendCommand('engine', 'runFlow', backendFlow);
+      const result = await sendCommand<RunFlowResponse>('engine', 'runFlow', backendFlow);
+      const runtimeValidation = result?.validation ?? validation;
+
+      if (!result?.queued) {
+        const message = buildValidationErrorMessage(runtimeValidation);
+        addLog({ timestamp: new Date().toISOString(), level: 'error', message });
+        setUserMessage({ type: 'error', text: message });
+        return;
+      }
+
+      setUserMessage({
+        type: runtimeValidation.warnings.length > 0 ? 'info' : 'success',
+        text: runtimeValidation.warnings.length > 0
+          ? buildValidationWarningMessage(runtimeValidation, 'Execucao enfileirada com sucesso')
+          : 'Execucao enfileirada com sucesso.',
+      });
     } catch (error) {
-      const message = getErrorMessage(error, 'Nao foi possivel executar o fluxo.');
-      setRunning(false);
-      clearRunningFlow();
+      const message = getErrorMessage(error, 'Nao foi possivel enfileirar o fluxo.');
       addLog({ timestamp: new Date().toISOString(), level: 'error', message });
       setUserMessage({ type: 'error', text: message });
+    }
+  };
+
+  const handleArm = async () => {
+    try {
+      setUserMessage(null);
+      const validation = await validateFlow();
+      if (!validation.isValid) {
+        const message = buildValidationErrorMessage(validation);
+        addLog({ timestamp: new Date().toISOString(), level: 'error', message });
+        setUserMessage({ type: 'error', text: message });
+        return;
+      }
+
+      const backendFlow = toBackendFlow(flowId, flowName, nodes, edges);
+      const result = await sendCommand<FlowActivationResponse>('engine', 'activateFlow', backendFlow);
+      const runtimeValidation = result?.validation ?? validation;
+      if (!result?.armed) {
+        const message = buildValidationErrorMessage(runtimeValidation);
+        addLog({ timestamp: new Date().toISOString(), level: 'error', message });
+        setUserMessage({ type: 'error', text: message });
+        return;
+      }
+
+      setUserMessage({
+        type: runtimeValidation.warnings.length > 0 ? 'info' : 'success',
+        text: runtimeValidation.warnings.length > 0
+          ? buildValidationWarningMessage(runtimeValidation, 'Flow armado para monitoramento continuo')
+          : 'Flow armado para monitoramento continuo.',
+      });
+    } catch (error) {
+      const message = getErrorMessage(error, 'Nao foi possivel armar o fluxo.');
+      addLog({ timestamp: new Date().toISOString(), level: 'error', message });
+      setUserMessage({ type: 'error', text: message });
+    }
+  };
+
+  const handleDisarm = async () => {
+    try {
+      setUserMessage(null);
+      await sendCommand('engine', 'deactivateFlow', { flowId });
+      setUserMessage({ type: 'success', text: 'Flow desarmado com sucesso.' });
+    } catch (error) {
+      const message = getErrorMessage(error, 'Nao foi possivel desarmar o fluxo.');
+      addLog({ timestamp: new Date().toISOString(), level: 'error', message });
+      setUserMessage({ type: 'error', text: message });
+    }
+  };
+
+  const executeStop = async (mode: StopFlowMode) => {
+    try {
+      setIsStoppingFlow(true);
+      setUserMessage(null);
+      await sendCommand('engine', 'stopFlow', { mode });
+      setIsStopDialogOpen(false);
+      setUserMessage({
+        type: 'info',
+        text: buildStopMessage(mode, queueLength),
+      });
+    } catch (error) {
+      const message = getErrorMessage(error, 'Nao foi possivel interromper o runtime.');
+      addLog({ timestamp: new Date().toISOString(), level: 'error', message });
+      setUserMessage({ type: 'error', text: message });
+    } finally {
+      setIsStoppingFlow(false);
     }
   };
 
   const handleStop = async () => {
-    try {
-      setUserMessage(null);
-      await sendCommand('engine', 'stopFlow', {});
-      setRunning(false);
-      clearRunningFlow();
-    } catch (error) {
-      const message = getErrorMessage(error, 'Nao foi possivel interromper o fluxo.');
-      addLog({ timestamp: new Date().toISOString(), level: 'error', message });
-      setUserMessage({ type: 'error', text: message });
+    if (!canStop) {
+      return;
     }
+
+    if (queueLength > 0) {
+      setIsStopDialogOpen(true);
+      return;
+    }
+
+    await executeStop('currentOnly');
   };
 
   const handleNew = async () => {
-    if (isRunning) return;
-    if (isDirty && !confirmDiscardUnsavedChanges('criar um novo fluxo')) return;
+    if (isDirty && !confirmDiscardUnsavedChanges('criar um novo fluxo')) {
+      return;
+    }
+
     try {
       setUserMessage(null);
       await newFlow();
+      clearNodeStatuses();
       setUserMessage({ type: 'success', text: 'Novo fluxo criado com sucesso.' });
       addLog({
         timestamp: new Date().toISOString(),
@@ -216,8 +507,6 @@ export default function Toolbar() {
   };
 
   const handleLoad = async () => {
-    if (isRunning) return;
-
     try {
       setUserMessage(null);
       setIsLoadingFlowList(true);
@@ -249,6 +538,7 @@ export default function Toolbar() {
     try {
       setIsApplyingLoadedFlow(true);
       setUserMessage(null);
+      clearNodeStatuses();
       await loadFlow(targetFlowId);
       const selectedFlow = availableFlows.find((flow) => flow.id === targetFlowId);
       const loadedFlowName = selectedFlow?.name?.trim() || 'Fluxo';
@@ -268,30 +558,145 @@ export default function Toolbar() {
     }
   };
 
+  const handleDeleteFlow = async (flow: FlowSummary) => {
+    if (flow.isNative) {
+      setUserMessage({ type: 'info', text: 'Fluxos nativos da ferramenta nao podem ser apagados.' });
+      return;
+    }
+
+    const label = flow.name?.trim() || flow.id;
+    const shouldDelete = window.confirm(`Deseja apagar a automacao "${label}"? Esta acao nao pode ser desfeita.`);
+    if (!shouldDelete) {
+      return;
+    }
+
+    try {
+      setDeletingFlowId(flow.id);
+      await sendCommand('flow', 'deleteFlow', { flowId: flow.id });
+      const nextFlows = availableFlows.filter((candidate) => candidate.id !== flow.id);
+      setAvailableFlows(nextFlows);
+      if (selectedFlowId === flow.id) {
+        setSelectedFlowId(nextFlows[0]?.id ?? null);
+      }
+      setUserMessage({ type: 'success', text: `Automacao "${label}" apagada com sucesso.` });
+      addLog({
+        timestamp: new Date().toISOString(),
+        level: 'info',
+        message: `Automacao "${label}" apagada com sucesso.`,
+      });
+    } catch (error) {
+      const message = getErrorMessage(error, 'Nao foi possivel apagar a automacao selecionada.');
+      addLog({ timestamp: new Date().toISOString(), level: 'error', message });
+      setUserMessage({ type: 'error', text: message });
+    } finally {
+      setDeletingFlowId(null);
+    }
+  };
+
+  const startMiraCapture = () => {
+    setInspectorMode('mira');
+    setUserMessage({ type: 'info', text: 'Mira ativo: clique no elemento que deseja capturar ou pressione Esc para cancelar.' });
+    void sendCommand('platform', 'startMira', {}).catch((error) => {
+      const message = getErrorMessage(error, 'Nao foi possivel iniciar o Mira.');
+      setInspectorMode('none');
+      setUserMessage({ type: 'error', text: message });
+      addLog({ timestamp: new Date().toISOString(), level: 'error', message });
+    });
+  };
+
   const toggleMira = () => {
     if (inspectorMode === 'mira') {
       void sendCommand('platform', 'cancelInspector', {});
       setInspectorMode('none');
-    } else {
-      void sendCommand('platform', 'startMira', {});
-      setInspectorMode('mira');
+      setUserMessage({ type: 'info', text: 'Mira cancelado.' });
+      return;
     }
+
+    startMiraCapture();
   };
 
   const toggleSnip = () => {
     if (inspectorMode === 'snip') {
       void sendCommand('platform', 'cancelInspector', {});
       setInspectorMode('none');
+      setUserMessage({ type: 'info', text: 'Snip cancelado.' });
     } else {
-      void sendCommand('platform', 'startSnip', {});
       setInspectorMode('snip');
+      setUserMessage({ type: 'info', text: 'Snip ativo: arraste para selecionar uma regiao ou pressione Esc para cancelar.' });
+      void sendCommand('platform', 'startSnip', {}).catch((error) => {
+        const message = getErrorMessage(error, 'Nao foi possivel iniciar o Snip.');
+        setInspectorMode('none');
+        setUserMessage({ type: 'error', text: message });
+        addLog({ timestamp: new Date().toISOString(), level: 'error', message });
+      });
+    }
+  };
+
+  const openInspectionLibrary = () => {
+    setInspectionFilter('');
+    setSelectedInspectionAssetId(inspectionAssets[0]?.id ?? null);
+    setInspectionAssetTestResult('');
+    setIsInspectionLibraryOpen(true);
+  };
+
+  const captureFromInspectionLibrary = () => {
+    setIsInspectionLibraryOpen(false);
+    startMiraCapture();
+  };
+
+  const latestCapturedInspection: CapturedElement | null = capturedElement;
+
+  const refreshInspectionAssets = async () => {
+    const assets = await sendCommand<InspectionAsset[]>('assets', 'listInspectionAssets', {});
+    if (Array.isArray(assets)) {
+      useAppStore.getState().setInspectionAssets(assets);
+    }
+  };
+
+  const testSelectedInspectionAsset = async () => {
+    if (!selectedInspectionAsset) {
+      return;
+    }
+
+    setInspectionAssetBusyId(selectedInspectionAsset.id);
+    setInspectionAssetTestResult('Testando seletor...');
+    try {
+      const result = await sendCommand<InspectionAssetTestResult>('assets', 'testInspectionAsset', {
+        assetId: selectedInspectionAsset.id,
+      });
+      setInspectionAssetTestResult(
+        result?.found
+          ? `Seletor encontrado agora em ${formatBounds(result.bounds ?? selectedInspectionAsset.locator.absoluteBounds)}.`
+          : 'Seletor nao encontrou o elemento agora; use fallback visual ou recapture.'
+      );
+    } catch (error) {
+      setInspectionAssetTestResult(getErrorMessage(error, 'Falha ao testar seletor.'));
+    } finally {
+      setInspectionAssetBusyId(null);
+    }
+  };
+
+  const deleteSelectedInspectionAsset = async () => {
+    if (!selectedInspectionAsset) {
+      return;
+    }
+
+    setInspectionAssetBusyId(selectedInspectionAsset.id);
+    try {
+      await sendCommand('assets', 'deleteInspectionAsset', { assetId: selectedInspectionAsset.id });
+      await refreshInspectionAssets();
+      setSelectedInspectionAssetId(null);
+      setInspectionAssetTestResult('Ativo Mira apagado.');
+    } catch (error) {
+      setInspectionAssetTestResult(getErrorMessage(error, 'Falha ao apagar ativo Mira.'));
+    } finally {
+      setInspectionAssetBusyId(null);
     }
   };
 
   return (
     <>
       <div className="toolbar">
-        {/* Left: File operations */}
         <div className="toolbar__group">
           <button className="toolbar__btn" onClick={handleNew} title="New Flow">
             <span className="toolbar__btn-icon">&#x1F4C4;</span>
@@ -302,10 +707,10 @@ export default function Toolbar() {
             <span className="toolbar__btn-label">Save</span>
           </button>
           <button
-            className={`toolbar__btn ${isLoadingFlowList || isRunning ? 'toolbar__btn--disabled' : ''}`}
+            className={`toolbar__btn ${isLoadingFlowList ? 'toolbar__btn--disabled' : ''}`}
             onClick={handleLoad}
             title="Load Flow"
-            disabled={isLoadingFlowList || isRunning}
+            disabled={isLoadingFlowList}
           >
             <span className="toolbar__btn-icon">&#x1F4C2;</span>
             <span className="toolbar__btn-label">{isLoadingFlowList ? 'Loading...' : 'Load'}</span>
@@ -314,14 +719,13 @@ export default function Toolbar() {
 
         <div className="toolbar__divider" />
 
-        {/* Center: Flow name */}
         <div className="toolbar__center">
           {isEditing ? (
             <input
               ref={inputRef}
               className="toolbar__name-input"
               value={editName}
-              onChange={(e) => setEditName(e.target.value)}
+              onChange={(event) => setEditName(event.target.value)}
               onBlur={commitName}
               onKeyDown={handleNameKeyDown}
             />
@@ -334,29 +738,47 @@ export default function Toolbar() {
               }}
               title="Click to rename"
             >
-              {flowName}{isDirty ? ' *' : ''}
+              {flowName}
+              {isDirty ? ' *' : ''}
+              {isCurrentFlowArmed ? ' [Armed]' : ''}
             </button>
           )}
         </div>
 
         <div className="toolbar__divider" />
 
-        {/* Right: Execution and inspector */}
         <div className="toolbar__group">
           <button
-            className={`toolbar__btn toolbar__btn--play ${isRunning ? 'toolbar__btn--disabled' : ''}`}
+            className="toolbar__btn toolbar__btn--play"
             onClick={handlePlay}
-            disabled={isRunning}
-            title="Run Flow"
+            title="Queue an immediate run"
           >
             <span className="toolbar__btn-icon">&#9654;</span>
-            <span className="toolbar__btn-label">Play</span>
+            <span className="toolbar__btn-label">Run Now</span>
           </button>
           <button
-            className={`toolbar__btn toolbar__btn--stop ${!isRunning ? 'toolbar__btn--disabled' : ''}`}
-            onClick={handleStop}
-            disabled={!isRunning}
-            title="Stop Flow"
+            className={`toolbar__btn ${!canArmCurrentFlow || isCurrentFlowArmed ? 'toolbar__btn--disabled' : ''}`}
+            onClick={handleArm}
+            disabled={!canArmCurrentFlow || isCurrentFlowArmed}
+            title="Arm flow triggers"
+          >
+            <span className="toolbar__btn-icon">&#128276;</span>
+            <span className="toolbar__btn-label">Arm</span>
+          </button>
+          <button
+            className={`toolbar__btn ${!isCurrentFlowArmed ? 'toolbar__btn--disabled' : ''}`}
+            onClick={handleDisarm}
+            disabled={!isCurrentFlowArmed}
+            title="Disarm flow triggers"
+          >
+            <span className="toolbar__btn-icon">&#128277;</span>
+            <span className="toolbar__btn-label">Disarm</span>
+          </button>
+          <button
+            className={`toolbar__btn toolbar__btn--stop ${!canStop ? 'toolbar__btn--disabled' : ''}`}
+            onClick={() => { void handleStop(); }}
+            disabled={!canStop}
+            title="Stop current run"
           >
             <span className="toolbar__btn-icon">&#9632;</span>
             <span className="toolbar__btn-label">Stop</span>
@@ -373,6 +795,15 @@ export default function Toolbar() {
           >
             <span className="toolbar__btn-icon">&#x1F441;</span>
             <span className="toolbar__btn-label">Mira</span>
+          </button>
+          <button
+            className="toolbar__btn"
+            onClick={openInspectionLibrary}
+            title="Browse saved Mira inspection assets"
+            type="button"
+          >
+            <span className="toolbar__btn-icon">&#x1F5C2;</span>
+            <span className="toolbar__btn-label">Mira Lib ({inspectionAssets.length})</span>
           </button>
           <button
             className={`toolbar__btn ${inspectorMode === 'snip' ? 'toolbar__btn--active' : ''}`}
@@ -444,22 +875,37 @@ export default function Toolbar() {
             ) : (
               <div className="toolbar__dialog-list" role="listbox" aria-label="Fluxos salvos">
                 {filteredFlows.map((flow) => (
-                  <button
-                    key={flow.id}
-                    className={`toolbar__flow-option ${selectedFlowId === flow.id ? 'toolbar__flow-option--selected' : ''}`}
-                    onClick={() => setSelectedFlowId(flow.id)}
-                    onDoubleClick={() => { void handleSelectFlow(flow.id); }}
-                    type="button"
-                  >
-                    <span className="toolbar__flow-option-header">
-                      <span className="toolbar__flow-option-title">{flow.name?.trim() || 'Untitled Flow'}</span>
-                      {isDemoFlow(flow) && <span className="toolbar__flow-option-badge">Demo</span>}
-                    </span>
-                    <span className="toolbar__flow-option-meta">
-                      {flow.nodeCount ?? 0} no(s) • {formatModifiedAt(flow.modifiedAt)}
-                    </span>
-                    <span className="toolbar__flow-option-id">{flow.id}</span>
-                  </button>
+                  <div key={flow.id} className="toolbar__flow-option-row">
+                    <button
+                      className={`toolbar__flow-option ${selectedFlowId === flow.id ? 'toolbar__flow-option--selected' : ''}`}
+                      onClick={() => setSelectedFlowId(flow.id)}
+                      onDoubleClick={() => { void handleSelectFlow(flow.id); }}
+                      type="button"
+                    >
+                      <span className="toolbar__flow-option-header">
+                        <span className="toolbar__flow-option-title">{flow.name?.trim() || 'Untitled Flow'}</span>
+                        <span className="toolbar__flow-option-badges">
+                          {flow.isNative && <span className="toolbar__flow-option-badge">Native</span>}
+                          {isDemoFlow(flow) && <span className="toolbar__flow-option-badge">Demo</span>}
+                        </span>
+                      </span>
+                      <span className="toolbar__flow-option-meta">
+                        {flow.nodeCount ?? 0} no(s) • {formatModifiedAt(flow.modifiedAt)}
+                      </span>
+                      <span className="toolbar__flow-option-id">{flow.id}</span>
+                    </button>
+                    {!flow.isNative && (
+                      <button
+                        type="button"
+                        className="toolbar__flow-delete-btn"
+                        onClick={() => { void handleDeleteFlow(flow); }}
+                        disabled={deletingFlowId === flow.id}
+                        title="Apagar automacao nao nativa"
+                      >
+                        {deletingFlowId === flow.id ? '...' : '🗑'}
+                      </button>
+                    )}
+                  </div>
                 ))}
               </div>
             )}
@@ -480,6 +926,288 @@ export default function Toolbar() {
                 type="button"
               >
                 {isApplyingLoadedFlow ? 'Carregando...' : 'Carregar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isStopDialogOpen && (
+        <div
+          className="toolbar__dialog-backdrop"
+          onClick={() => {
+            if (!isStoppingFlow) {
+              setIsStopDialogOpen(false);
+            }
+          }}
+        >
+          <div
+            className="toolbar__dialog toolbar__dialog--compact"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="stop-runtime-dialog-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="toolbar__dialog-header">
+              <div>
+                <h2 id="stop-runtime-dialog-title" className="toolbar__dialog-title">Parar runtime</h2>
+                <p className="toolbar__dialog-subtitle">
+                  {currentRun
+                    ? `Existe uma execucao em andamento para "${currentRun.flowName}".`
+                    : 'Existem itens aguardando na fila do runtime.'}
+                </p>
+              </div>
+              <button
+                className="toolbar__dialog-close"
+                onClick={() => setIsStopDialogOpen(false)}
+                disabled={isStoppingFlow}
+                title="Fechar"
+              >
+                x
+              </button>
+            </div>
+
+            <div className="toolbar__dialog-body">
+              <p className="toolbar__dialog-copy">
+                Fila atual: {queueLength} item(ns).
+              </p>
+              <p className="toolbar__dialog-copy">
+                Escolha se deseja apenas interromper a execucao atual ou tambem limpar toda a fila pendente.
+              </p>
+            </div>
+
+            <div className="toolbar__dialog-actions">
+              <button
+                className="toolbar__dialog-btn toolbar__dialog-btn--secondary"
+                onClick={() => setIsStopDialogOpen(false)}
+                disabled={isStoppingFlow}
+                type="button"
+              >
+                Cancelar
+              </button>
+              <button
+                className="toolbar__dialog-btn toolbar__dialog-btn--secondary"
+                onClick={() => { void executeStop('currentOnly'); }}
+                disabled={!isRunning || isStoppingFlow}
+                type="button"
+              >
+                {isStoppingFlow ? 'Parando...' : 'Parar atual'}
+              </button>
+              <button
+                className="toolbar__dialog-btn toolbar__dialog-btn--danger"
+                onClick={() => { void executeStop('cancelAll'); }}
+                disabled={isStoppingFlow}
+                type="button"
+              >
+                {isStoppingFlow ? 'Limpando...' : 'Parar e limpar fila'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isInspectionLibraryOpen && (
+        <div
+          className="toolbar__dialog-backdrop"
+          onClick={() => setIsInspectionLibraryOpen(false)}
+        >
+          <div
+            className="toolbar__dialog toolbar__dialog--wide"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="inspection-library-dialog-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="toolbar__dialog-header">
+              <div>
+                <h2 id="inspection-library-dialog-title" className="toolbar__dialog-title">Biblioteca Mira</h2>
+                <p className="toolbar__dialog-subtitle">
+                  Navegue pelos elementos capturados e reutilize este historico como base para futuros bindings.
+                </p>
+              </div>
+              <button
+                className="toolbar__dialog-close"
+                onClick={() => setIsInspectionLibraryOpen(false)}
+                title="Fechar"
+                type="button"
+              >
+                x
+              </button>
+            </div>
+
+            {latestCapturedInspection && (
+              <div className="toolbar__asset-summary">
+                <strong className="toolbar__asset-summary-title">Ultima captura</strong>
+                <span className="toolbar__asset-summary-copy">
+                  {(latestCapturedInspection.asset?.displayName ?? latestCapturedInspection.name ?? latestCapturedInspection.automationId ?? 'Elemento capturado')}
+                  {' • '}
+                  {latestCapturedInspection.controlType || 'tipo desconhecido'}
+                  {' • '}
+                  {formatBounds(latestCapturedInspection.boundingRect)}
+                </span>
+                {latestCapturedInspection.assetSaveError && (
+                  <span className="toolbar__asset-summary-copy toolbar__asset-summary-copy--warning">
+                    Persistencia falhou: {latestCapturedInspection.assetSaveError}
+                  </span>
+                )}
+              </div>
+            )}
+
+            {inspectionAssets.length > 0 && (
+              <div className="toolbar__dialog-search">
+                <input
+                  ref={inspectionSearchInputRef}
+                  className="toolbar__dialog-search-input"
+                  type="text"
+                  value={inspectionFilter}
+                  onChange={(event) => setInspectionFilter(event.target.value)}
+                  placeholder="Buscar por nome, seletor, janela ou tag"
+                  aria-label="Buscar ativos Mira"
+                />
+                <span className="toolbar__dialog-search-count">
+                  {filteredInspectionAssets.length} de {inspectionAssets.length}
+                </span>
+              </div>
+            )}
+
+            {inspectionAssets.length === 0 ? (
+              <div className="toolbar__dialog-empty">
+                Nenhum ativo Mira salvo ainda. Use o botao Mira para capturar um elemento.
+              </div>
+            ) : filteredInspectionAssets.length === 0 ? (
+              <div className="toolbar__dialog-empty">
+                Nenhum ativo Mira corresponde ao filtro informado.
+              </div>
+            ) : (
+              <div className="toolbar__asset-layout">
+                <div className="toolbar__dialog-list" role="listbox" aria-label="Ativos Mira salvos">
+                  {filteredInspectionAssets.map((asset) => (
+                    <button
+                      key={asset.id}
+                      className={`toolbar__flow-option ${selectedInspectionAsset?.id === asset.id ? 'toolbar__flow-option--selected' : ''}`}
+                      onClick={() => setSelectedInspectionAssetId(asset.id)}
+                      type="button"
+                    >
+                      <span className="toolbar__flow-option-header">
+                        <span className="toolbar__flow-option-title">{asset.displayName?.trim() || 'Elemento salvo'}</span>
+                        <span className="toolbar__flow-option-badge">Mira</span>
+                      </span>
+                      <span className="toolbar__flow-option-meta">
+                        {buildInspectionSummary(asset)}
+                      </span>
+                      <span className="toolbar__flow-option-meta">
+                        {asset.source.windowTitle || 'Janela indisponivel'} • {formatInspectionCapturedAt(asset.updatedAt)}
+                      </span>
+                      <span className="toolbar__flow-option-id">{asset.id}</span>
+                    </button>
+                  ))}
+                </div>
+
+                {selectedInspectionAsset && (
+                  <div className="toolbar__asset-detail">
+                    <div className="toolbar__asset-detail-section">
+                      <strong className="toolbar__asset-detail-title">{selectedInspectionAsset.displayName}</strong>
+                      <p className="toolbar__asset-detail-copy">{buildInspectionSummary(selectedInspectionAsset)}</p>
+                    </div>
+
+                    <div className="toolbar__asset-detail-section">
+                      <strong className="toolbar__asset-detail-label">Strategia</strong>
+                      <p className="toolbar__asset-detail-copy">
+                        {selectedInspectionAsset.locator.strategy}
+                        {' • '}
+                        selector {selectedInspectionAsset.locator.strength ?? 'fraca'}
+                      </p>
+                      {selectedInspectionAsset.locator.strengthReason && (
+                        <p className="toolbar__asset-detail-copy">{selectedInspectionAsset.locator.strengthReason}</p>
+                      )}
+                    </div>
+
+                    <div className="toolbar__asset-detail-grid">
+                      <div className="toolbar__asset-detail-card">
+                        <strong className="toolbar__asset-detail-label">Janela</strong>
+                        <p className="toolbar__asset-detail-copy">{selectedInspectionAsset.source.windowTitle || 'Indisponivel'}</p>
+                      </div>
+                      <div className="toolbar__asset-detail-card">
+                        <strong className="toolbar__asset-detail-label">Processo</strong>
+                        <p className="toolbar__asset-detail-copy">
+                          {selectedInspectionAsset.source.processName || 'Indisponivel'}
+                          {selectedInspectionAsset.source.processId ? ` (#${selectedInspectionAsset.source.processId})` : ''}
+                        </p>
+                        {selectedInspectionAsset.source.processPath && (
+                          <p className="toolbar__asset-detail-copy">{selectedInspectionAsset.source.processPath}</p>
+                        )}
+                      </div>
+                      <div className="toolbar__asset-detail-card">
+                        <strong className="toolbar__asset-detail-label">Selector</strong>
+                        <p className="toolbar__asset-detail-copy">
+                          {selectedInspectionAsset.locator.selector.automationId
+                            || selectedInspectionAsset.locator.selector.name
+                            || selectedInspectionAsset.locator.selector.className
+                            || 'Indisponivel'}
+                        </p>
+                      </div>
+                      <div className="toolbar__asset-detail-card">
+                        <strong className="toolbar__asset-detail-label">Bounds</strong>
+                        <p className="toolbar__asset-detail-copy">
+                          {formatBounds(selectedInspectionAsset.locator.absoluteBounds)}
+                        </p>
+                        <p className="toolbar__asset-detail-copy">
+                          Rel {formatBounds(selectedInspectionAsset.locator.relativeBounds)}
+                        </p>
+                      </div>
+                    </div>
+
+                    {inspectionAssetTestResult && (
+                      <div className="toolbar__asset-detail-section">
+                        <p className="toolbar__asset-detail-copy">{inspectionAssetTestResult}</p>
+                      </div>
+                    )}
+
+                    {selectedInspectionAsset.tags.length > 0 && (
+                      <div className="toolbar__asset-detail-section">
+                        <strong className="toolbar__asset-detail-label">Tags</strong>
+                        <div className="toolbar__asset-tags">
+                          {selectedInspectionAsset.tags.map((tag) => (
+                            <span key={tag} className="toolbar__asset-tag">{tag}</span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="toolbar__dialog-actions">
+              <button
+                className="toolbar__dialog-btn toolbar__dialog-btn--secondary"
+                onClick={() => setIsInspectionLibraryOpen(false)}
+                type="button"
+              >
+                Fechar
+              </button>
+              <button
+                className="toolbar__dialog-btn toolbar__dialog-btn--secondary"
+                onClick={() => { void testSelectedInspectionAsset(); }}
+                disabled={!selectedInspectionAsset || inspectionAssetBusyId === selectedInspectionAsset?.id}
+                type="button"
+              >
+                Test Selector
+              </button>
+              <button
+                className="toolbar__dialog-btn toolbar__dialog-btn--secondary"
+                onClick={() => { void deleteSelectedInspectionAsset(); }}
+                disabled={!selectedInspectionAsset || inspectionAssetBusyId === selectedInspectionAsset?.id}
+                type="button"
+              >
+                Apagar
+              </button>
+              <button
+                className="toolbar__dialog-btn toolbar__dialog-btn--primary"
+                onClick={captureFromInspectionLibrary}
+                type="button"
+              >
+                Capturar com Mira
               </button>
             </div>
           </div>

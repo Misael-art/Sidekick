@@ -29,17 +29,15 @@ public class BrowserWaitElementNode : IActionNode
         OutputPorts = new List<PortDefinition>
         {
             new() { Id = "out", Name = "Out", DataType = PortDataType.Flow },
+            new() { Id = "notFound", Name = "Not Found", DataType = PortDataType.Flow },
             new() { Id = "found", Name = "Found", DataType = PortDataType.Boolean }
         },
-        Properties = new List<PropertyDefinition>
-        {
-            new() { Id = "windowTitle", Name = "Window Title", Type = PropertyType.String, DefaultValue = "", Description = "Optional browser window title" },
-            new() { Id = "automationId", Name = "Automation ID", Type = PropertyType.String, DefaultValue = "", Description = "Optional automation id" },
-            new() { Id = "elementName", Name = "Element Name", Type = PropertyType.String, DefaultValue = "", Description = "Visible element name/text" },
-            new() { Id = "controlType", Name = "Control Type", Type = PropertyType.String, DefaultValue = "", Description = "Optional UIAutomation control type" },
-            new() { Id = "timeoutMs", Name = "Timeout (ms)", Type = PropertyType.Integer, DefaultValue = 5000, Description = "Maximum wait time for the element" },
-            new() { Id = "storeInVariable", Name = "Store In Variable", Type = PropertyType.String, DefaultValue = "", Description = "Optional variable for the found flag" }
-        }
+        Properties = BrowserSelectorHelper.SelectorPropertyDefinitions()
+            .Concat(new[]
+            {
+                new PropertyDefinition { Id = "storeInVariable", Name = "Store In Variable", Type = PropertyType.String, DefaultValue = "", Description = "Optional variable for the found flag" }
+            })
+            .ToList()
     };
 
     public void Configure(Dictionary<string, object?> properties)
@@ -51,7 +49,7 @@ public class BrowserWaitElementNode : IActionNode
     {
         var selector = BrowserSelectorHelper.ResolveSelector(context, _properties);
         var variableName = NodeValueHelper.GetString(_properties, "storeInVariable");
-        var element = AutomationElementLocator.FindElement(selector.windowTitle, selector.automationId, selector.elementName, selector.controlType, selector.timeoutMs);
+        var element = BrowserSelectorHelper.FindElement(selector);
         var found = element is not null;
 
         NodeValueHelper.SetVariableIfRequested(context, variableName, found);

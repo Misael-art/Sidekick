@@ -16,7 +16,7 @@ public class BridgeMessage
     public string Type { get; set; } = "";
 
     /// <summary>
-    /// Routing channel: "flow", "engine", "platform", "inspector", "registry".
+    /// Routing channel: "flow", "engine", "platform", "inspector", "registry", "assets".
     /// </summary>
     [JsonPropertyName("channel")]
     public string Channel { get; set; } = "";
@@ -59,5 +59,6 @@ public class BridgeMessage
         public const string Platform = "platform";
         public const string Inspector = "inspector";
         public const string Registry = "registry";
+        public const string Assets = "assets";
     }
 }

@@ -4,10 +4,12 @@ using System.Reflection;
 using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Input;
+using Ajudante.App.Assets;
 using Ajudante.App.Bridge;
+using Ajudante.App.Configuration;
+using Ajudante.App.Runtime;
 using Ajudante.App.TrayIcon;
 using Ajudante.Core;
-using Ajudante.Core.Engine;
 using Ajudante.Core.Registry;
 using Microsoft.Web.WebView2.Core;
 
@@ -22,14 +24,16 @@ public partial class MainWindow : Window
     private WebBridge? _bridge;
     private BridgeRouter? _router;
     private NodeRegistry? _registry;
-    private FlowExecutor? _executor;
+    private FlowRuntimeManager? _runtimeManager;
     private SystemTrayManager? _trayManager;
     private bool _isCloseConfirmed;
     private bool _isHandlingCloseRequest;
+    private string ExecutionHistoryFilePath => Path.Combine(App.DataDirectory, "execution-history.json");
 
     public MainWindow()
     {
         InitializeComponent();
+        Title = ProductIdentity.MainWindowTitle;
     }
 
     private async void Window_Loaded(object sender, RoutedEventArgs e)
@@ -43,7 +47,7 @@ public partial class MainWindow : Window
             LogStartupFailure(ex);
             MessageBox.Show(
                 $"Failed to initialize application:\n\n{ex.Message}",
-                "Sidekick - Startup Error",
+                ProductIdentity.StartupErrorTitle,
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
             Application.Current.Shutdown();
@@ -59,8 +63,9 @@ public partial class MainWindow : Window
         // Scan plugins directory for external node DLLs
         _registry.ScanDirectory(App.PluginsDirectory);
 
-        // 2. Initialize flow executor
-        _executor = new FlowExecutor(_registry);
+        // 2. Initialize unified runtime manager
+        var executionHistoryStore = new ExecutionHistoryStore(ExecutionHistoryFilePath);
+        _runtimeManager = new FlowRuntimeManager(_registry, executionHistoryStore);
 
         // 3. Initialize WebView2 bridge
         _bridge = new WebBridge(WebView);
@@ -83,18 +88,29 @@ public partial class MainWindow : Window
 
         // 4. Initialize bridge router
         var flowsDirectory = App.FlowsDirectory;
-        _router = new BridgeRouter(_bridge, _registry, _executor, flowsDirectory, Dispatcher);
+        var snipAssetCatalog = new SnipAssetCatalog(App.DataDirectory, App.SnipAssetsDirectory, App.AssetManifestsDirectory);
+        var miraInspectionCatalog = new MiraInspectionCatalog(App.DataDirectory, App.InspectionAssetsDirectory, App.AssetManifestsDirectory);
+        _router = new BridgeRouter(_bridge, _registry, _runtimeManager, flowsDirectory, Dispatcher, snipAssetCatalog, miraInspectionCatalog);
         _router.LogMessage += OnLogMessage;
         _bridge.SetRouter(_router);
 
         // Push node definitions to the frontend once the page finishes loading
         WebView.NavigationCompleted += OnWebViewNavigationCompleted;
 
-        // 5. Wire up executor events to forward to the UI
-        _executor.NodeStatusChanged += OnNodeStatusChanged;
-        _executor.LogMessage += OnExecutorLogMessage;
-        _executor.FlowCompleted += OnFlowCompleted;
-        _executor.FlowError += OnFlowError;
+        // 5. Wire up runtime events to forward to the UI
+        _runtimeManager.NodeStatusChanged += OnNodeStatusChanged;
+        _runtimeManager.LogMessage += OnExecutorLogMessage;
+        _runtimeManager.FlowCompleted += OnFlowCompleted;
+        _runtimeManager.FlowError += OnFlowError;
+        _runtimeManager.RuntimeStatusChanged += OnRuntimeStatusChanged;
+        _runtimeManager.FlowArmed += OnFlowArmed;
+        _runtimeManager.FlowDisarmed += OnFlowDisarmed;
+        _runtimeManager.TriggerFired += OnTriggerFired;
+        _runtimeManager.FlowQueued += OnFlowQueued;
+        _runtimeManager.FlowQueueCoalesced += OnFlowQueueCoalesced;
+        _runtimeManager.RuntimeError += OnRuntimeError;
+        _runtimeManager.ExecutionHistoryRecorded += OnExecutionHistoryRecorded;
+        _runtimeManager.RuntimePhaseChanged += OnRuntimePhaseChanged;
 
         // 6. Initialize system tray
         InitializeSystemTray();
@@ -117,7 +133,7 @@ public partial class MainWindow : Window
         };
         _trayManager.StopFlowRequested += () =>
         {
-            _executor?.Cancel();
+            _runtimeManager?.Stop(StopFlowMode.CancelAll);
         };
         _trayManager.Initialize();
     }
@@ -178,10 +194,87 @@ public partial class MainWindow : Window
         }
     }
 
+    private void OnRuntimeStatusChanged(object? sender, RuntimeStatusSnapshot snapshot)
+    {
+        _ = ForwardBridgeEventAsync(
+            BridgeMessage.Channels.Engine,
+            "runtimeStatusChanged",
+            snapshot);
+
+        if (_trayManager != null)
+        {
+            _trayManager.IsFlowRunning = snapshot.IsRunning;
+        }
+    }
+
+    private void OnFlowArmed(object? sender, FlowRuntimeSnapshot snapshot)
+    {
+        _ = ForwardBridgeEventAsync(
+            BridgeMessage.Channels.Engine,
+            "flowArmed",
+            snapshot);
+    }
+
+    private void OnFlowDisarmed(object? sender, FlowRuntimeSnapshot snapshot)
+    {
+        _ = ForwardBridgeEventAsync(
+            BridgeMessage.Channels.Engine,
+            "flowDisarmed",
+            snapshot);
+    }
+
+    private void OnTriggerFired(object? sender, TriggerRuntimeEvent runtimeEvent)
+    {
+        _ = ForwardBridgeEventAsync(
+            BridgeMessage.Channels.Engine,
+            "triggerFired",
+            runtimeEvent);
+    }
+
+    private void OnFlowQueued(object? sender, FlowQueuedEvent queueEvent)
+    {
+        _ = ForwardBridgeEventAsync(
+            BridgeMessage.Channels.Engine,
+            "flowQueued",
+            queueEvent);
+    }
+
+    private void OnFlowQueueCoalesced(object? sender, FlowQueuedEvent queueEvent)
+    {
+        _ = ForwardBridgeEventAsync(
+            BridgeMessage.Channels.Engine,
+            "flowQueueCoalesced",
+            queueEvent);
+    }
+
+    private void OnRuntimeError(object? sender, RuntimeErrorEvent runtimeError)
+    {
+        _ = ForwardBridgeEventAsync(
+            BridgeMessage.Channels.Engine,
+            "runtimeError",
+            runtimeError);
+    }
+
+    private void OnExecutionHistoryRecorded(object? sender, FlowExecutionHistoryEntry historyEntry)
+    {
+        _ = ForwardBridgeEventAsync(
+            BridgeMessage.Channels.Engine,
+            "executionHistoryRecorded",
+            historyEntry);
+    }
+
+    private void OnRuntimePhaseChanged(object? sender, RuntimePhaseEvent phaseEvent)
+    {
+        _ = ForwardBridgeEventAsync(
+            BridgeMessage.Channels.Engine,
+            "runtimePhaseChanged",
+            phaseEvent);
+    }
+
     private void UpdateTrayRunningState()
     {
         if (_trayManager != null)
-            _trayManager.IsFlowRunning = _executor?.IsRunning ?? false;
+            _trayManager.IsFlowRunning = _runtimeManager?.IsRunning ?? false;
     }
 
     private async Task ForwardBridgeEventAsync(string channel, string action, object payload)
@@ -310,7 +403,7 @@ public partial class MainWindow : Window
 
     private void CleanupResources()
     {
-        _executor?.Cancel();
+        _runtimeManager?.Dispose();
         _bridge?.Dispose();
         _trayManager?.Dispose();
     }
@@ -325,7 +418,7 @@ public partial class MainWindow : Window
         var result = MessageBox.Show(
             this,
             "Existem alteracoes nao salvas no fluxo atual.\n\nDeseja sair e descartalas?",
-            "Sidekick",
+            ProductIdentity.ProductName,
             MessageBoxButton.YesNo,
             MessageBoxImage.Warning);
 

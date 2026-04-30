@@ -11,7 +11,7 @@ namespace Ajudante.Nodes.Triggers;
     Category = NodeCategory.Trigger,
     Description = "Fires when a file is created, changed, or deleted in a watched folder",
     Color = "#EF4444")]
-public class FileSystemTriggerNode : ITriggerNode
+public class FileSystemTriggerNode : ITriggerNode, IDisposable
 {
     private readonly FileWatcher _fileWatcher = new();
     private string _path = "";
@@ -83,6 +83,11 @@ public class FileSystemTriggerNode : ITriggerNode
 
     public Task StartWatchingAsync(CancellationToken ct)
     {
+        if (_watching)
+        {
+            return Task.CompletedTask;
+        }
+
         if (string.IsNullOrWhiteSpace(_path))
             return Task.CompletedTask;
 
@@ -131,5 +136,11 @@ public class FileSystemTriggerNode : ITriggerNode
             },
             Timestamp = DateTime.UtcNow
         });
+    }
+
+    public void Dispose()
+    {
+        StopWatchingAsync().GetAwaiter().GetResult();
+        _fileWatcher.Dispose();
     }
 }

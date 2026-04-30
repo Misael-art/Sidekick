@@ -1,6 +1,7 @@
 using Ajudante.Core;
 using Ajudante.Core.Engine;
 using Ajudante.Core.Interfaces;
+using Ajudante.Nodes.Common;
 using Ajudante.Platform.Screen;
 
 namespace Ajudante.Nodes.Triggers;
@@ -11,7 +12,7 @@ namespace Ajudante.Nodes.Triggers;
     Category = NodeCategory.Trigger,
     Description = "Fires when a template image is detected on screen",
     Color = "#EF4444")]
-public class ImageDetectedTriggerNode : ITriggerNode
+public class ImageDetectedTriggerNode : ITriggerNode, IDisposable
 {
     private CancellationTokenSource? _pollCts;
     private byte[]? _templateImage;
@@ -67,10 +68,7 @@ public class ImageDetectedTriggerNode : ITriggerNode
     {
         if (properties.TryGetValue("templateImage", out var img))
         {
-            if (img is byte[] bytes)
-                _templateImage = bytes;
-            else if (img is string base64 && !string.IsNullOrEmpty(base64))
-                _templateImage = Convert.FromBase64String(base64);
+            _templateImage = ImageTemplateResolver.Resolve(img);
         }
 
         if (properties.TryGetValue("threshold", out var th))
@@ -87,6 +85,11 @@ public class ImageDetectedTriggerNode : ITriggerNode
 
     public Task StartWatchingAsync(CancellationToken ct)
     {
+        if (_pollCts != null)
+        {
+            return Task.CompletedTask;
+        }
+
         if (_templateImage == null || _templateImage.Length == 0)
             return Task.CompletedTask;
 
@@ -139,4 +142,10 @@ public class ImageDetectedTriggerNode : ITriggerNode
         _pollCts = null;
         return Task.CompletedTask;
     }
+
+    public void Dispose()
+    {
+        StopWatchingAsync().GetAwaiter().GetResult();
+    }
+
 }

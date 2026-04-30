@@ -2,7 +2,9 @@ using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Windows.Threading;
+using Ajudante.App.Assets;
 using Ajudante.App.Overlays;
+using Ajudante.App.Runtime;
 using Ajudante.Core;
 using Ajudante.Core.Engine;
 using Ajudante.Core.Interfaces;
@@ -19,11 +21,13 @@ public class BridgeRouter
 {
     private readonly WebBridge _bridge;
     private readonly INodeRegistry _registry;
-    private readonly FlowExecutor _executor;
+    private readonly FlowRuntimeManager _runtimeManager;
     private readonly string _flowsDirectory;
     private readonly Dispatcher _dispatcher;
+    private readonly SnipAssetCatalog _snipAssetCatalog;
+    private readonly MiraInspectionCatalog _miraInspectionCatalog;
+    private readonly HashSet<string> _nativeBundledFlowIds;
 
-    private Flow? _currentRunningFlow;
     private MiraWindow? _activeMiraWindow;
     private SnipWindow? _activeSnipWindow;
 
@@ -39,15 +43,20 @@ public class BridgeRouter
     public BridgeRouter(
         WebBridge bridge,
         INodeRegistry registry,
-        FlowExecutor executor,
+        FlowRuntimeManager runtimeManager,
         string flowsDirectory,
-        Dispatcher dispatcher)
+        Dispatcher dispatcher,
+        SnipAssetCatalog snipAssetCatalog,
+        MiraInspectionCatalog miraInspectionCatalog)
     {
         _bridge = bridge ?? throw new ArgumentNullException(nameof(bridge));
         _registry = registry ?? throw new ArgumentNullException(nameof(registry));
-        _executor = executor ?? throw new ArgumentNullException(nameof(executor));
+        _runtimeManager = runtimeManager ?? throw new ArgumentNullException(nameof(runtimeManager));
         _flowsDirectory = flowsDirectory ?? throw new ArgumentNullException(nameof(flowsDirectory));
         _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
+        _snipAssetCatalog = snipAssetCatalog ?? throw new ArgumentNullException(nameof(snipAssetCatalog));
+        _miraInspectionCatalog = miraInspectionCatalog ?? throw new ArgumentNullException(nameof(miraInspectionCatalog));
+        _nativeBundledFlowIds = LoadNativeBundledFlowIds();
 
         Directory.CreateDirectory(_flowsDirectory);
 
@@ -72,6 +81,10 @@ public class BridgeRouter
 
                 case BridgeMessage.Channels.Platform:
                     await HandlePlatformChannelAsync(message);
+                    break;
+
+                case BridgeMessage.Channels.Assets:
+                    await HandleAssetsChannelAsync(message);
                     break;
 
                 case BridgeMessage.Channels.Registry:
@@ -198,7 +211,8 @@ public class BridgeRouter
             id = f.Id,
             name = f.Name,
             modifiedAt = f.ModifiedAt,
-            nodeCount = f.Nodes.Count
+            nodeCount = f.Nodes.Count,
+            isNative = IsNativeFlowId(f.Id)
         }).OrderByDescending(f => f.modifiedAt).ToArray();
 
         Log($"Listed {summaries.Length} flows");
@@ -241,6 +255,12 @@ public class BridgeRouter
             return;
         }
 
+        if (IsNativeFlowId(flowId))
+        {
+            await SendErrorIfRequested(message, "Native bundled flows cannot be deleted.");
+            return;
+        }
+
         var deletedPaths = DeleteFlowFiles(await FindFlowFilePathsAsync(flowId));
         if (deletedPaths > 0)
         {
@@ -267,12 +287,32 @@ public class BridgeRouter
                 await HandleRunFlowAsync(message);
                 break;
 
+            case "validateFlow":
+                await HandleValidateFlowAsync(message);
+                break;
+
             case "stopFlow":
                 await HandleStopFlowAsync(message);
                 break;
 
+            case "activateFlow":
+                await HandleActivateFlowAsync(message);
+                break;
+
+            case "deactivateFlow":
+                await HandleDeactivateFlowAsync(message);
+                break;
+
             case "getStatus":
                 await HandleGetStatusAsync(message);
+                break;
+
+            case "getRuntimeStatus":
+                await HandleGetRuntimeStatusAsync(message);
+                break;
+
+            case "getExecutionHistory":
+                await HandleGetExecutionHistoryAsync(message);
                 break;
 
             default:
@@ -283,36 +323,7 @@ public class BridgeRouter
 
     private async Task HandleRunFlowAsync(BridgeMessage message)
     {
-        if (_executor.IsRunning)
-        {
-            await SendErrorIfRequested(message, "A flow is already running");
-            return;
-        }
-
-        Flow? flow = null;
-
-        // Accept either an inline flow object or a flowId reference
-        if (message.Payload != null)
-        {
-            var payloadText = message.Payload.Value.GetRawText();
-            var payloadElement = message.Payload.Value;
-
-            if (payloadElement.ValueKind == JsonValueKind.Object &&
-                payloadElement.TryGetProperty("nodes", out _))
-            {
-                // Inline flow object
-                flow = JsonSerializer.Deserialize<Flow>(payloadText, JsonOptions);
-            }
-            else
-            {
-                // Load by flowId
-                var flowId = GetPayloadString(message.Payload, "flowId");
-                if (!string.IsNullOrEmpty(flowId))
-                {
-                    flow = await FlowSerializer.LoadAsync(await FindFlowFilePathAsync(flowId));
-                }
-            }
-        }
+        var flow = await ResolveFlowAsync(message.Payload);
 
         if (flow == null)
         {
@@ -320,69 +331,224 @@ public class BridgeRouter
             return;
         }
 
-        _currentRunningFlow = flow;
+        var validation = ValidateFlow(flow);
+        if (!validation.IsValid)
+        {
+            Log($"Flow run blocked by validation: {flow.Name} ({flow.Id})");
 
-        Log($"Starting flow execution: {flow.Name} ({flow.Id})");
+            if (message.RequestId != null)
+            {
+                await _bridge.SendResponseAsync(message.RequestId, new
+                {
+                    queued = false,
+                    flowId = flow.Id,
+                    validation
+                });
+            }
+
+            return;
+        }
+
+        var queueEvent = _runtimeManager.QueueManualRun(flow);
+        Log($"Flow queued for execution: {flow.Name} ({flow.Id})");
 
         if (message.RequestId != null)
         {
-            await _bridge.SendResponseAsync(message.RequestId, new { started = true, flowId = flow.Id });
+            await _bridge.SendResponseAsync(message.RequestId, new
+            {
+                queued = true,
+                flowId = flow.Id,
+                queueLength = queueEvent.QueueLength,
+                queuePending = queueEvent.QueuePending,
+                validation
+            });
+        }
+    }
+
+    private async Task HandleValidateFlowAsync(BridgeMessage message)
+    {
+        var flow = await ResolveFlowAsync(message.Payload);
+
+        if (flow == null)
+        {
+            await SendErrorIfRequested(message, "No valid flow provided");
+            return;
         }
 
-        // Fire-and-forget the execution; events are pushed to the UI via bridge
-        _ = Task.Run(async () =>
+        var validation = ValidateFlow(flow);
+        Log($"Flow validated: {flow.Name} ({flow.Id}) - valid={validation.IsValid}");
+
+        if (message.RequestId != null)
         {
-            try
-            {
-                await _executor.ExecuteAsync(flow);
-            }
-            catch (Exception ex)
-            {
-                // FlowExecutor already publishes flowError for execution failures.
-                // Keep this catch for defensive logging so unexpected exceptions
-                // do not surface as duplicate UI error events.
-                Log($"Flow execution failed: {ex.Message}");
-            }
-            finally
-            {
-                _currentRunningFlow = null;
-            }
-        });
+            await _bridge.SendResponseAsync(message.RequestId, validation);
+        }
     }
 
     private async Task HandleStopFlowAsync(BridgeMessage message)
     {
-        if (!_executor.IsRunning)
+        var status = _runtimeManager.GetRuntimeStatus();
+        if (!status.IsRunning && status.QueueLength == 0)
         {
-            await SendErrorIfRequested(message, "No flow is currently running");
+            await SendErrorIfRequested(message, "No flow is currently running or queued");
             return;
         }
 
-        _executor.Cancel();
-        Log("Flow execution stop requested");
+        var mode = GetStopFlowMode(message.Payload);
+        var result = _runtimeManager.Stop(mode);
+        Log($"Runtime stop requested ({mode})");
 
         if (message.RequestId != null)
         {
-            await _bridge.SendResponseAsync(message.RequestId, new { stopped = true });
+            await _bridge.SendResponseAsync(message.RequestId, result);
         }
     }
 
     private async Task HandleGetStatusAsync(BridgeMessage message)
     {
-        var status = new
+        var status = _runtimeManager.GetRuntimeStatus();
+        var currentRun = status.CurrentRun;
+        var payload = new
         {
-            isRunning = _executor.IsRunning,
-            currentFlowId = _currentRunningFlow?.Id,
-            currentFlowName = _currentRunningFlow?.Name
+            isRunning = status.IsRunning,
+            currentFlowId = currentRun?.FlowId,
+            currentFlowName = currentRun?.FlowName,
+            queueLength = status.QueueLength,
+            armedFlowCount = status.ArmedFlowCount,
+            currentRun,
+            flows = status.Flows
         };
 
+        if (message.RequestId != null)
+        {
+            await _bridge.SendResponseAsync(message.RequestId, payload);
+        }
+    }
+
+    private async Task HandleGetRuntimeStatusAsync(BridgeMessage message)
+    {
+        var status = _runtimeManager.GetRuntimeStatus();
         if (message.RequestId != null)
         {
             await _bridge.SendResponseAsync(message.RequestId, status);
         }
     }
 
+    private async Task HandleGetExecutionHistoryAsync(BridgeMessage message)
+    {
+        var request = DeserializePayload<ExecutionHistoryRequest>(message.Payload) ?? new ExecutionHistoryRequest();
+        var history = await _runtimeManager.GetExecutionHistoryAsync(request.Limit, request.FlowId);
+
+        if (message.RequestId != null)
+        {
+            await _bridge.SendResponseAsync(message.RequestId, history);
+        }
+    }
+
+    private async Task HandleActivateFlowAsync(BridgeMessage message)
+    {
+        var flow = await ResolveFlowAsync(message.Payload);
+        if (flow == null)
+        {
+            await SendErrorIfRequested(message, "No valid flow provided");
+            return;
+        }
+
+        var validation = ValidateFlow(flow);
+        if (!validation.IsValid)
+        {
+            Log($"Flow activation blocked by validation: {flow.Name} ({flow.Id})");
+
+            if (message.RequestId != null)
+            {
+                await _bridge.SendResponseAsync(message.RequestId, new
+                {
+                    armed = false,
+                    flow = (object?)null,
+                    warnings = validation.Warnings,
+                    validation
+                });
+            }
+
+            return;
+        }
+
+        var activation = await _runtimeManager.ActivateFlowAsync(flow);
+        Log($"Flow armed for continuous runtime: {flow.Name} ({flow.Id})");
+
+        if (message.RequestId != null)
+        {
+            await _bridge.SendResponseAsync(message.RequestId, new
+            {
+                armed = activation.Armed,
+                flow = activation.Snapshot,
+                warnings = activation.Warnings,
+                validation
+            });
+        }
+    }
+
+    private async Task HandleDeactivateFlowAsync(BridgeMessage message)
+    {
+        var flowId = GetPayloadString(message.Payload, "flowId");
+        if (string.IsNullOrWhiteSpace(flowId))
+        {
+            await SendErrorIfRequested(message, "No flowId specified");
+            return;
+        }
+
+        var snapshot = await _runtimeManager.DeactivateFlowAsync(flowId);
+        Log($"Flow disarmed: {flowId}");
+
+        if (message.RequestId != null)
+        {
+            await _bridge.SendResponseAsync(message.RequestId, new
+            {
+                disarmed = snapshot != null,
+                flow = snapshot
+            });
+        }
+    }
+
     // ── Platform Channel ─────────────────────────────────────────────────
+
+    private async Task<Flow?> ResolveFlowAsync(JsonElement? payload)
+    {
+        if (payload == null)
+        {
+            return null;
+        }
+
+        var payloadElement = payload.Value;
+        if (payloadElement.ValueKind == JsonValueKind.Object &&
+            payloadElement.TryGetProperty("nodes", out _))
+        {
+            return JsonSerializer.Deserialize<Flow>(payloadElement.GetRawText(), JsonOptions);
+        }
+
+        var flowId = GetPayloadString(payload, "flowId");
+        if (string.IsNullOrWhiteSpace(flowId))
+        {
+            return null;
+        }
+
+        return await FlowSerializer.LoadAsync(await FindFlowFilePathAsync(flowId));
+    }
+
+    private static StopFlowMode GetStopFlowMode(JsonElement? payload)
+    {
+        var rawMode = GetPayloadString(payload, "mode");
+        return rawMode?.Trim().ToLowerInvariant() switch
+        {
+            "cancelall" => StopFlowMode.CancelAll,
+            _ => StopFlowMode.CurrentOnly
+        };
+    }
+
+    private ValidationResult ValidateFlow(Flow flow)
+    {
+        var validator = new FlowValidator(_registry);
+        return validator.Validate(flow);
+    }
 
     private async Task HandlePlatformChannelAsync(BridgeMessage message)
     {
@@ -406,6 +572,36 @@ public class BridgeRouter
         }
     }
 
+    private async Task HandleAssetsChannelAsync(BridgeMessage message)
+    {
+        switch (message.Action)
+        {
+            case "listSnipAssets":
+                await HandleListSnipAssetsAsync(message);
+                break;
+
+            case "getSnipAssetTemplate":
+                await HandleGetSnipAssetTemplateAsync(message);
+                break;
+
+            case "listInspectionAssets":
+                await HandleListInspectionAssetsAsync(message);
+                break;
+
+            case "deleteInspectionAsset":
+                await HandleDeleteInspectionAssetAsync(message);
+                break;
+
+            case "testInspectionAsset":
+                await HandleTestInspectionAssetAsync(message);
+                break;
+
+            default:
+                await SendErrorIfRequested(message, $"Unknown assets action: {message.Action}");
+                break;
+        }
+    }
+
     private async Task HandleStartMiraAsync(BridgeMessage message)
     {
         Log("startMira requested");
@@ -421,31 +617,114 @@ public class BridgeRouter
             miraWindow.ElementCaptured += (ElementInfo element) =>
             {
                 _activeMiraWindow = null;
-                _ = _bridge.SendEventAsync("inspector", "elementCaptured", new
+                _ = Task.Run(async () =>
                 {
-                    automationId = element.AutomationId,
-                    name = element.Name,
-                    className = element.ClassName,
-                    controlType = element.ControlType,
-                    boundingRect = new
+                    MiraInspectionManifest? asset = null;
+                    string? assetSaveError = null;
+
+                    try
                     {
-                        x = element.BoundingRect.X,
-                        y = element.BoundingRect.Y,
-                        width = element.BoundingRect.Width,
-                        height = element.BoundingRect.Height
-                    },
-                    processId = element.ProcessId,
-                    windowTitle = element.WindowTitle
+                        asset = await _miraInspectionCatalog.SaveCaptureAsync(element);
+                        await _bridge.SendEventAsync(BridgeMessage.Channels.Assets, "inspectionAssetSaved", asset);
+                    }
+                    catch (Exception ex)
+                    {
+                        assetSaveError = ex.Message;
+                        Log($"Failed to persist Mira inspection asset: {ex.Message}");
+                    }
+
+                    await _bridge.SendEventAsync("inspector", "elementCaptured", new
+                    {
+                        automationId = element.AutomationId,
+                        name = element.Name,
+                        className = element.ClassName,
+                        controlType = element.ControlType,
+                        boundingRect = new
+                        {
+                            x = element.BoundingRect.X,
+                            y = element.BoundingRect.Y,
+                            width = element.BoundingRect.Width,
+                            height = element.BoundingRect.Height
+                        },
+                        processId = element.ProcessId,
+                        processName = element.ProcessName,
+                        processPath = element.ProcessPath,
+                        windowTitle = element.WindowTitle,
+                        windowBounds = new
+                        {
+                            x = element.WindowBounds.X,
+                            y = element.WindowBounds.Y,
+                            width = element.WindowBounds.Width,
+                            height = element.WindowBounds.Height
+                        },
+                        relativeBoundingRect = new
+                        {
+                            x = element.RelativeBoundingRect.X,
+                            y = element.RelativeBoundingRect.Y,
+                            width = element.RelativeBoundingRect.Width,
+                            height = element.RelativeBoundingRect.Height
+                        },
+                        cursorScreen = new
+                        {
+                            x = element.CursorScreen.X,
+                            y = element.CursorScreen.Y
+                        },
+                        cursorPixelColor = element.CursorPixelColor,
+                        isFocused = element.IsFocused,
+                        isEnabled = element.IsEnabled,
+                        isVisible = !element.IsOffscreen,
+                        selectorStrength = SelectorStrengthEvaluator.ToPublicLabel(SelectorStrengthEvaluator.Evaluate(element)),
+                        selectorStrategy = SelectorStrengthEvaluator.ToPublicStrategy(SelectorStrengthEvaluator.SuggestStrategy(element)),
+                        asset,
+                        assetSaveError
+                    });
                 });
             };
 
             miraWindow.Closed += (s, e) => _activeMiraWindow = null;
             miraWindow.Show();
+            miraWindow.Activate();
+            miraWindow.Focus();
         });
 
         if (message.RequestId != null)
         {
             await _bridge.SendResponseAsync(message.RequestId, new { started = true });
+        }
+    }
+
+    private async Task HandleGetSnipAssetTemplateAsync(BridgeMessage message)
+    {
+        var assetId = GetPayloadString(message.Payload, "assetId") ?? GetPayloadString(message.Payload, "id");
+        if (string.IsNullOrWhiteSpace(assetId))
+        {
+            await SendErrorIfRequested(message, "No assetId specified");
+            return;
+        }
+
+        var asset = await _snipAssetCatalog.GetAsync(assetId);
+        if (asset == null)
+        {
+            await SendErrorIfRequested(message, $"Snip asset not found: {assetId}");
+            return;
+        }
+
+        var imageBase64 = await _snipAssetCatalog.GetImageBase64Async(assetId);
+        if (string.IsNullOrWhiteSpace(imageBase64))
+        {
+            await SendErrorIfRequested(message, $"Snip asset image not found: {assetId}");
+            return;
+        }
+
+        if (message.RequestId != null)
+        {
+            await _bridge.SendResponseAsync(message.RequestId, new
+            {
+                assetId = asset.Id,
+                displayName = asset.DisplayName,
+                imagePath = asset.Content.ImagePath,
+                imageBase64
+            });
         }
     }
 
@@ -461,11 +740,25 @@ public class BridgeRouter
             var snipWindow = new SnipWindow();
             _activeSnipWindow = snipWindow;
 
-            snipWindow.RegionCaptured += (byte[] pngBytes, System.Drawing.Rectangle bounds) =>
+            snipWindow.RegionCaptured += async (byte[] pngBytes, System.Drawing.Rectangle bounds) =>
             {
                 _activeSnipWindow = null;
                 var base64 = Convert.ToBase64String(pngBytes);
-                _ = _bridge.SendEventAsync("inspector", "regionCaptured", new
+                SnipAssetManifest? asset = null;
+                string? assetSaveError = null;
+
+                try
+                {
+                    asset = await _snipAssetCatalog.SaveCaptureAsync(pngBytes, bounds);
+                    await _bridge.SendEventAsync(BridgeMessage.Channels.Assets, "snipAssetSaved", asset);
+                }
+                catch (Exception ex)
+                {
+                    assetSaveError = ex.Message;
+                    Log($"Failed to persist snip asset: {ex.Message}");
+                }
+
+                await _bridge.SendEventAsync("inspector", "regionCaptured", new
                 {
                     image = base64,
                     bounds = new
@@ -474,12 +767,16 @@ public class BridgeRouter
                         y = bounds.Y,
                         width = bounds.Width,
                         height = bounds.Height
-                    }
+                    },
+                    asset,
+                    assetSaveError
                 });
             };
 
             snipWindow.Closed += (s, e) => _activeSnipWindow = null;
             snipWindow.Show();
+            snipWindow.Activate();
+            snipWindow.Focus();
         });
 
         if (message.RequestId != null)
@@ -497,6 +794,92 @@ public class BridgeRouter
         if (message.RequestId != null)
         {
             await _bridge.SendResponseAsync(message.RequestId, new { cancelled = true });
+        }
+    }
+
+    private async Task HandleListSnipAssetsAsync(BridgeMessage message)
+    {
+        var assets = await _snipAssetCatalog.ListAsync();
+        Log($"Listed {assets.Count} snip assets");
+
+        if (message.RequestId != null)
+        {
+            await _bridge.SendResponseAsync(message.RequestId, assets);
+        }
+    }
+
+    private async Task HandleListInspectionAssetsAsync(BridgeMessage message)
+    {
+        var assets = await _miraInspectionCatalog.ListAsync();
+        Log($"Listed {assets.Count} inspection assets");
+
+        if (message.RequestId != null)
+        {
+            await _bridge.SendResponseAsync(message.RequestId, assets);
+        }
+    }
+
+    private async Task HandleDeleteInspectionAssetAsync(BridgeMessage message)
+    {
+        var assetId = GetPayloadString(message.Payload, "assetId") ?? GetPayloadString(message.Payload, "id");
+        if (string.IsNullOrWhiteSpace(assetId))
+        {
+            await SendErrorIfRequested(message, "No inspection asset id specified");
+            return;
+        }
+
+        var deleted = await _miraInspectionCatalog.DeleteAsync(assetId);
+        if (message.RequestId != null)
+        {
+            await _bridge.SendResponseAsync(message.RequestId, new { success = deleted });
+        }
+    }
+
+    private async Task HandleTestInspectionAssetAsync(BridgeMessage message)
+    {
+        var assetId = GetPayloadString(message.Payload, "assetId") ?? GetPayloadString(message.Payload, "id");
+        if (string.IsNullOrWhiteSpace(assetId))
+        {
+            await SendErrorIfRequested(message, "No inspection asset id specified");
+            return;
+        }
+
+        var asset = await _miraInspectionCatalog.GetAsync(assetId);
+        if (asset == null)
+        {
+            await SendErrorIfRequested(message, $"Inspection asset not found: {assetId}");
+            return;
+        }
+
+        var selector = asset.Locator.Selector;
+        var found = AutomationElementLocator.FindElement(
+            selector.WindowTitle ?? asset.Source.WindowTitle,
+            selector.AutomationId,
+            selector.Name,
+            selector.ControlType,
+            1000,
+            asset.Source.ProcessName,
+            asset.Source.ProcessPath,
+            AutomationElementLocator.TitleMatch.Contains);
+
+        var rect = found?.Current.BoundingRectangle;
+        if (message.RequestId != null)
+        {
+            await _bridge.SendResponseAsync(message.RequestId, new
+            {
+                found = found != null,
+                bounds = found == null || rect == null
+                    ? null
+                    : new
+                    {
+                        x = (int)rect.Value.X,
+                        y = (int)rect.Value.Y,
+                        width = (int)rect.Value.Width,
+                        height = (int)rect.Value.Height
+                    },
+                strategy = asset.Locator.Strategy,
+                strength = asset.Locator.Strength
+            });
         }
     }
 
@@ -637,6 +1020,44 @@ public class BridgeRouter
         return deletedCount;
     }
 
+    private bool IsNativeFlowId(string? flowId)
+    {
+        if (string.IsNullOrWhiteSpace(flowId))
+        {
+            return false;
+        }
+
+        return _nativeBundledFlowIds.Contains(flowId);
+    }
+
+    private static HashSet<string> LoadNativeBundledFlowIds()
+    {
+        var flowIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var bundledFlowsDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "seed-flows");
+        if (!Directory.Exists(bundledFlowsDirectory))
+        {
+            return flowIds;
+        }
+
+        foreach (var sourcePath in Directory.EnumerateFiles(bundledFlowsDirectory, "*.json", SearchOption.TopDirectoryOnly))
+        {
+            try
+            {
+                var flow = FlowSerializer.Deserialize(File.ReadAllText(sourcePath));
+                if (!string.IsNullOrWhiteSpace(flow?.Id))
+                {
+                    flowIds.Add(flow.Id);
+                }
+            }
+            catch
+            {
+                // Keep startup resilient even if a bundled sample is malformed.
+            }
+        }
+
+        return flowIds;
+    }
+
     private static string? GetPayloadString(JsonElement? payload, string propertyName)
     {
         if (payload == null) return null;
@@ -654,6 +1075,22 @@ public class BridgeRouter
         }
 
         return null;
+    }
+
+    private static TPayload? DeserializePayload<TPayload>(JsonElement? payload)
+    {
+        if (payload == null)
+        {
+            return default;
+        }
+
+        return JsonSerializer.Deserialize<TPayload>(payload.Value.GetRawText(), JsonOptions);
+    }
+
+    private sealed class ExecutionHistoryRequest
+    {
+        public int Limit { get; set; } = 50;
+        public string? FlowId { get; set; }
     }
 
     private async Task SendErrorIfRequested(BridgeMessage message, string error)

@@ -1,6 +1,8 @@
 using System.Drawing;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Windows.Automation;
+using Ajudante.Platform.Screen;
 
 namespace Ajudante.Platform.UIAutomation;
 
@@ -132,8 +134,22 @@ public static class ElementInspector
         }
         catch { /* unavailable */ }
 
-        // Walk up to find the top-level window title
-        string windowTitle = FindWindowTitle(element);
+        var (windowTitle, windowBounds) = FindWindowMetadata(element);
+        var (processName, processPath) = GetProcessMetadata(processId);
+        var cursor = GetCursorPos(out POINT pt) ? new Point(pt.X, pt.Y) : Point.Empty;
+        var cursorPixel = "";
+        if (!cursor.IsEmpty)
+        {
+            try
+            {
+                var color = PixelReader.GetPixelColor(cursor.X, cursor.Y);
+                cursorPixel = $"#{color.R:X2}{color.G:X2}{color.B:X2}";
+            }
+            catch
+            {
+                cursorPixel = "";
+            }
+        }
 
         return new ElementInfo
         {
@@ -142,15 +158,23 @@ public static class ElementInspector
             ClassName = className,
             ControlType = controlType,
             BoundingRect = boundingRect,
+            WindowBounds = windowBounds,
             ProcessId = processId,
-            WindowTitle = windowTitle
+            WindowTitle = windowTitle,
+            ProcessName = processName,
+            ProcessPath = processPath,
+            CursorScreen = cursor,
+            CursorPixelColor = cursorPixel,
+            IsFocused = SafeGetBoolProperty(element, AutomationElement.HasKeyboardFocusProperty),
+            IsEnabled = SafeGetBoolProperty(element, AutomationElement.IsEnabledProperty),
+            IsOffscreen = SafeGetBoolProperty(element, AutomationElement.IsOffscreenProperty)
         };
     }
 
     /// <summary>
-    /// Walks up the automation tree to find the nearest Window element and returns its name.
+    /// Walks up the automation tree to find the nearest Window element and returns its name and bounds.
     /// </summary>
-    private static string FindWindowTitle(AutomationElement element)
+    private static (string windowTitle, Rectangle windowBounds) FindWindowMetadata(AutomationElement element)
     {
         try
         {
@@ -160,7 +184,27 @@ public static class ElementInspector
                 try
                 {
                     if (current.Current.ControlType == ControlType.Window)
-                        return current.Current.Name ?? "";
+                    {
+                        var bounds = Rectangle.Empty;
+                        try
+                        {
+                            var rect = current.Current.BoundingRectangle;
+                            if (!rect.IsEmpty && !double.IsInfinity(rect.Width) && !double.IsInfinity(rect.Height))
+                            {
+                                bounds = new Rectangle(
+                                    (int)rect.X,
+                                    (int)rect.Y,
+                                    (int)rect.Width,
+                                    (int)rect.Height);
+                            }
+                        }
+                        catch
+                        {
+                            // Bounds are optional diagnostics.
+                        }
+
+                        return (current.Current.Name ?? "", bounds);
+                    }
                 }
                 catch { /* skip */ }
 
@@ -169,7 +213,34 @@ public static class ElementInspector
         }
         catch { /* unavailable */ }
 
-        return "";
+        return ("", Rectangle.Empty);
+    }
+
+    private static (string processName, string processPath) GetProcessMetadata(int processId)
+    {
+        if (processId <= 0)
+            return ("", "");
+
+        try
+        {
+            using var process = Process.GetProcessById(processId);
+            var processName = process.ProcessName ?? "";
+            var processPath = "";
+            try
+            {
+                processPath = process.MainModule?.FileName ?? "";
+            }
+            catch
+            {
+                // Access can be denied across integrity/session/bitness boundaries.
+            }
+
+            return (processName, processPath);
+        }
+        catch
+        {
+            return ("", "");
+        }
     }
 
     private static string? SafeGetProperty(AutomationElement element, AutomationProperty property)
@@ -196,6 +267,19 @@ public static class ElementInspector
         catch
         {
             return 0;
+        }
+    }
+
+    private static bool SafeGetBoolProperty(AutomationElement element, AutomationProperty property)
+    {
+        try
+        {
+            object? val = element.GetCurrentPropertyValue(property, true);
+            return val is bool boolValue && boolValue;
+        }
+        catch
+        {
+            return false;
         }
     }
 }

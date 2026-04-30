@@ -63,4 +63,24 @@ describe('flowConverter sample flows', () => {
       );
     }
   });
+
+  it('persists node alias/comment only when requested', () => {
+    const sample = getSampleFlows()[0].flow;
+    const converted = fromBackendFlow(sample, testDefinitions);
+    const firstNode = converted.nodes[0];
+    firstNode.data.nodeAlias = 'Alias de teste';
+    firstNode.data.nodeComment = 'Comentario de teste';
+
+    const runtimeFlow = toBackendFlow(sample.id, sample.name, converted.nodes, converted.edges);
+    const persistedFlow = toBackendFlow(sample.id, sample.name, converted.nodes, converted.edges, {
+      persistUiMetadata: true,
+    });
+
+    expect(runtimeFlow.nodes[0].properties.__ui_alias).toBeUndefined();
+    expect(runtimeFlow.nodes[0].properties.__ui_comment).toBeUndefined();
+    expect(runtimeFlow.nodes[0].properties['__ui.alias']).toBeUndefined();
+    expect(runtimeFlow.nodes[0].properties['__ui.comment']).toBeUndefined();
+    expect(persistedFlow.nodes[0].properties['__ui.alias']).toBe('Alias de teste');
+    expect(persistedFlow.nodes[0].properties['__ui.comment']).toBe('Comentario de teste');
+  });
 });

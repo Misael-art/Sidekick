@@ -9,6 +9,9 @@
 import type { Node, Edge } from '@xyflow/react';
 import type { FlowNodeData, NodeDefinition } from './types';
 
+const UI_ALIAS_PROPERTY_KEY = '__ui.alias';
+const UI_COMMENT_PROPERTY_KEY = '__ui.comment';
+
 // ── Backend types (mirrors C# models) ────────────────────────────
 
 export interface BackendFlow {
@@ -50,7 +53,10 @@ export function toBackendFlow(
   flowName: string,
   nodes: Node<FlowNodeData>[],
   edges: Edge[],
+  options?: { persistUiMetadata?: boolean },
 ): BackendFlow {
+  const persistUiMetadata = options?.persistUiMetadata ?? false;
+
   return {
     id: flowId || crypto.randomUUID(),
     name: flowName,
@@ -60,7 +66,7 @@ export function toBackendFlow(
       id: n.id,
       typeId: n.data.typeId,
       position: { x: n.position.x, y: n.position.y },
-      properties: { ...(n.data.propertyValues ?? {}) },
+      properties: serializeNodeProperties(n.data, persistUiMetadata),
     })),
     connections: edges.map((e) => ({
       id: e.id,
@@ -93,6 +99,7 @@ export function fromBackendFlow(
       console.warn(`[flowConverter] Unknown typeId "${inst.typeId}", skipping node ${inst.id}`);
       continue;
     }
+    const uiMetadata = extractNodeUiMetadata(inst.properties);
     nodes.push({
       id: inst.id,
       type: categoryToType[def.category] ?? 'actionNode',
@@ -100,12 +107,14 @@ export function fromBackendFlow(
       data: {
         typeId: def.typeId,
         displayName: def.displayName,
+        nodeAlias: uiMetadata.nodeAlias,
+        nodeComment: uiMetadata.nodeComment,
         category: def.category,
         color: def.color,
         inputPorts: def.inputPorts,
         outputPorts: def.outputPorts,
         properties: def.properties,
-        propertyValues: { ...buildDefaults(def), ...inst.properties },
+        propertyValues: { ...buildDefaults(def), ...uiMetadata.nodeProperties },
       },
     });
   }
@@ -130,4 +139,46 @@ function buildDefaults(def: NodeDefinition): Record<string, unknown> {
     defaults[prop.id] = prop.defaultValue ?? '';
   }
   return defaults;
+}
+
+function serializeNodeProperties(
+  data: FlowNodeData,
+  persistUiMetadata: boolean,
+): Record<string, unknown> {
+  const properties: Record<string, unknown> = { ...(data.propertyValues ?? {}) };
+  delete properties[UI_ALIAS_PROPERTY_KEY];
+  delete properties[UI_COMMENT_PROPERTY_KEY];
+
+  if (!persistUiMetadata) {
+    return properties;
+  }
+
+  const alias = data.nodeAlias?.trim() ?? '';
+  const comment = data.nodeComment?.trim() ?? '';
+  if (alias) {
+    properties[UI_ALIAS_PROPERTY_KEY] = alias;
+  }
+  if (comment) {
+    properties[UI_COMMENT_PROPERTY_KEY] = comment;
+  }
+
+  return properties;
+}
+
+function extractNodeUiMetadata(properties: Record<string, unknown>): {
+  nodeAlias: string;
+  nodeComment: string;
+  nodeProperties: Record<string, unknown>;
+} {
+  const nodeProperties = { ...properties };
+  const nodeAliasRaw = nodeProperties[UI_ALIAS_PROPERTY_KEY];
+  const nodeCommentRaw = nodeProperties[UI_COMMENT_PROPERTY_KEY];
+  delete nodeProperties[UI_ALIAS_PROPERTY_KEY];
+  delete nodeProperties[UI_COMMENT_PROPERTY_KEY];
+
+  return {
+    nodeAlias: typeof nodeAliasRaw === 'string' ? nodeAliasRaw : '',
+    nodeComment: typeof nodeCommentRaw === 'string' ? nodeCommentRaw : '',
+    nodeProperties,
+  };
 }

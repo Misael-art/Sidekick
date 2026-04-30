@@ -2,6 +2,7 @@ using System.IO;
 using System.Threading;
 using System.Windows;
 using System.Windows.Threading;
+using Ajudante.App.Configuration;
 using Ajudante.Core.Serialization;
 
 namespace Ajudante.App;
@@ -15,47 +16,67 @@ public partial class App : Application
     private static Mutex? _singleInstanceMutex;
 
     /// <summary>
-    /// Root data directory for Ajudante: %AppData%/Ajudante/
+    /// Root data directory for Sidekick.
     /// </summary>
-    public static string DataDirectory { get; } = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        "Sidekick");
+    public static string DataDirectory => AppPaths.Current.DataDirectory;
 
     /// <summary>
     /// Directory where flow JSON files are stored.
     /// </summary>
-    public static string FlowsDirectory { get; } = Path.Combine(DataDirectory, "flows");
+    public static string FlowsDirectory => AppPaths.Current.FlowsDirectory;
 
     /// <summary>
     /// Directory for application logs.
     /// </summary>
-    public static string LogsDirectory { get; } = Path.Combine(DataDirectory, "logs");
+    public static string LogsDirectory => AppPaths.Current.LogsDirectory;
 
     /// <summary>
     /// Directory for plugin DLLs containing external nodes.
     /// </summary>
-    public static string PluginsDirectory { get; } = Path.Combine(DataDirectory, "plugins");
+    public static string PluginsDirectory => AppPaths.Current.PluginsDirectory;
+
+    /// <summary>
+    /// Root directory for persisted product assets.
+    /// </summary>
+    public static string AssetsDirectory => AppPaths.Current.AssetsDirectory;
+
+    /// <summary>
+    /// Directory for persisted Snip image files.
+    /// </summary>
+    public static string SnipAssetsDirectory => AppPaths.Current.SnipAssetsDirectory;
+
+    /// <summary>
+    /// Directory for persisted Mira inspection assets.
+    /// </summary>
+    public static string InspectionAssetsDirectory => AppPaths.Current.InspectionAssetsDirectory;
+
+    /// <summary>
+    /// Directory for persisted asset manifests.
+    /// </summary>
+    public static string AssetManifestsDirectory => AppPaths.Current.AssetManifestsDirectory;
 
     protected override void OnStartup(StartupEventArgs e)
     {
+        var paths = AppPaths.Initialize();
+
         // Single instance enforcement
-        _singleInstanceMutex = new Mutex(true, "Global\\SidekickRPA_SingleInstance", out bool createdNew);
+        _singleInstanceMutex = new Mutex(true, ProductIdentity.MutexName, out bool createdNew);
         if (!createdNew)
         {
             MessageBox.Show(
-                "Sidekick is already running. Check the system tray.",
-                "Sidekick",
+                $"{ProductIdentity.ProductName} is already running. Check the system tray.",
+                ProductIdentity.ProductName,
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
             Shutdown();
             return;
         }
 
-        // Ensure application data directories exist
-        Directory.CreateDirectory(DataDirectory);
-        Directory.CreateDirectory(FlowsDirectory);
-        Directory.CreateDirectory(LogsDirectory);
-        Directory.CreateDirectory(PluginsDirectory);
+        if (paths.MigratedLegacyData)
+        {
+            LogInformation("Startup", $"Migrated legacy data from '{paths.LegacyDataDirectory}' to '{paths.DataDirectory}'.");
+        }
+
         SeedBundledFlows();
 
         // Global exception handling
@@ -79,7 +100,7 @@ public partial class App : Application
 
         MessageBox.Show(
             $"An unexpected error occurred:\n\n{e.Exception.Message}\n\nThe application will attempt to continue.",
-            "Sidekick - Error",
+            ProductIdentity.ErrorTitle,
             MessageBoxButton.OK,
             MessageBoxImage.Error);
 
@@ -102,16 +123,21 @@ public partial class App : Application
 
     private static void LogException(string source, Exception ex)
     {
+        LogInformation(source, ex.ToString(), $"crash_{DateTime.Now:yyyyMMdd}.log");
+    }
+
+    private static void LogInformation(string source, string message, string? fileName = null)
+    {
         try
         {
-            var logFile = Path.Combine(LogsDirectory, $"crash_{DateTime.Now:yyyyMMdd}.log");
-            var entry = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [{source}] {ex}\n\n";
+            var logFile = Path.Combine(LogsDirectory, fileName ?? $"app_{DateTime.Now:yyyyMMdd}.log");
+            var entry = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [{source}] {message}{Environment.NewLine}{Environment.NewLine}";
             File.AppendAllText(logFile, entry);
         }
         catch
         {
             // Last resort: write to debug output
-            System.Diagnostics.Debug.WriteLine($"[{source}] {ex}");
+            System.Diagnostics.Debug.WriteLine($"[{source}] {message}");
         }
     }
 

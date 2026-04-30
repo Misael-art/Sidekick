@@ -1,0 +1,71 @@
+{
+  "id": "portfolio-snip-reuse-demo",
+  "name": "Sidekick - Snip Reuse Demo",
+  "version": 1,
+  "variables": [],
+  "nodes": [
+    {
+      "id": "image-trigger",
+      "typeId": "trigger.imageDetected",
+      "position": {
+        "x": 80,
+        "y": 180
+      },
+      "properties": {
+        "templateImage": {
+          "kind": "snipAsset",
+          "assetId": "sample-header-button",
+          "displayName": "Sample Header Button",
+          "imagePath": "assets/snips/sample-header-button.png",
+          "imageBase64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADElEQVR4nGP4DwQACfsD/aBaeaIAAAAASUVORK5CYII="
+        },
+        "threshold": 0.9,
+        "interval": 1500
+      }
+    },
+    {
+      "id": "log",
+      "typeId": "action.logMessage",
+      "position": {
+        "x": 360,
+        "y": 180
+      },
+      "properties": {
+        "message": "Image template detected from a saved Snip asset binding.",
+        "level": "info",
+        "storeInVariable": ""
+      }
+    },
+    {
+      "id": "notify",
+      "typeId": "action.showNotification",
+      "position": {
+        "x": 640,
+        "y": 180
+      },
+      "properties": {
+        "title": "Sidekick",
+        "message": "Saved Snip asset detected successfully.",
+        "timeoutMs": 3000
+      }
+    }
+  ],
+  "connections": [
+    {
+      "id": "c1",
+      "sourceNodeId": "image-trigger",
+      "sourcePort": "triggered",
+      "targetNodeId": "log",
+      "targetPort": "in"
+    },
+    {
+      "id": "c2",
+      "sourceNodeId": "log",
+      "sourcePort": "out",
+      "targetNodeId": "notify",
+      "targetPort": "in"
+    }
+  ],
+  "createdAt": "2026-04-26T00:00:00Z",
+  "modifiedAt": "2026-04-26T00:00:00Z"
+}

@@ -1,0 +1,64 @@
+{
+  "id": "recipe-scheduler-interval",
+  "name": "Recipe - Scheduler Interval",
+  "version": 1,
+  "variables": [],
+  "nodes": [
+    {
+      "id": "interval",
+      "typeId": "trigger.interval",
+      "position": {
+        "x": 80,
+        "y": 160
+      },
+      "properties": {
+        "intervalMs": 60000,
+        "fireImmediately": false,
+        "maxRepeat": 0
+      }
+    },
+    {
+      "id": "log-tick",
+      "typeId": "action.logMessage",
+      "position": {
+        "x": 410,
+        "y": 160
+      },
+      "properties": {
+        "message": "Interval trigger fired.",
+        "level": "info"
+      }
+    },
+    {
+      "id": "notify-tick",
+      "typeId": "action.showNotification",
+      "position": {
+        "x": 740,
+        "y": 160
+      },
+      "properties": {
+        "title": "Sidekick",
+        "message": "Scheduled automation fired.",
+        "timeoutMs": 3000
+      }
+    }
+  ],
+  "connections": [
+    {
+      "id": "c1",
+      "sourceNodeId": "interval",
+      "sourcePort": "triggered",
+      "targetNodeId": "log-tick",
+      "targetPort": "in"
+    },
+    {
+      "id": "c2",
+      "sourceNodeId": "log-tick",
+      "sourcePort": "out",
+      "targetNodeId": "notify-tick",
+      "targetPort": "in"
+    }
+  ],
+  "createdAt": "2026-04-29T00:00:00Z",
+  "modifiedAt": "2026-04-29T00:00:00Z"
+}

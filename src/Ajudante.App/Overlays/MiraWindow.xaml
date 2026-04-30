@@ -93,8 +93,79 @@
                                Foreground="#FFA6ADC8" />
                 </StackPanel>
 
+                <StackPanel Orientation="Horizontal" Margin="0,1">
+                    <TextBlock Text="Relative: "
+                               FontSize="11"
+                               Foreground="#FF6C7086" />
+                    <TextBlock x:Name="RelativeBoundsText"
+                               FontSize="11"
+                               Foreground="#FFA6ADC8" />
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" Margin="0,1">
+                    <TextBlock Text="Window: "
+                               FontSize="11"
+                               Foreground="#FF6C7086" />
+                    <TextBlock x:Name="WindowTitleText"
+                               FontSize="11"
+                               Foreground="#FFCDD6F4"
+                               MaxWidth="320"
+                               TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" Margin="0,1">
+                    <TextBlock Text="Process: "
+                               FontSize="11"
+                               Foreground="#FF6C7086" />
+                    <TextBlock x:Name="ProcessText"
+                               FontSize="11"
+                               Foreground="#FFCDD6F4"
+                               MaxWidth="320"
+                               TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" Margin="0,1">
+                    <TextBlock Text="Path: "
+                               FontSize="11"
+                               Foreground="#FF6C7086" />
+                    <TextBlock x:Name="ProcessPathText"
+                               FontSize="11"
+                               Foreground="#FFA6ADC8"
+                               MaxWidth="320"
+                               TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" Margin="0,1">
+                    <TextBlock Text="Cursor: "
+                               FontSize="11"
+                               Foreground="#FF6C7086" />
+                    <TextBlock x:Name="CursorText"
+                               FontSize="11"
+                               Foreground="#FFA6ADC8" />
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" Margin="0,1">
+                    <TextBlock Text="State: "
+                               FontSize="11"
+                               Foreground="#FF6C7086" />
+                    <TextBlock x:Name="StateText"
+                               FontSize="11"
+                               Foreground="#FFA6ADC8" />
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" Margin="0,1">
+                    <TextBlock Text="Selector: "
+                               FontSize="11"
+                               Foreground="#FF6C7086" />
+                    <TextBlock x:Name="SelectorText"
+                               FontSize="11"
+                               Foreground="#FF94E2D5"
+                               MaxWidth="320"
+                               TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+
                 <!-- Hint at bottom -->
-                <TextBlock Text="Click to capture  |  Esc to cancel"
+                <TextBlock Text="Click to save Mira asset  |  Esc to cancel"
                            FontSize="10"
                            Foreground="#FF585B70"
                            Margin="0,6,0,0" />

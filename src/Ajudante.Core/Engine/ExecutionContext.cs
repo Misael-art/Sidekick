@@ -2,6 +2,22 @@ using System.Collections.Concurrent;
 
 namespace Ajudante.Core.Engine;
 
+public static class RuntimePhases
+{
+    public const string Idle = "idle";
+    public const string Armed = "armed";
+    public const string WaitingForSchedule = "waitingForSchedule";
+    public const string WaitingForWindow = "waitingForWindow";
+    public const string WaitingForElement = "waitingForElement";
+    public const string ElementMatched = "elementMatched";
+    public const string Retrying = "retrying";
+    public const string CooldownActive = "cooldownActive";
+    public const string FallbackVisualActive = "fallbackVisualActive";
+    public const string ClickExecuted = "clickExecuted";
+    public const string Stopped = "stopped";
+    public const string Error = "error";
+}
+
 public class FlowExecutionContext
 {
     private readonly ConcurrentDictionary<string, object?> _variables = new();
@@ -9,6 +25,8 @@ public class FlowExecutionContext
 
     public Flow Flow { get; }
     public CancellationToken CancellationToken { get; }
+    public Action<string, string, string?, object?>? PhaseSink { get; set; }
+    public string CurrentNodeId { get; internal set; } = "";
 
     public FlowExecutionContext(Flow flow, CancellationToken ct)
     {
@@ -24,6 +42,18 @@ public class FlowExecutionContext
     public void SetVariable(string name, object? value)
     {
         _variables[name] = value;
+    }
+
+    public void EmitPhase(string phase, string? message = null, object? detail = null, string? nodeId = null)
+    {
+        try
+        {
+            PhaseSink?.Invoke(nodeId ?? CurrentNodeId, phase, message, detail);
+        }
+        catch
+        {
+            // Runtime phase emission is diagnostic only.
+        }
     }
 
     public object? GetVariable(string name)

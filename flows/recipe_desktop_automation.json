@@ -1,0 +1,102 @@
+{
+  "id": "recipe-desktop-automation",
+  "name": "Recipe - Desktop Automation Capture Apply",
+  "version": 1,
+  "variables": [
+    {
+      "name": "targetWindow",
+      "type": "String",
+      "default": "Untitled - Notepad"
+    },
+    {
+      "name": "targetProcess",
+      "type": "String",
+      "default": "notepad"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "start",
+      "typeId": "trigger.manualStart",
+      "position": {
+        "x": 80,
+        "y": 180
+      },
+      "properties": {}
+    },
+    {
+      "id": "wait-target",
+      "typeId": "action.desktopWaitElement",
+      "position": {
+        "x": 390,
+        "y": 180
+      },
+      "properties": {
+        "windowTitle": "{{targetWindow}}",
+        "windowTitleMatch": "contains",
+        "processName": "{{targetProcess}}",
+        "processPath": "",
+        "automationId": "",
+        "elementName": "",
+        "controlType": "document",
+        "timeoutMs": 10000
+      }
+    },
+    {
+      "id": "read-target",
+      "typeId": "action.desktopReadElementText",
+      "position": {
+        "x": 740,
+        "y": 180
+      },
+      "properties": {
+        "windowTitle": "{{targetWindow}}",
+        "windowTitleMatch": "contains",
+        "processName": "{{targetProcess}}",
+        "processPath": "",
+        "automationId": "",
+        "elementName": "",
+        "controlType": "document",
+        "timeoutMs": 5000,
+        "storeInVariable": "desktopText"
+      }
+    },
+    {
+      "id": "log-text",
+      "typeId": "action.logMessage",
+      "position": {
+        "x": 1080,
+        "y": 180
+      },
+      "properties": {
+        "message": "Desktop text captured: {{desktopText}}",
+        "level": "info"
+      }
+    }
+  ],
+  "connections": [
+    {
+      "id": "c1",
+      "sourceNodeId": "start",
+      "sourcePort": "triggered",
+      "targetNodeId": "wait-target",
+      "targetPort": "in"
+    },
+    {
+      "id": "c2",
+      "sourceNodeId": "wait-target",
+      "sourcePort": "out",
+      "targetNodeId": "read-target",
+      "targetPort": "in"
+    },
+    {
+      "id": "c3",
+      "sourceNodeId": "read-target",
+      "sourcePort": "out",
+      "targetNodeId": "log-text",
+      "targetPort": "in"
+    }
+  ],
+  "createdAt": "2026-04-29T00:00:00Z",
+  "modifiedAt": "2026-04-29T00:00:00Z"
+}

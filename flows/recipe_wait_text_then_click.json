@@ -1,0 +1,128 @@
+{
+  "id": "recipe-wait-text-then-click",
+  "name": "Recipe - Wait Text Then Click",
+  "version": 1,
+  "variables": [
+    {
+      "name": "windowTitle",
+      "type": "String",
+      "default": "Target App"
+    },
+    {
+      "name": "processName",
+      "type": "String",
+      "default": "TargetApp"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "start",
+      "typeId": "trigger.manualStart",
+      "position": {
+        "x": 80,
+        "y": 150
+      },
+      "properties": {}
+    },
+    {
+      "id": "wait-ready-text",
+      "typeId": "action.desktopWaitElement",
+      "position": {
+        "x": 390,
+        "y": 150
+      },
+      "properties": {
+        "windowTitle": "{{windowTitle}}",
+        "windowTitleMatch": "contains",
+        "processName": "{{processName}}",
+        "processPath": "",
+        "automationId": "",
+        "elementName": "Ready",
+        "controlType": "text",
+        "timeoutMs": 30000
+      }
+    },
+    {
+      "id": "click-continue",
+      "typeId": "action.desktopClickElement",
+      "position": {
+        "x": 740,
+        "y": 150
+      },
+      "properties": {
+        "windowTitle": "{{windowTitle}}",
+        "windowTitleMatch": "contains",
+        "processName": "{{processName}}",
+        "processPath": "",
+        "automationId": "",
+        "elementName": "Continue",
+        "controlType": "button",
+        "timeoutMs": 5000,
+        "clickType": "single"
+      }
+    },
+    {
+      "id": "log-done",
+      "typeId": "action.logMessage",
+      "position": {
+        "x": 1080,
+        "y": 150
+      },
+      "properties": {
+        "message": "Ready text found and Continue clicked.",
+        "level": "info"
+      }
+    },
+    {
+      "id": "log-not-found",
+      "typeId": "action.logMessage",
+      "position": {
+        "x": 740,
+        "y": 340
+      },
+      "properties": {
+        "message": "Selector did not find the target text or button. Re-capture with Mira or add visual fallback.",
+        "level": "warning"
+      }
+    }
+  ],
+  "connections": [
+    {
+      "id": "c1",
+      "sourceNodeId": "start",
+      "sourcePort": "triggered",
+      "targetNodeId": "wait-ready-text",
+      "targetPort": "in"
+    },
+    {
+      "id": "c2",
+      "sourceNodeId": "wait-ready-text",
+      "sourcePort": "out",
+      "targetNodeId": "click-continue",
+      "targetPort": "in"
+    },
+    {
+      "id": "c3",
+      "sourceNodeId": "click-continue",
+      "sourcePort": "out",
+      "targetNodeId": "log-done",
+      "targetPort": "in"
+    },
+    {
+      "id": "c4",
+      "sourceNodeId": "wait-ready-text",
+      "sourcePort": "notFound",
+      "targetNodeId": "log-not-found",
+      "targetPort": "in"
+    },
+    {
+      "id": "c5",
+      "sourceNodeId": "click-continue",
+      "sourcePort": "notFound",
+      "targetNodeId": "log-not-found",
+      "targetPort": "in"
+    }
+  ],
+  "createdAt": "2026-04-29T00:00:00Z",
+  "modifiedAt": "2026-04-29T00:00:00Z"
+}
