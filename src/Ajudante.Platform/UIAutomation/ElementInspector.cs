@@ -1,6 +1,7 @@
 using System.Drawing;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Windows.Forms;
 using System.Windows.Automation;
 using Ajudante.Platform.Screen;
 
@@ -22,6 +23,9 @@ public static class ElementInspector
 
     [DllImport("user32.dll")]
     private static extern bool GetCursorPos(out POINT lpPoint);
+
+    [DllImport("user32.dll")]
+    private static extern bool IsIconic(IntPtr hWnd);
 
     #endregion
 
@@ -135,6 +139,7 @@ public static class ElementInspector
         catch { /* unavailable */ }
 
         var (windowTitle, windowBounds) = FindWindowMetadata(element);
+        var windowHandle = FindWindowHandle(element);
         var (processName, processPath) = GetProcessMetadata(processId);
         var cursor = GetCursorPos(out POINT pt) ? new Point(pt.X, pt.Y) : Point.Empty;
         var cursorPixel = "";
@@ -151,6 +156,18 @@ public static class ElementInspector
             }
         }
 
+        var monitor = cursor.IsEmpty ? global::System.Windows.Forms.Screen.PrimaryScreen : global::System.Windows.Forms.Screen.FromPoint(cursor);
+        var monitorBounds = monitor?.Bounds ?? Rectangle.Empty;
+        var monitorName = monitor?.DeviceName ?? "";
+        var hostBounds = SystemInformation.VirtualScreen;
+        var relativePointX = cursor.X - windowBounds.X;
+        var relativePointY = cursor.Y - windowBounds.Y;
+        var normalizedWindowX = windowBounds.Width > 0 ? (double)relativePointX / windowBounds.Width : 0d;
+        var normalizedWindowY = windowBounds.Height > 0 ? (double)relativePointY / windowBounds.Height : 0d;
+        var normalizedScreenX = hostBounds.Width > 0 ? (double)(cursor.X - hostBounds.X) / hostBounds.Width : 0d;
+        var normalizedScreenY = hostBounds.Height > 0 ? (double)(cursor.Y - hostBounds.Y) / hostBounds.Height : 0d;
+        var windowState = ResolveWindowState(windowHandle);
+
         return new ElementInfo
         {
             AutomationId = automationId,
@@ -161,13 +178,26 @@ public static class ElementInspector
             WindowBounds = windowBounds,
             ProcessId = processId,
             WindowTitle = windowTitle,
+            WindowStateAtCapture = windowState,
+            WindowHandle = windowHandle.ToInt64(),
             ProcessName = processName,
             ProcessPath = processPath,
             CursorScreen = cursor,
             CursorPixelColor = cursorPixel,
             IsFocused = SafeGetBoolProperty(element, AutomationElement.HasKeyboardFocusProperty),
             IsEnabled = SafeGetBoolProperty(element, AutomationElement.IsEnabledProperty),
-            IsOffscreen = SafeGetBoolProperty(element, AutomationElement.IsOffscreenProperty)
+            IsOffscreen = SafeGetBoolProperty(element, AutomationElement.IsOffscreenProperty),
+            MonitorDeviceName = monitorName,
+            MonitorBounds = monitorBounds,
+            HostScreenWidth = hostBounds.Width,
+            HostScreenHeight = hostBounds.Height,
+            DpiScale = 1.0d,
+            RelativePointX = relativePointX,
+            RelativePointY = relativePointY,
+            NormalizedWindowX = ClampNormalized(normalizedWindowX),
+            NormalizedWindowY = ClampNormalized(normalizedWindowY),
+            NormalizedScreenX = ClampNormalized(normalizedScreenX),
+            NormalizedScreenY = ClampNormalized(normalizedScreenY)
         };
     }
 
@@ -214,6 +244,52 @@ public static class ElementInspector
         catch { /* unavailable */ }
 
         return ("", Rectangle.Empty);
+    }
+
+    private static IntPtr FindWindowHandle(AutomationElement element)
+    {
+        try
+        {
+            var current = element;
+            while (current is not null)
+            {
+                try
+                {
+                    if (current.Current.ControlType == ControlType.Window)
+                    {
+                        var nativeHandle = current.Current.NativeWindowHandle;
+                        return nativeHandle == 0 ? IntPtr.Zero : new IntPtr(nativeHandle);
+                    }
+                }
+                catch
+                {
+                    // Keep searching upwards.
+                }
+
+                current = TreeWalker.ControlViewWalker.GetParent(current);
+            }
+        }
+        catch
+        {
+            // no-op
+        }
+
+        return IntPtr.Zero;
+    }
+
+    private static string ResolveWindowState(IntPtr windowHandle)
+    {
+        if (windowHandle == IntPtr.Zero)
+            return "normal";
+
+        try
+        {
+            return IsIconic(windowHandle) ? "minimized" : "normal";
+        }
+        catch
+        {
+            return "normal";
+        }
     }
 
     private static (string processName, string processPath) GetProcessMetadata(int processId)
@@ -281,5 +357,12 @@ public static class ElementInspector
         {
             return false;
         }
+    }
+
+    private static double ClampNormalized(double value)
+    {
+        if (double.IsNaN(value) || double.IsInfinity(value))
+            return 0d;
+        return Math.Max(0d, Math.Min(1d, value));
     }
 }

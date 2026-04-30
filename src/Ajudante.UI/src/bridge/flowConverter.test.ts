@@ -83,4 +83,55 @@ describe('flowConverter sample flows', () => {
     expect(persistedFlow.nodes[0].properties['__ui.alias']).toBe('Alias de teste');
     expect(persistedFlow.nodes[0].properties['__ui.comment']).toBe('Comentario de teste');
   });
+
+  it('persists disabled node metadata only when requested', () => {
+    const sample = getSampleFlows()[0].flow;
+    const converted = fromBackendFlow(sample, testDefinitions);
+    converted.nodes[0].data.nodeDisabled = true;
+
+    const runtimeFlow = toBackendFlow(sample.id, sample.name, converted.nodes, converted.edges);
+    const persistedFlow = toBackendFlow(sample.id, sample.name, converted.nodes, converted.edges, {
+      persistUiMetadata: true,
+    });
+
+    expect(runtimeFlow.nodes[0].properties['__ui.disabled']).toBeUndefined();
+    expect(persistedFlow.nodes[0].properties['__ui.disabled']).toBe(true);
+  });
+
+  it('bypasses a disabled node in runtime view when it has one input and one output edge', () => {
+    const converted = fromBackendFlow({
+      id: 'disabled-runtime-flow',
+      name: 'Disabled Runtime Flow',
+      version: 1,
+      variables: [],
+      nodes: [
+        { id: 'trigger', typeId: 'trigger.manualStart', position: { x: 0, y: 0 }, properties: {} },
+        { id: 'delay', typeId: 'logic.delay', position: { x: 240, y: 0 }, properties: { milliseconds: 1000, '__ui.disabled': true } },
+        { id: 'log', typeId: 'action.logMessage', position: { x: 480, y: 0 }, properties: { message: 'after delay' } },
+      ],
+      connections: [
+        { id: 'edge-trigger-delay', sourceNodeId: 'trigger', sourcePort: 'triggered', targetNodeId: 'delay', targetPort: 'in' },
+        { id: 'edge-delay-log', sourceNodeId: 'delay', sourcePort: 'out', targetNodeId: 'log', targetPort: 'in' },
+      ],
+    }, testDefinitions);
+
+    const runtimeFlow = toBackendFlow('disabled-runtime-flow', 'Disabled Runtime Flow', converted.nodes, converted.edges, {
+      runtimeView: true,
+    });
+    const persistedFlow = toBackendFlow('disabled-runtime-flow', 'Disabled Runtime Flow', converted.nodes, converted.edges, {
+      persistUiMetadata: true,
+    });
+
+    expect(runtimeFlow.nodes.map((node) => node.id)).toEqual(['trigger', 'log']);
+    expect(runtimeFlow.connections).toEqual([
+      expect.objectContaining({
+        sourceNodeId: 'trigger',
+        sourcePort: 'triggered',
+        targetNodeId: 'log',
+        targetPort: 'in',
+      }),
+    ]);
+    expect(persistedFlow.nodes.map((node) => node.id)).toEqual(['trigger', 'delay', 'log']);
+    expect(persistedFlow.connections).toHaveLength(2);
+  });
 });

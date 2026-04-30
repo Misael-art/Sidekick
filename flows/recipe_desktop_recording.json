@@ -1,0 +1,65 @@
+{
+  "id": "recipe-desktop-recording",
+  "name": "Recipe - Desktop Recording",
+  "version": 1,
+  "variables": [
+    {
+      "name": "recordFolder",
+      "type": "String",
+      "default": "%USERPROFILE%\\Videos\\Sidekick"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "start",
+      "typeId": "trigger.manualStart",
+      "position": { "x": 80, "y": 170 },
+      "properties": {}
+    },
+    {
+      "id": "record",
+      "typeId": "action.recordDesktop",
+      "position": { "x": 390, "y": 170 },
+      "properties": {
+        "target": "fullDesktop",
+        "durationMs": 12000,
+        "fps": 12,
+        "outputFolder": "{{recordFolder}}",
+        "filenameTemplate": "desktop_record_{{timestamp}}",
+        "codec": "MJPG",
+        "format": "avi",
+        "includeCursor": true,
+        "countdownMs": 1500,
+        "showRecordingIndicator": false,
+        "maxFileSizeMb": 250
+      }
+    },
+    {
+      "id": "log-record",
+      "typeId": "action.logMessage",
+      "position": { "x": 760, "y": 170 },
+      "properties": {
+        "message": "Video desktop salvo em {{record.filePath}} (frames: {{record.framesWritten}})",
+        "level": "info"
+      }
+    }
+  ],
+  "connections": [
+    {
+      "id": "c1",
+      "sourceNodeId": "start",
+      "sourcePort": "triggered",
+      "targetNodeId": "record",
+      "targetPort": "in"
+    },
+    {
+      "id": "c2",
+      "sourceNodeId": "record",
+      "sourcePort": "out",
+      "targetNodeId": "log-record",
+      "targetPort": "in"
+    }
+  ],
+  "createdAt": "2026-04-30T00:00:00Z",
+  "modifiedAt": "2026-04-30T00:00:00Z"
+}

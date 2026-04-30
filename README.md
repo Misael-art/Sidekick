@@ -33,7 +33,7 @@ Sidekick is a modern, node-based automation tool that lets you create macros, wo
 <td width="50%">
 
 ### 🎨 Visual Node Editor
-Drag-and-drop nodes, connect ports, drop a wire on empty canvas to create the next step, or right-click for a searchable context menu.
+Drag-and-drop nodes, connect ports, drop a wire on empty canvas to create the next step, right-click nodes/edges for focused actions, insert a node into an existing wire, reconnect edges, disable steps, and run basic auto layout.
 
 ### ⌨️ Global Hotkeys
 Trigger any flow with system-wide keyboard shortcuts — even when Sidekick is minimized to tray.
@@ -52,6 +52,9 @@ Detect pixel colors, find images on screen, and react to window events in real-t
 
 ### 🧭 Mira & Snip Assets
 Capture UI selectors with Mira, capture image templates with Snip, test selectors, score selector robustness, and create pre-filled nodes from the latest capture.
+
+### 📸 Screenshot & Recording
+Capture screenshots (desktop/monitor/region/window) and record desktop/camera video with explicit outputs for file path, dimensions, frame count, and runtime-safe cancellation.
 
 ### 🔁 Logic & Control Flow
 If/Else branching, loops, variables, delays, and text comparisons — all without writing code.
@@ -165,7 +168,13 @@ cd src/Ajudante.UI
 npm run test
 ```
 
-> Automated tests cover the Core engine, runtime orchestration, sample flows, bridge contracts, trigger lifecycle, built-in nodes, and the React stores/components that surface runtime state.
+> Automated tests cover the Core engine, runtime orchestration, sample flows, bridge contracts, trigger lifecycle, built-in nodes, React stores/components, flow conversion, and the visual editor operations for connecting, reconnecting, inserting, removing, disabling, and laying out nodes.
+
+Latest validated gate on `2026-04-30`:
+
+- `.NET`: `dotnet build Ajudante.sln` and `dotnet test Ajudante.sln` passed (`257` tests).
+- UI: `npm run test` passed (`49` tests) and `npm run build` generated current assets.
+- Publish: `dotnet publish ./src/Ajudante.App/Ajudante.App.csproj -c Release -o ./src/Ajudante.App/bin/publish` generated `Sidekick.exe`; built-in recipes are copied as `seed-flows/*.json`.
 
 ### Sample Flows
 
@@ -183,6 +192,11 @@ The `flows/` folder includes ready-to-open examples and recipes:
 - `recipe_console_pwd_command.json` shows PWD setup, console command execution, stdout capture, and logging.
 - `recipe_hardware_quick_controls.json` shows safe hardware state checks for audio, displays, and device inventory.
 - `trae_auto_continue.json` is the official Trae Continue flow using a desktop element trigger, window focus, cooldown, debounce, and max repeat.
+- `recipe_screenshot_window_support.json` shows resilient screenshot capture by window selector/process path.
+- `recipe_desktop_recording.json` shows desktop recording with frame capture and file-size guard.
+- `recipe_camera_recording.json` shows camera recording with optional mirror/effects/timestamp.
+- `recipe_mira_resilient_click.json` shows selector-first click with fallback coordinates.
+- `recipe_whatsapp_status_assistant.json` keeps WhatsApp message preparation in draft mode by default and requires explicit consent for sensitive send mode.
 
 ### Runtime Data & Compatibility
 
@@ -224,6 +238,9 @@ The `flows/` folder includes ready-to-open examples and recipes:
 | **Desktop Click Element** | Clicks a desktop element, falling back to coordinates when needed |
 | **Desktop Read Element Text** | Reads text from a desktop element |
 | **Click Image Match** | Finds a screen image and clicks the match center |
+| **Capture Screenshot** | Captures screenshot from desktop/monitor/region/active window/window selector with effects and scaling |
+| **Record Desktop** | Records desktop frames to video using ScreenCapture + Emgu CV VideoWriter |
+| **Record Camera** | Records webcam frames to video using Emgu CV VideoCapture + VideoWriter |
 | **Overlay Solid Color** | Covers the screen or a region with a configurable foreground color overlay |
 | **Overlay Image** | Shows image overlays with fit, background, timer, plane, fullscreen, and motion controls |
 | **Overlay Text** | Shows text overlays with font, color, effects, alignment, background, timer, plane, fullscreen, and motion controls |
@@ -246,6 +263,7 @@ The `flows/` folder includes ready-to-open examples and recipes:
 | **Get Variable** | Reads a value from the flow context |
 | **Compare Text** | Branches on string equality, contains, starts/ends with |
 | **Cooldown** | Routes repeated executions through a cooldown branch |
+| **Condition Group** | Evaluates ANY/ALL nested conditions with equals/contains/regex/greater/less/exists/changed |
 
 ---
 
@@ -339,6 +357,7 @@ Release validation snapshot `2026-04-30`:
 Known release caveats:
 
 - OCR is not yet a product feature; visual fallback currently means image template matching.
+- Desktop/camera recording currently does not include audio capture.
 - Re-publishing to `bin/publish` requires closing any running `Sidekick.exe` from that folder first, otherwise Windows keeps DLLs locked.
 
 ### Create an Installer

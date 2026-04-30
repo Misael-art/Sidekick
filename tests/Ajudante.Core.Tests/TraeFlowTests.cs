@@ -22,7 +22,7 @@ public class TraeFlowTests
 
         Assert.Equal("contains", GetString(trigger.Properties, "windowTitleMatch"));
         Assert.Equal("Trae", GetString(trigger.Properties, "processName"));
-        Assert.Equal(@"C:\Users\misae\AppData\Local\Programs\Trae\Trae.exe", GetString(trigger.Properties, "processPath"));
+        Assert.Equal(@"%LOCALAPPDATA%\Programs\Trae\Trae.exe", GetString(trigger.Properties, "processPath"));
         Assert.Equal("Continue", GetString(trigger.Properties, "elementName"));
         Assert.Equal("button", GetString(trigger.Properties, "controlType"));
         Assert.Equal(7000, GetInt(trigger.Properties, "cooldownMs"));

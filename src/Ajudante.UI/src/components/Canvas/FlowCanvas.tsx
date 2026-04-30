@@ -1,4 +1,4 @@
-import { useCallback, useRef, useMemo, useState, type DragEvent, type MouseEvent as ReactMouseEvent } from 'react';
+import { useCallback, useEffect, useRef, useMemo, useState, type DragEvent, type MouseEvent as ReactMouseEvent } from 'react';
 import {
   ReactFlow,
   MiniMap,
@@ -9,6 +9,7 @@ import {
   type Node,
   type Edge,
   type Connection,
+  type IsValidConnection,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
@@ -19,6 +20,7 @@ import ActionNode from '../Nodes/ActionNode';
 import { useFlowStore } from '../../store/flowStore';
 import { useAppStore } from '../../store/appStore';
 import { createMiraSelectorOverrides, createSnipTemplateOverrides } from '../../utils/captureNodePrefill';
+import { getNodeProductCategory } from '../../utils/nodeProductCategory';
 
 const nodeTypes = {
   triggerNode: TriggerNode,
@@ -46,6 +48,18 @@ export default function FlowCanvas() {
     position: { x: number; y: number };
     filter: string;
     pendingConnection?: PendingConnection | null;
+    insertEdgeId?: string | null;
+  } | null>(null);
+  const [nodeContextMenu, setNodeContextMenu] = useState<{
+    x: number;
+    y: number;
+    nodeId: string;
+  } | null>(null);
+  const [edgeContextMenu, setEdgeContextMenu] = useState<{
+    x: number;
+    y: number;
+    position: { x: number; y: number };
+    edgeId: string;
   } | null>(null);
 
   const nodes = useFlowStore((s) => s.nodes);
@@ -53,18 +67,30 @@ export default function FlowCanvas() {
   const nodeDefinitions = useFlowStore((s) => s.nodeDefinitions);
   const onNodesChange = useFlowStore((s) => s.onNodesChange);
   const onEdgesChange = useFlowStore((s) => s.onEdgesChange);
-  const onConnect = useFlowStore((s) => s.onConnect);
   const addNode = useFlowStore((s) => s.addNode);
+  const autoLayout = useFlowStore((s) => s.autoLayout);
+  const canConnect = useFlowStore((s) => s.canConnect);
+  const connectNodes = useFlowStore((s) => s.connectNodes);
+  const duplicateNode = useFlowStore((s) => s.duplicateNode);
+  const insertNodeOnEdge = useFlowStore((s) => s.insertNodeOnEdge);
+  const reconnectEdgeById = useFlowStore((s) => s.reconnectEdge);
+  const removeEdge = useFlowStore((s) => s.removeEdge);
+  const removeNode = useFlowStore((s) => s.removeNode);
+  const selectedNodeId = useFlowStore((s) => s.selectedNodeId);
   const setSelectedNodeId = useFlowStore((s) => s.setSelectedNodeId);
+  const toggleNodeDisabled = useFlowStore((s) => s.toggleNodeDisabled);
   const setUserMessage = useAppStore((s) => s.setUserMessage);
   const addLog = useAppStore((s) => s.addLog);
   const capturedElement = useAppStore((s) => s.capturedElement);
   const capturedRegion = useAppStore((s) => s.capturedRegion);
   const [pendingConnection, setPendingConnection] = useState<PendingConnection | null>(null);
+  const selectedNode = nodes.find((node) => node.id === selectedNodeId) ?? null;
 
   // Deselect when clicking canvas background
   const onPaneClick = useCallback(() => {
     setContextMenu(null);
+    setNodeContextMenu(null);
+    setEdgeContextMenu(null);
     setSelectedNodeId(null);
   }, [setSelectedNodeId]);
 
@@ -124,7 +150,10 @@ export default function FlowCanvas() {
       position,
       filter: '',
       pendingConnection: null,
+      insertEdgeId: null,
     });
+    setNodeContextMenu(null);
+    setEdgeContextMenu(null);
   }, [getFlowPositionFromEvent]);
 
   const resolveCompatibleTargetPort = useCallback((typeId: string, sourcePortId: string, sourceNodeId: string) => {
@@ -146,6 +175,17 @@ export default function FlowCanvas() {
       return;
     }
 
+    if (contextMenu.insertEdgeId) {
+      const insertedNodeId = insertNodeOnEdge(contextMenu.insertEdgeId, typeId, contextMenu.position, propertyOverrides);
+      if (!insertedNodeId) {
+        const message = 'Node nao inserido no fio: portas incompatíveis com a conexão existente.';
+        addLog({ timestamp: new Date().toISOString(), level: 'warning', message });
+        setUserMessage({ type: 'info', text: message });
+      }
+      setContextMenu(null);
+      return;
+    }
+
     const newNodeId = addNode(typeId, contextMenu.position, propertyOverrides);
     if (newNodeId && contextMenu.pendingConnection) {
       const targetPort = resolveCompatibleTargetPort(
@@ -158,16 +198,21 @@ export default function FlowCanvas() {
         addLog({ timestamp: new Date().toISOString(), level: 'warning', message });
         setUserMessage({ type: 'info', text: message });
       } else {
-        onConnect({
+        const result = connectNodes({
           source: contextMenu.pendingConnection.sourceNodeId,
           sourceHandle: contextMenu.pendingConnection.sourcePortId,
           target: newNodeId,
           targetHandle: targetPort.id,
         });
+        if (!result.ok) {
+          const message = result.reason ?? 'Conexao falhou por portas incompatíveis.';
+          addLog({ timestamp: new Date().toISOString(), level: 'warning', message });
+          setUserMessage({ type: 'info', text: message });
+        }
       }
     }
     setContextMenu(null);
-  }, [addLog, addNode, contextMenu, onConnect, resolveCompatibleTargetPort, setUserMessage]);
+  }, [addLog, addNode, connectNodes, contextMenu, insertNodeOnEdge, resolveCompatibleTargetPort, setUserMessage]);
 
   const filteredDefinitions = useMemo(() => {
     const filter = contextMenu?.filter.trim().toLocaleLowerCase('en-US') ?? '';
@@ -181,9 +226,11 @@ export default function FlowCanvas() {
       : nodeDefinitions;
 
     return definitions.sort((left, right) => {
-      if (left.category !== right.category) {
-        const order = { Trigger: 0, Logic: 1, Action: 2 };
-        return order[left.category] - order[right.category];
+      const leftCategory = getNodeProductCategory(left);
+      const rightCategory = getNodeProductCategory(right);
+      if (leftCategory !== rightCategory) {
+        const order = { Trigger: 0, Desktop: 1, Window: 2, Hardware: 3, Media: 4, Console: 5, Logic: 6, Data: 7, Utility: 8 };
+        return order[leftCategory] - order[rightCategory];
       }
 
       return left.displayName.localeCompare(right.displayName);
@@ -228,9 +275,79 @@ export default function FlowCanvas() {
   }, []);
 
   const handleConnect = useCallback((connection: Connection) => {
-    connectionCompletedRef.current = true;
-    onConnect(connection);
-  }, [onConnect]);
+    const result = connectNodes(connection);
+    connectionCompletedRef.current = result.ok;
+    if (!result.ok) {
+      const message = result.reason ?? 'Conexao falhou.';
+      addLog({ timestamp: new Date().toISOString(), level: 'warning', message });
+      setUserMessage({ type: 'info', text: message });
+    }
+  }, [addLog, connectNodes, setUserMessage]);
+
+  const isValidConnection = useCallback<IsValidConnection<Edge>>((connection) => (
+    canConnect({
+      source: connection.source,
+      sourceHandle: connection.sourceHandle ?? null,
+      target: connection.target,
+      targetHandle: connection.targetHandle ?? null,
+    }).ok
+  ), [canConnect]);
+
+  const handleReconnect = useCallback((oldEdge: Edge, newConnection: Connection) => {
+    const result = reconnectEdgeById(oldEdge.id, newConnection);
+    if (!result.ok) {
+      const message = result.reason ?? 'Reconexao falhou.';
+      addLog({ timestamp: new Date().toISOString(), level: 'warning', message });
+      setUserMessage({ type: 'info', text: message });
+    }
+  }, [addLog, reconnectEdgeById, setUserMessage]);
+
+  const onNodeContextMenu = useCallback((event: CanvasPointerEvent, node: Node<FlowNodeData>) => {
+    event.preventDefault();
+    const menuPosition = clampContextMenuPosition(event.clientX, event.clientY);
+    setSelectedNodeId(node.id);
+    setContextMenu(null);
+    setEdgeContextMenu(null);
+    setNodeContextMenu({
+      x: menuPosition.x,
+      y: menuPosition.y,
+      nodeId: node.id,
+    });
+  }, [setSelectedNodeId]);
+
+  const onEdgeContextMenu = useCallback((event: CanvasPointerEvent, edge: Edge) => {
+    event.preventDefault();
+    const position = getFlowPositionFromEvent(event);
+    if (!position) {
+      return;
+    }
+
+    const menuPosition = clampContextMenuPosition(event.clientX, event.clientY);
+    setContextMenu(null);
+    setNodeContextMenu(null);
+    setEdgeContextMenu({
+      x: menuPosition.x,
+      y: menuPosition.y,
+      position,
+      edgeId: edge.id,
+    });
+  }, [getFlowPositionFromEvent]);
+
+  const openInsertMenuForEdge = useCallback(() => {
+    if (!edgeContextMenu) {
+      return;
+    }
+
+    setContextMenu({
+      x: edgeContextMenu.x,
+      y: edgeContextMenu.y,
+      position: edgeContextMenu.position,
+      filter: '',
+      pendingConnection: null,
+      insertEdgeId: edgeContextMenu.edgeId,
+    });
+    setEdgeContextMenu(null);
+  }, [edgeContextMenu]);
 
   const onConnectEnd = useCallback((event: CanvasPointerLikeEvent) => {
     if (!pendingConnection) {
@@ -282,9 +399,81 @@ export default function FlowCanvas() {
       position: panePosition,
       filter: '',
       pendingConnection,
+      insertEdgeId: null,
     });
+    setNodeContextMenu(null);
+    setEdgeContextMenu(null);
     setPendingConnection(null);
   }, [getFlowPositionFromEvent, pendingConnection, resolveClientPoint]);
+
+  useEffect(() => {
+    const openAddMenuAtCenter = (connection?: PendingConnection | null) => {
+      const bounds = reactFlowWrapper.current?.getBoundingClientRect();
+      const clientX = bounds ? bounds.left + bounds.width / 2 : window.innerWidth / 2;
+      const clientY = bounds ? bounds.top + bounds.height / 2 : window.innerHeight / 2;
+      const position = getFlowPositionFromEvent({ clientX, clientY } as CanvasPointerEvent) ?? { x: 0, y: 0 };
+      const menuPosition = clampContextMenuPosition(clientX, clientY);
+      setContextMenu({
+        x: menuPosition.x,
+        y: menuPosition.y,
+        position,
+        filter: '',
+        pendingConnection: connection ?? null,
+        insertEdgeId: null,
+      });
+      setNodeContextMenu(null);
+      setEdgeContextMenu(null);
+    };
+
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest('input, textarea, select, [contenteditable="true"]')) {
+        return;
+      }
+
+      const key = event.key.toLocaleLowerCase('en-US');
+      if ((event.ctrlKey || event.metaKey) && key === 'd' && selectedNodeId) {
+        event.preventDefault();
+        duplicateNode(selectedNodeId);
+        return;
+      }
+
+      if ((event.ctrlKey || event.metaKey) && event.key === '0') {
+        event.preventDefault();
+        reactFlowInstance.current?.fitView?.({ padding: 0.2 });
+        return;
+      }
+
+      if ((event.ctrlKey || event.metaKey) && key === 'k') {
+        event.preventDefault();
+        openAddMenuAtCenter();
+        return;
+      }
+
+      if (event.key === '/') {
+        event.preventDefault();
+        openAddMenuAtCenter();
+        return;
+      }
+
+      if (key === 'c' && selectedNode) {
+        const firstOutput = selectedNode.data.outputPorts[0];
+        if (firstOutput) {
+          event.preventDefault();
+          openAddMenuAtCenter({ sourceNodeId: selectedNode.id, sourcePortId: firstOutput.id });
+        }
+        return;
+      }
+
+      if (key === 'l') {
+        event.preventDefault();
+        autoLayout();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [autoLayout, duplicateNode, getFlowPositionFromEvent, selectedNode, selectedNodeId]);
 
   return (
     <div ref={reactFlowWrapper} className="flow-canvas">
@@ -294,15 +483,21 @@ export default function FlowCanvas() {
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={handleConnect}
+        onReconnect={handleReconnect}
         onInit={onInit}
         onPaneClick={onPaneClick}
         onPaneContextMenu={onPaneContextMenu}
+        onNodeContextMenu={onNodeContextMenu}
+        onEdgeContextMenu={onEdgeContextMenu}
         onDrop={onDrop}
         onDragOver={onDragOver}
         onConnectStart={onConnectStart}
         onConnectEnd={onConnectEnd}
+        isValidConnection={isValidConnection}
         nodeTypes={nodeTypes}
         defaultEdgeOptions={defaultEdgeOptions}
+        connectionLineStyle={{ stroke: '#58a6ff', strokeWidth: 3 }}
+        edgesReconnectable
         fitView
         proOptions={{ hideAttribution: true }}
         colorMode="dark"
@@ -327,6 +522,70 @@ export default function FlowCanvas() {
           }}
         />
       </ReactFlow>
+      {nodeContextMenu && (
+        <div
+          className="flow-mini-menu"
+          style={{ left: nodeContextMenu.x, top: nodeContextMenu.y }}
+          role="menu"
+          aria-label="Node actions"
+          onContextMenu={(event) => event.preventDefault()}
+        >
+          <button
+            type="button"
+            className="flow-mini-menu__item"
+            onClick={() => {
+              duplicateNode(nodeContextMenu.nodeId);
+              setNodeContextMenu(null);
+            }}
+          >
+            Duplicar node
+          </button>
+          <button
+            type="button"
+            className="flow-mini-menu__item"
+            onClick={() => {
+              const node = nodes.find((candidate) => candidate.id === nodeContextMenu.nodeId);
+              toggleNodeDisabled(nodeContextMenu.nodeId, !node?.data.nodeDisabled);
+              setNodeContextMenu(null);
+            }}
+          >
+            {nodes.find((node) => node.id === nodeContextMenu.nodeId)?.data.nodeDisabled ? 'Habilitar node' : 'Desabilitar node'}
+          </button>
+          <button
+            type="button"
+            className="flow-mini-menu__item flow-mini-menu__item--danger"
+            onClick={() => {
+              removeNode(nodeContextMenu.nodeId);
+              setNodeContextMenu(null);
+            }}
+          >
+            Remover node
+          </button>
+        </div>
+      )}
+      {edgeContextMenu && (
+        <div
+          className="flow-mini-menu"
+          style={{ left: edgeContextMenu.x, top: edgeContextMenu.y }}
+          role="menu"
+          aria-label="Edge actions"
+          onContextMenu={(event) => event.preventDefault()}
+        >
+          <button type="button" className="flow-mini-menu__item" onClick={openInsertMenuForEdge}>
+            Inserir passo no fio
+          </button>
+          <button
+            type="button"
+            className="flow-mini-menu__item flow-mini-menu__item--danger"
+            onClick={() => {
+              removeEdge(edgeContextMenu.edgeId);
+              setEdgeContextMenu(null);
+            }}
+          >
+            Remover fio
+          </button>
+        </div>
+      )}
       {contextMenu && (
         <div
           className="flow-context-menu"
@@ -341,6 +600,8 @@ export default function FlowCanvas() {
               <div className="flow-context-menu__subtitle">
                 {contextMenu.pendingConnection
                   ? 'Selecione um node para criar e conectar automaticamente'
+                  : contextMenu.insertEdgeId
+                    ? 'Escolha um node compativel para inserir no fio selecionado'
                   : 'Crie nodes com busca, receitas e capturas recentes'}
               </div>
             </div>
@@ -379,6 +640,23 @@ export default function FlowCanvas() {
                   <small>{capturedRegion.bounds.width} x {capturedRegion.bounds.height} px visual fallback</small>
                 </button>
               )}
+            </div>
+          )}
+
+          {!contextMenu.pendingConnection && !contextMenu.insertEdgeId && (
+            <div className="flow-context-menu__section">
+              <div className="flow-context-menu__section-title">Organizacao</div>
+              <button
+                type="button"
+                className="flow-context-menu__quick"
+                onClick={() => {
+                  autoLayout();
+                  setContextMenu(null);
+                }}
+              >
+                <span>Auto layout</span>
+                <small>Organiza o fluxo da esquerda para a direita</small>
+              </button>
             </div>
           )}
 

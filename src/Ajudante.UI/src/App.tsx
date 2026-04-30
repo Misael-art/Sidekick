@@ -34,7 +34,15 @@ interface WebViewWindow extends UnsavedChangesWindow {
   chrome?: {
     webview?: object;
   };
+  __sidekickRequiredNodes?: string[];
 }
+
+const requiredPublishedNodeMarkers = [
+  'action.captureScreenshot',
+  'action.recordDesktop',
+  'action.recordCamera',
+  'logic.conditionGroup',
+] as const;
 
 function formatFlowLabel(flow: { flowName?: string | null; flowId?: string | null }): string {
   if (flow.flowName?.trim()) {
@@ -45,6 +53,8 @@ function formatFlowLabel(flow: { flowName?: string | null; flowId?: string | nul
 }
 
 export default function App() {
+  (window as WebViewWindow).__sidekickRequiredNodes = [...requiredPublishedNodeMarkers];
+
   const setNodeDefinitions = useFlowStore((s) => s.setNodeDefinitions);
   const loadFlow = useFlowStore((s) => s.loadFlow);
   const isDirty = useFlowStore((s) => s.isDirty);

@@ -1,0 +1,76 @@
+{
+  "id": "recipe-screenshot-window-support",
+  "name": "Recipe - Screenshot Window Support",
+  "version": 1,
+  "variables": [
+    {
+      "name": "targetWindow",
+      "type": "String",
+      "default": "Trae"
+    },
+    {
+      "name": "targetProcessPath",
+      "type": "String",
+      "default": "%LOCALAPPDATA%\\Programs\\Trae\\Trae.exe"
+    },
+    {
+      "name": "screenshotsFolder",
+      "type": "String",
+      "default": "%USERPROFILE%\\Pictures\\Sidekick"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "start",
+      "typeId": "trigger.manualStart",
+      "position": { "x": 80, "y": 140 },
+      "properties": {}
+    },
+    {
+      "id": "capture-window",
+      "typeId": "action.captureScreenshot",
+      "position": { "x": 390, "y": 140 },
+      "properties": {
+        "target": "windowSelector",
+        "outputFolder": "{{screenshotsFolder}}",
+        "filenameTemplate": "window_capture_{{timestamp}}",
+        "format": "png",
+        "quality": 90,
+        "delayMs": 0,
+        "includeCursor": true,
+        "windowTitle": "{{targetWindow}}",
+        "windowTitleMatch": "contains",
+        "processPath": "{{targetProcessPath}}",
+        "processName": "",
+        "effect": "highlightCursor"
+      }
+    },
+    {
+      "id": "log-result",
+      "typeId": "action.logMessage",
+      "position": { "x": 760, "y": 140 },
+      "properties": {
+        "message": "Screenshot salvo em {{capture-window.filePath}}",
+        "level": "info"
+      }
+    }
+  ],
+  "connections": [
+    {
+      "id": "c1",
+      "sourceNodeId": "start",
+      "sourcePort": "triggered",
+      "targetNodeId": "capture-window",
+      "targetPort": "in"
+    },
+    {
+      "id": "c2",
+      "sourceNodeId": "capture-window",
+      "sourcePort": "out",
+      "targetNodeId": "log-result",
+      "targetPort": "in"
+    }
+  ],
+  "createdAt": "2026-04-30T00:00:00Z",
+  "modifiedAt": "2026-04-30T00:00:00Z"
+}

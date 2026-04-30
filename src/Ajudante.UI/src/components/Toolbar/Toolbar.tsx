@@ -419,7 +419,7 @@ export default function Toolbar() {
       }
 
       clearNodeStatuses();
-      const backendFlow = toBackendFlow(flowId, flowName, nodes, edges);
+      const backendFlow = toBackendFlow(flowId, flowName, nodes, edges, { runtimeView: true });
       const result = await sendCommand<RunFlowResponse>('engine', 'runFlow', backendFlow);
       const runtimeValidation = result?.validation ?? validation;
 
@@ -454,7 +454,7 @@ export default function Toolbar() {
         return;
       }
 
-      const backendFlow = toBackendFlow(flowId, flowName, nodes, edges);
+      const backendFlow = toBackendFlow(flowId, flowName, nodes, edges, { runtimeView: true });
       const result = await sendCommand<FlowActivationResponse>('engine', 'activateFlow', backendFlow);
       const runtimeValidation = result?.validation ?? validation;
       if (!result?.armed) {

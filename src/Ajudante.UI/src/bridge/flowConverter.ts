@@ -11,6 +11,7 @@ import type { FlowNodeData, NodeDefinition } from './types';
 
 const UI_ALIAS_PROPERTY_KEY = '__ui.alias';
 const UI_COMMENT_PROPERTY_KEY = '__ui.comment';
+const UI_DISABLED_PROPERTY_KEY = '__ui.disabled';
 
 // ── Backend types (mirrors C# models) ────────────────────────────
 
@@ -53,22 +54,25 @@ export function toBackendFlow(
   flowName: string,
   nodes: Node<FlowNodeData>[],
   edges: Edge[],
-  options?: { persistUiMetadata?: boolean },
+  options?: { persistUiMetadata?: boolean; runtimeView?: boolean },
 ): BackendFlow {
   const persistUiMetadata = options?.persistUiMetadata ?? false;
+  const runtimeView = options?.runtimeView ?? false;
+  const convertedNodes = runtimeView ? createRuntimeNodes(nodes) : nodes;
+  const convertedEdges = runtimeView ? createRuntimeEdges(nodes, edges) : edges;
 
   return {
     id: flowId || crypto.randomUUID(),
     name: flowName,
     version: 1,
     variables: [],
-    nodes: nodes.map((n) => ({
+    nodes: convertedNodes.map((n) => ({
       id: n.id,
       typeId: n.data.typeId,
       position: { x: n.position.x, y: n.position.y },
       properties: serializeNodeProperties(n.data, persistUiMetadata),
     })),
-    connections: edges.map((e) => ({
+    connections: convertedEdges.map((e) => ({
       id: e.id,
       sourceNodeId: e.source,
       sourcePort: e.sourceHandle ?? 'out',
@@ -109,6 +113,7 @@ export function fromBackendFlow(
         displayName: def.displayName,
         nodeAlias: uiMetadata.nodeAlias,
         nodeComment: uiMetadata.nodeComment,
+        nodeDisabled: uiMetadata.nodeDisabled,
         category: def.category,
         color: def.color,
         inputPorts: def.inputPorts,
@@ -148,6 +153,7 @@ function serializeNodeProperties(
   const properties: Record<string, unknown> = { ...(data.propertyValues ?? {}) };
   delete properties[UI_ALIAS_PROPERTY_KEY];
   delete properties[UI_COMMENT_PROPERTY_KEY];
+  delete properties[UI_DISABLED_PROPERTY_KEY];
 
   if (!persistUiMetadata) {
     return properties;
@@ -161,6 +167,9 @@ function serializeNodeProperties(
   if (comment) {
     properties[UI_COMMENT_PROPERTY_KEY] = comment;
   }
+  if (data.nodeDisabled) {
+    properties[UI_DISABLED_PROPERTY_KEY] = true;
+  }
 
   return properties;
 }
@@ -168,17 +177,59 @@ function serializeNodeProperties(
 function extractNodeUiMetadata(properties: Record<string, unknown>): {
   nodeAlias: string;
   nodeComment: string;
+  nodeDisabled: boolean;
   nodeProperties: Record<string, unknown>;
 } {
   const nodeProperties = { ...properties };
   const nodeAliasRaw = nodeProperties[UI_ALIAS_PROPERTY_KEY];
   const nodeCommentRaw = nodeProperties[UI_COMMENT_PROPERTY_KEY];
+  const nodeDisabledRaw = nodeProperties[UI_DISABLED_PROPERTY_KEY];
   delete nodeProperties[UI_ALIAS_PROPERTY_KEY];
   delete nodeProperties[UI_COMMENT_PROPERTY_KEY];
+  delete nodeProperties[UI_DISABLED_PROPERTY_KEY];
 
   return {
     nodeAlias: typeof nodeAliasRaw === 'string' ? nodeAliasRaw : '',
     nodeComment: typeof nodeCommentRaw === 'string' ? nodeCommentRaw : '',
+    nodeDisabled: nodeDisabledRaw === true,
     nodeProperties,
   };
+}
+
+function createRuntimeNodes(nodes: Node<FlowNodeData>[]): Node<FlowNodeData>[] {
+  return nodes.filter((node) => !node.data.nodeDisabled);
+}
+
+function createRuntimeEdges(nodes: Node<FlowNodeData>[], edges: Edge[]): Edge[] {
+  const nodeMap = new Map(nodes.map((node) => [node.id, node]));
+  const disabledNodeIds = new Set(
+    nodes.filter((node) => node.data.nodeDisabled).map((node) => node.id),
+  );
+  const runtimeEdges = edges.filter(
+    (edge) => !disabledNodeIds.has(edge.source) && !disabledNodeIds.has(edge.target),
+  );
+
+  for (const disabledNodeId of disabledNodeIds) {
+    const disabledNode = nodeMap.get(disabledNodeId);
+    if (!disabledNode) {
+      continue;
+    }
+
+    const incoming = edges.filter((edge) => edge.target === disabledNodeId);
+    const outgoing = edges.filter((edge) => edge.source === disabledNodeId);
+    if (incoming.length !== 1 || outgoing.length !== 1) {
+      continue;
+    }
+
+    runtimeEdges.push({
+      id: `bypass_${disabledNodeId}_${incoming[0].id}_${outgoing[0].id}`,
+      source: incoming[0].source,
+      sourceHandle: incoming[0].sourceHandle,
+      target: outgoing[0].target,
+      targetHandle: outgoing[0].targetHandle,
+      type: outgoing[0].type ?? incoming[0].type ?? 'smoothstep',
+    });
+  }
+
+  return runtimeEdges;
 }

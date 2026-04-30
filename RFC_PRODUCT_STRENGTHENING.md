@@ -20,6 +20,28 @@ Atualizacao `2026-04-30`:
 - Catalogo local aparece como Marketplace na toolbar para recipes oficiais.
 - A cobertura Windows foi ampliada com nodes de hardware/sistema para audio, microfone, camera, Wi-Fi, energia e display.
 - Operacoes que mudam sistema exigem guardas explicitas (`allowSystemChanges` ou frase `CONFIRM`), mantendo a importacao/execucao remota como fora de escopo seguro.
+- Foi adicionada trilha de captura/gravao para produto:
+  - `action.captureScreenshot`
+  - `action.recordDesktop`
+  - `action.recordCamera`
+- `Mira` recebeu metadados adicionais de resiliencia (estado de janela, monitor, pontos relativos/normalizados, handle quando seguro) e prefill para pipeline de fallback em nodes desktop.
+- `logic.conditionGroup` passou a suportar `ANY/ALL`, operadores textuais/numericos, nested groups simples e operador `changed`.
+- Recipes Marketplace locais adicionais foram entregues para screenshot, gravacao desktop/camera, clique resiliente Mira e assistente WhatsApp em modo draft seguro.
+- Limite declarado e mantido: gravacao de audio ainda fora de escopo desta entrega.
+
+Atualizacao `2026-04-30` (editor visual P0):
+
+- A Fase 3 de jornada guiada avancou no canvas real:
+  - menu de contexto no canvas, node e edge
+  - criacao de proximo passo ao soltar fio no vazio
+  - insercao de node no meio de uma edge existente
+  - reconexao/remocao de edge com validacao local de porta
+  - duplicar node e habilitar/desabilitar sem apagar
+  - bypass de node desabilitado na view de runtime quando ha uma entrada e uma saida
+  - auto layout basico e atalhos (`Ctrl+D`, `Ctrl+0`, `Ctrl+K`/`/`, `C`, `L`)
+- O palette adotou categorias publicas de produto: Trigger, Desktop, Window, Hardware, Media, Console, Logic, Data e Utility.
+- A conversao frontend/backend preserva metadata de UI somente quando solicitado e separa `runtimeView` para execucao/validacao.
+- Validado nesta rodada: `dotnet build`, `dotnet test`, `npm run test`, `npm run build` e `dotnet publish` oficial.
 
 ## Objetivo
 
@@ -392,12 +414,14 @@ Mitigacao:
 - mensagens de erro e validacao ficam mais claras
 - nao ha regressao nas operacoes atuais de salvar, carregar e executar
 - Status `2026-04-29`: parcial para RC; recipes oficiais e samples validaveis existem, mas wizard dedicado ainda nao foi implementado.
+- Status `2026-04-30`: RC tecnico do editor P0 avancado; usuario ja consegue criar fluxo pelo canvas/menu, inserir node no meio de edge, reconectar/remover edge, duplicar/desabilitar node e organizar com auto layout. Ainda falta validacao manual ampla no executavel publicado.
 
 ### Fase 4. Catalogo Local
 
 - pacote local pode ser exportado e importado com manifesto
 - validacao rejeita pacote incompativel
 - falha de instalacao nao deixa estado parcial silencioso
+- Status `2026-04-30`: catalogo local de recipes oficiais existe na toolbar e e publicado como `seed-flows/*.json`; remoto/publicacao de pacote continua bloqueado ate hash/assinatura, schema, capabilities e importacao desarmada ficarem completos.
 
 ## Protocolo De Registro Obrigatorio
 

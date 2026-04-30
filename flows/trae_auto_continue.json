@@ -11,7 +11,7 @@
     {
       "name": "traeProcessPath",
       "type": "String",
-      "default": "C:\\Users\\misae\\AppData\\Local\\Programs\\Trae\\Trae.exe"
+      "default": "%LOCALAPPDATA%\\Programs\\Trae\\Trae.exe"
     },
     {
       "name": "traeWindowTitle",
@@ -36,7 +36,7 @@
         "windowTitle": "Trae",
         "windowTitleMatch": "contains",
         "processName": "Trae",
-        "processPath": "C:\\Users\\misae\\AppData\\Local\\Programs\\Trae\\Trae.exe",
+        "processPath": "%LOCALAPPDATA%\\Programs\\Trae\\Trae.exe",
         "automationId": "",
         "elementName": "Continue",
         "controlType": "button",
@@ -58,7 +58,7 @@
         "windowTitle": "Trae",
         "windowTitleMatch": "contains",
         "processName": "Trae",
-        "processPath": "C:\\Users\\misae\\AppData\\Local\\Programs\\Trae\\Trae.exe",
+        "processPath": "%LOCALAPPDATA%\\Programs\\Trae\\Trae.exe",
         "automationId": "",
         "elementName": "",
         "controlType": "",
@@ -77,7 +77,7 @@
         "windowTitle": "Trae",
         "windowTitleMatch": "contains",
         "processName": "Trae",
-        "processPath": "C:\\Users\\misae\\AppData\\Local\\Programs\\Trae\\Trae.exe",
+        "processPath": "%LOCALAPPDATA%\\Programs\\Trae\\Trae.exe",
         "automationId": "",
         "elementName": "Continue",
         "controlType": "button",

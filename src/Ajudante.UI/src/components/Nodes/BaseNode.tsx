@@ -27,10 +27,11 @@ function BaseNode({ id, data, selected }: BaseNodeProps) {
   const headerColor = data.color ?? '#6b7280';
   const displayTitle = data.nodeAlias?.trim() || data.displayName;
   const hoverComment = data.nodeComment?.trim();
+  const isDisabled = data.nodeDisabled === true;
 
   return (
     <div
-      className={`base-node ${selected ? 'base-node--selected' : ''}`}
+      className={`base-node ${selected ? 'base-node--selected' : ''} ${isDisabled ? 'base-node--disabled' : ''}`}
       title={hoverComment || undefined}
       style={{
         borderColor: selected ? headerColor : 'transparent',
@@ -50,6 +51,7 @@ function BaseNode({ id, data, selected }: BaseNodeProps) {
             title={statusLabels[status]}
           />
         )}
+        {isDisabled && <span className="base-node__disabled-badge">Off</span>}
       </div>
 
       {/* Body: ports */}

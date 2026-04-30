@@ -25,6 +25,17 @@ function edgeId(conn: Connection): string {
   return `e_${conn.source}_${conn.sourceHandle ?? 'out'}_${conn.target}_${conn.targetHandle ?? 'in'}`;
 }
 
+interface FlowMutationState {
+  flowId: string;
+  flowName: string;
+  lastPersistedSnapshot: string;
+}
+
+export interface ConnectionAttemptResult {
+  ok: boolean;
+  reason?: string;
+}
+
 function createEmptyFlowState(flowId: string, flowName: string) {
   return {
     flowId,
@@ -66,6 +77,7 @@ function createFlowSnapshot(
         position: { x: node.position.x, y: node.position.y },
         nodeAlias: node.data.nodeAlias ?? '',
         nodeComment: node.data.nodeComment ?? '',
+        nodeDisabled: node.data.nodeDisabled ?? false,
         propertyValues: normalizeRecord(node.data.propertyValues ?? {}),
       }))
       .sort((a, b) => a.id.localeCompare(b.id)),
@@ -81,6 +93,130 @@ function createFlowSnapshot(
   });
 }
 
+function createDirtyPatch(
+  state: FlowMutationState,
+  nodes: Node<FlowNodeData>[],
+  edges: Edge[],
+): { nodes: Node<FlowNodeData>[]; edges: Edge[]; isDirty: boolean; validationResult: null } {
+  const nextSnapshot = createFlowSnapshot(state.flowId, state.flowName, nodes, edges);
+  return {
+    nodes,
+    edges,
+    isDirty: nextSnapshot !== state.lastPersistedSnapshot,
+    validationResult: null,
+  };
+}
+
+function cloneRecord(value: Record<string, unknown>): Record<string, unknown> {
+  if (typeof structuredClone === 'function') {
+    return structuredClone(value) as Record<string, unknown>;
+  }
+
+  return JSON.parse(JSON.stringify(value)) as Record<string, unknown>;
+}
+
+function buildNodeFromDefinition(
+  def: NodeDefinition,
+  position: { x: number; y: number },
+  propertyOverrides: Record<string, unknown> = {},
+  nodeId = nextNodeId(),
+): Node<FlowNodeData> {
+  const categoryToType: Record<string, string> = {
+    Trigger: 'triggerNode',
+    Logic: 'logicNode',
+    Action: 'actionNode',
+  };
+
+  const propertyValues: Record<string, unknown> = {};
+  for (const prop of def.properties) {
+    propertyValues[prop.id] = prop.defaultValue ?? '';
+  }
+
+  for (const [key, value] of Object.entries(propertyOverrides)) {
+    if (def.properties.some((property) => property.id === key)) {
+      propertyValues[key] = value;
+    }
+  }
+
+  return {
+    id: nodeId,
+    type: categoryToType[def.category] ?? 'actionNode',
+    position,
+    data: {
+      typeId: def.typeId,
+      displayName: def.displayName,
+      nodeAlias: '',
+      nodeComment: '',
+      nodeDisabled: false,
+      category: def.category,
+      color: def.color,
+      inputPorts: def.inputPorts,
+      outputPorts: def.outputPorts,
+      properties: def.properties,
+      propertyValues,
+    },
+  };
+}
+
+function isPortCompatible(sourceType: string, targetType: string): boolean {
+  if (sourceType === 'Flow' || targetType === 'Flow') {
+    return sourceType === 'Flow' && targetType === 'Flow';
+  }
+
+  return sourceType === 'Any' || targetType === 'Any' || sourceType === targetType;
+}
+
+export function validateConnectionForNodes(
+  nodes: Node<FlowNodeData>[],
+  connection: Connection,
+): ConnectionAttemptResult {
+  const sourceNode = nodes.find((node) => node.id === connection.source);
+  const targetNode = nodes.find((node) => node.id === connection.target);
+
+  if (!connection.source || !connection.target || !sourceNode || !targetNode) {
+    return { ok: false, reason: 'Conexao invalida: node de origem ou destino nao encontrado.' };
+  }
+
+  if (connection.source === connection.target) {
+    return { ok: false, reason: 'Conexao invalida: um node nao pode conectar nele mesmo.' };
+  }
+
+  if (sourceNode.data.nodeDisabled || targetNode.data.nodeDisabled) {
+    return { ok: false, reason: 'Conexao invalida: habilite os nodes antes de conectar.' };
+  }
+
+  const sourcePortId = connection.sourceHandle ?? sourceNode.data.outputPorts[0]?.id;
+  const targetPortId = connection.targetHandle ?? targetNode.data.inputPorts[0]?.id;
+  const sourcePort = sourceNode.data.outputPorts.find((port) => port.id === sourcePortId);
+  const targetPort = targetNode.data.inputPorts.find((port) => port.id === targetPortId);
+
+  if (!sourcePort) {
+    return { ok: false, reason: `Conexao invalida: porta de saida "${sourcePortId ?? ''}" nao existe.` };
+  }
+
+  if (!targetPort) {
+    return { ok: false, reason: `Conexao invalida: porta de entrada "${targetPortId ?? ''}" nao existe.` };
+  }
+
+  if (!isPortCompatible(sourcePort.dataType, targetPort.dataType)) {
+    return {
+      ok: false,
+      reason: `Portas incompativeis: ${sourcePort.name} (${sourcePort.dataType}) nao conecta em ${targetPort.name} (${targetPort.dataType}).`,
+    };
+  }
+
+  return { ok: true };
+}
+
+function createEdgeFromConnection(connection: Connection, id = edgeId(connection)): Edge {
+  return {
+    ...connection,
+    id,
+    type: 'smoothstep',
+    animated: false,
+  };
+}
+
 interface FlowResponse {
   id?: string;
   name?: string;
@@ -91,6 +227,13 @@ interface FlowResponse {
 function isBackendFlow(value: FlowResponse): value is BackendFlow {
   return Array.isArray(value.nodes);
 }
+
+const requiredRuntimeNodeTypeIds = [
+  'action.captureScreenshot',
+  'action.recordDesktop',
+  'action.recordCamera',
+  'logic.conditionGroup',
+] as const;
 
 // ── Store Definition ──────────────────────────────────────────────
 
@@ -117,9 +260,17 @@ export interface FlowState {
   // Node CRUD
   addNode: (typeId: string, position: { x: number; y: number }, propertyOverrides?: Record<string, unknown>) => string | null;
   removeNode: (id: string) => void;
+  duplicateNode: (id: string) => string | null;
+  toggleNodeDisabled: (id: string, disabled?: boolean) => void;
   updateNodeProperty: (nodeId: string, propertyId: string, value: unknown) => void;
   updateNodeProperties: (nodeId: string, propertyValues: Record<string, unknown>) => void;
   updateNodeMetadata: (nodeId: string, metadata: { nodeAlias?: string; nodeComment?: string }) => void;
+  insertNodeOnEdge: (edgeId: string, typeId: string, position: { x: number; y: number }, propertyOverrides?: Record<string, unknown>) => string | null;
+  removeEdge: (edgeId: string) => void;
+  connectNodes: (connection: Connection) => ConnectionAttemptResult;
+  canConnect: (connection: Connection) => ConnectionAttemptResult;
+  reconnectEdge: (edgeId: string, connection: Connection) => ConnectionAttemptResult;
+  autoLayout: () => void;
 
   // Persistence
   saveFlow: () => Promise<void>;
@@ -184,21 +335,7 @@ export const useFlowStore = create<FlowState>((set, get) => ({
   },
 
   onConnect: (connection) => {
-    const edge: Edge = {
-      ...connection,
-      id: edgeId(connection),
-      type: 'smoothstep',
-      animated: false,
-    };
-    set((state) => {
-      const nextEdges = addEdge(edge, state.edges);
-      const nextSnapshot = createFlowSnapshot(state.flowId, state.flowName, state.nodes, nextEdges);
-      return {
-        edges: nextEdges,
-        isDirty: nextSnapshot !== state.lastPersistedSnapshot,
-        validationResult: null,
-      };
-    });
+    get().connectNodes(connection);
   },
 
   // ── Selection ───────────────────────────────────────────────────
@@ -214,43 +351,7 @@ export const useFlowStore = create<FlowState>((set, get) => ({
       return null;
     }
 
-    const categoryToType: Record<string, string> = {
-      Trigger: 'triggerNode',
-      Logic: 'logicNode',
-      Action: 'actionNode',
-    };
-
-    // Build initial property values from defaults
-    const propertyValues: Record<string, unknown> = {};
-    for (const prop of def.properties) {
-      propertyValues[prop.id] = prop.defaultValue ?? '';
-    }
-
-    for (const [key, value] of Object.entries(propertyOverrides)) {
-      if (def.properties.some((property) => property.id === key)) {
-        propertyValues[key] = value;
-      }
-    }
-
-    const nodeId = nextNodeId();
-
-    const newNode: Node<FlowNodeData> = {
-      id: nodeId,
-      type: categoryToType[def.category] ?? 'actionNode',
-      position,
-      data: {
-        typeId: def.typeId,
-        displayName: def.displayName,
-        nodeAlias: '',
-        nodeComment: '',
-        category: def.category,
-        color: def.color,
-        inputPorts: def.inputPorts,
-        outputPorts: def.outputPorts,
-        properties: def.properties,
-        propertyValues,
-      },
-    };
+    const newNode = buildNodeFromDefinition(def, position, propertyOverrides);
 
     set((state) => {
       const nextNodes = [...state.nodes, newNode];
@@ -263,7 +364,7 @@ export const useFlowStore = create<FlowState>((set, get) => ({
       };
     });
 
-    return nodeId;
+    return newNode.id;
   },
 
   removeNode: (id) => {
@@ -278,6 +379,57 @@ export const useFlowStore = create<FlowState>((set, get) => ({
         isDirty: nextSnapshot !== state.lastPersistedSnapshot,
         validationResult: null,
       };
+    });
+  },
+
+  duplicateNode: (id) => {
+    const source = get().nodes.find((node) => node.id === id);
+    if (!source) {
+      return null;
+    }
+
+    const newNodeId = nextNodeId();
+    const duplicate: Node<FlowNodeData> = {
+      ...source,
+      id: newNodeId,
+      selected: false,
+      position: {
+        x: source.position.x + 40,
+        y: source.position.y + 40,
+      },
+      data: {
+        ...source.data,
+        nodeAlias: source.data.nodeAlias ? `${source.data.nodeAlias} copia` : '',
+        propertyValues: cloneRecord(source.data.propertyValues ?? {}),
+      },
+    };
+
+    set((state) => {
+      const nextNodes = [...state.nodes, duplicate];
+      return {
+        ...createDirtyPatch(state, nextNodes, state.edges),
+        selectedNodeId: newNodeId,
+      };
+    });
+
+    return newNodeId;
+  },
+
+  toggleNodeDisabled: (id, disabled) => {
+    set((state) => {
+      const nextNodes = state.nodes.map((node) => {
+        if (node.id !== id) return node;
+        const nextDisabled = disabled ?? !node.data.nodeDisabled;
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            nodeDisabled: nextDisabled,
+          },
+        };
+      });
+
+      return createDirtyPatch(state, nextNodes, state.edges);
     });
   },
 
@@ -351,6 +503,161 @@ export const useFlowStore = create<FlowState>((set, get) => ({
     });
   },
 
+  insertNodeOnEdge: (targetEdgeId, typeId, position, propertyOverrides = {}) => {
+    const state = get();
+    const edge = state.edges.find((candidate) => candidate.id === targetEdgeId);
+    const def = state.nodeDefinitions.find((candidate) => candidate.typeId === typeId);
+    if (!edge || !def) {
+      return null;
+    }
+
+    const sourceNode = state.nodes.find((node) => node.id === edge.source);
+    const targetNode = state.nodes.find((node) => node.id === edge.target);
+    const sourcePort = sourceNode?.data.outputPorts.find((port) => port.id === (edge.sourceHandle ?? 'out'));
+    const targetPort = targetNode?.data.inputPorts.find((port) => port.id === (edge.targetHandle ?? 'in'));
+    if (!sourceNode || !targetNode || !sourcePort || !targetPort) {
+      return null;
+    }
+
+    const inputPort = def.inputPorts.find((port) => isPortCompatible(sourcePort.dataType, port.dataType));
+    const outputPort = def.outputPorts.find((port) => isPortCompatible(port.dataType, targetPort.dataType));
+    if (!inputPort || !outputPort) {
+      return null;
+    }
+
+    const newNode = buildNodeFromDefinition(def, position, propertyOverrides);
+    const firstConnection: Connection = {
+      source: edge.source,
+      sourceHandle: edge.sourceHandle ?? sourcePort.id,
+      target: newNode.id,
+      targetHandle: inputPort.id,
+    };
+    const secondConnection: Connection = {
+      source: newNode.id,
+      sourceHandle: outputPort.id,
+      target: edge.target,
+      targetHandle: edge.targetHandle ?? targetPort.id,
+    };
+
+    set((currentState) => {
+      const nextNodes = [...currentState.nodes, newNode];
+      const nextEdges = [
+        ...currentState.edges.filter((candidate) => candidate.id !== targetEdgeId),
+        createEdgeFromConnection(firstConnection),
+        createEdgeFromConnection(secondConnection),
+      ];
+      return {
+        ...createDirtyPatch(currentState, nextNodes, nextEdges),
+        selectedNodeId: newNode.id,
+      };
+    });
+
+    return newNode.id;
+  },
+
+  removeEdge: (edgeIdToRemove) => {
+    set((state) => {
+      const nextEdges = state.edges.filter((edge) => edge.id !== edgeIdToRemove);
+      return createDirtyPatch(state, state.nodes, nextEdges);
+    });
+  },
+
+  canConnect: (connection) => validateConnectionForNodes(get().nodes, connection),
+
+  connectNodes: (connection) => {
+    const result = validateConnectionForNodes(get().nodes, connection);
+    if (!result.ok) {
+      return result;
+    }
+
+    const edge = createEdgeFromConnection(connection);
+    set((state) => {
+      const nextEdges = addEdge(edge, state.edges);
+      return createDirtyPatch(state, state.nodes, nextEdges);
+    });
+
+    return result;
+  },
+
+  reconnectEdge: (edgeIdToReconnect, connection) => {
+    const state = get();
+    const existingEdge = state.edges.find((edge) => edge.id === edgeIdToReconnect);
+    if (!existingEdge) {
+      return { ok: false, reason: 'Conexao invalida: fio original nao encontrado.' };
+    }
+
+    const result = validateConnectionForNodes(state.nodes, connection);
+    if (!result.ok) {
+      return result;
+    }
+
+    set((currentState) => {
+      const nextEdges = currentState.edges.map((edge) => (
+        edge.id === edgeIdToReconnect
+          ? createEdgeFromConnection(connection, edge.id)
+          : edge
+      ));
+      return createDirtyPatch(currentState, currentState.nodes, nextEdges);
+    });
+
+    return result;
+  },
+
+  autoLayout: () => {
+    set((state) => {
+      const incomingCount = new Map(state.nodes.map((node) => [node.id, 0]));
+      for (const edge of state.edges) {
+        incomingCount.set(edge.target, (incomingCount.get(edge.target) ?? 0) + 1);
+      }
+
+      const depth = new Map(state.nodes.map((node) => [node.id, 0]));
+      const queue = state.nodes
+        .filter((node) => (incomingCount.get(node.id) ?? 0) === 0)
+        .map((node) => node.id);
+      const visited = new Set<string>();
+
+      while (queue.length > 0) {
+        const current = queue.shift()!;
+        visited.add(current);
+        const currentDepth = depth.get(current) ?? 0;
+
+        for (const edge of state.edges.filter((candidate) => candidate.source === current)) {
+          depth.set(edge.target, Math.max(depth.get(edge.target) ?? 0, currentDepth + 1));
+          incomingCount.set(edge.target, Math.max(0, (incomingCount.get(edge.target) ?? 1) - 1));
+          if ((incomingCount.get(edge.target) ?? 0) === 0 && !visited.has(edge.target)) {
+            queue.push(edge.target);
+          }
+        }
+      }
+
+      const grouped = new Map<number, Node<FlowNodeData>[]>();
+      for (const node of state.nodes) {
+        const nodeDepth = depth.get(node.id) ?? 0;
+        grouped.set(nodeDepth, [...(grouped.get(nodeDepth) ?? []), node]);
+      }
+
+      const indexByNodeId = new Map<string, number>();
+      for (const [nodeDepth, group] of grouped) {
+        group
+          .sort((left, right) => left.position.y - right.position.y || left.id.localeCompare(right.id))
+          .forEach((node, index) => {
+            indexByNodeId.set(node.id, index);
+            depth.set(node.id, nodeDepth);
+          });
+      }
+
+      const nextNodes = state.nodes.map((node) => ({
+        ...node,
+        position: {
+          x: 80 + (depth.get(node.id) ?? 0) * 280,
+          y: 80 + (indexByNodeId.get(node.id) ?? 0) * 140,
+        },
+      }));
+
+      return createDirtyPatch(state, nextNodes, state.edges);
+    });
+  },
+
   // ── Persistence ─────────────────────────────────────────────────
   saveFlow: async () => {
     const { flowId, flowName, nodes, edges } = get();
@@ -398,7 +705,7 @@ export const useFlowStore = create<FlowState>((set, get) => ({
 
   validateFlow: async () => {
     const { flowId, flowName, nodes, edges } = get();
-    const backendFlow = toBackendFlow(flowId, flowName, nodes, edges);
+    const backendFlow = toBackendFlow(flowId, flowName, nodes, edges, { runtimeView: true });
     const result = await sendCommand<FlowValidationResult>('engine', 'validateFlow', backendFlow);
     set({ validationResult: result });
     return result;
@@ -406,5 +713,12 @@ export const useFlowStore = create<FlowState>((set, get) => ({
 
   // ── Registry ────────────────────────────────────────────────────
   nodeDefinitions: [],
-  setNodeDefinitions: (defs) => set({ nodeDefinitions: defs }),
+  setNodeDefinitions: (defs) => {
+    const availableIds = new Set(defs.map((definition) => definition.typeId));
+    const missingRequired = requiredRuntimeNodeTypeIds.filter((typeId) => !availableIds.has(typeId));
+    if (missingRequired.length > 0) {
+      console.warn(`[flowStore] Missing required runtime node definitions: ${missingRequired.join(', ')}`);
+    }
+    set({ nodeDefinitions: defs });
+  },
 }));

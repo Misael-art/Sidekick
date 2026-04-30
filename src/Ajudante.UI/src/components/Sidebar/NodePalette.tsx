@@ -1,19 +1,13 @@
 import { useState, useMemo, type DragEvent } from 'react';
 import { useFlowStore } from '../../store/flowStore';
 import { useAppStore } from '../../store/appStore';
-import type { NodeCategory } from '../../bridge/types';
-
-const categoryColors: Record<NodeCategory, string> = {
-  Trigger: '#EF4444',
-  Logic: '#EAB308',
-  Action: '#22C55E',
-};
-
-const categoryIcons: Record<NodeCategory, string> = {
-  Trigger: '\u26A1',
-  Logic: '\uD83D\uDD00',
-  Action: '\u2699\uFE0F',
-};
+import {
+  getNodeProductCategory,
+  getProductCategoryColor,
+  getProductCategoryIcon,
+  getProductCategoryOrder,
+  type ProductNodeCategory,
+} from '../../utils/nodeProductCategory';
 
 export default function NodePalette() {
   const nodeDefinitions = useFlowStore((s) => s.nodeDefinitions);
@@ -31,17 +25,16 @@ export default function NodePalette() {
         d.typeId.toLowerCase().includes(lowerFilter),
     );
 
-    const groups: Record<NodeCategory, typeof filtered> = {
-      Trigger: [],
-      Logic: [],
-      Action: [],
-    };
+    const groups = getProductCategoryOrder().reduce<Record<ProductNodeCategory, typeof filtered>>((acc, category) => {
+      acc[category] = [];
+      return acc;
+    }, {} as Record<ProductNodeCategory, typeof filtered>);
 
     for (const def of filtered) {
-      groups[def.category]?.push(def);
+      groups[getNodeProductCategory(def)]?.push(def);
     }
 
-    for (const category of Object.keys(groups) as NodeCategory[]) {
+    for (const category of getProductCategoryOrder()) {
       groups[category].sort((a, b) => a.displayName.localeCompare(b.displayName));
     }
 
@@ -91,7 +84,7 @@ export default function NodePalette() {
       </div>
 
       <div className="node-palette__list">
-        {(['Trigger', 'Logic', 'Action'] as NodeCategory[]).map((category) => {
+        {getProductCategoryOrder().map((category) => {
           const items = grouped[category];
           if (items.length === 0) return null;
 
@@ -99,9 +92,9 @@ export default function NodePalette() {
             <div key={category} className="node-palette__group">
               <div
                 className="node-palette__group-header"
-                style={{ borderLeftColor: categoryColors[category] }}
+                style={{ borderLeftColor: getProductCategoryColor(category) }}
               >
-                <span>{categoryIcons[category]}</span>
+                <span className="node-palette__group-icon">{getProductCategoryIcon(category)}</span>
                 <span>{category}</span>
                 <span className="node-palette__count">{items.length}</span>
               </div>
@@ -115,7 +108,7 @@ export default function NodePalette() {
                 >
                   <div
                     className="node-palette__item-dot"
-                    style={{ backgroundColor: categoryColors[category] }}
+                    style={{ backgroundColor: getProductCategoryColor(category) }}
                   />
                   <div className="node-palette__item-info">
                     <div className="node-palette__item-name">{def.displayName}</div>

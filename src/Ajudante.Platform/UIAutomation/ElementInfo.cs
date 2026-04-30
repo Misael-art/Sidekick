@@ -31,6 +31,12 @@ public sealed class ElementInfo
     /// <summary>The title of the top-level window that contains this element.</summary>
     public string WindowTitle { get; init; } = "";
 
+    /// <summary>Window state at capture time: normal, maximized, or minimized.</summary>
+    public string WindowStateAtCapture { get; init; } = "normal";
+
+    /// <summary>Native window handle when available.</summary>
+    public long WindowHandle { get; init; }
+
     /// <summary>The owning process name without forcing an .exe suffix.</summary>
     public string ProcessName { get; init; } = "";
 
@@ -51,6 +57,39 @@ public sealed class ElementInfo
 
     /// <summary>Whether UIAutomation reports the element as off-screen.</summary>
     public bool IsOffscreen { get; init; }
+
+    /// <summary>Monitor device name at capture time when available.</summary>
+    public string MonitorDeviceName { get; init; } = "";
+
+    /// <summary>Monitor bounds at capture time.</summary>
+    public Rectangle MonitorBounds { get; init; }
+
+    /// <summary>Host screen width at capture time.</summary>
+    public int HostScreenWidth { get; init; }
+
+    /// <summary>Host screen height at capture time.</summary>
+    public int HostScreenHeight { get; init; }
+
+    /// <summary>DPI scale at capture time when available.</summary>
+    public double DpiScale { get; init; } = 1.0;
+
+    /// <summary>Point relative to window top-left at capture time.</summary>
+    public int RelativePointX { get; init; }
+
+    /// <summary>Point relative to window top-left at capture time.</summary>
+    public int RelativePointY { get; init; }
+
+    /// <summary>Normalized horizontal point in window bounds (0..1).</summary>
+    public double NormalizedWindowX { get; init; }
+
+    /// <summary>Normalized vertical point in window bounds (0..1).</summary>
+    public double NormalizedWindowY { get; init; }
+
+    /// <summary>Normalized horizontal point in virtual desktop bounds (0..1).</summary>
+    public double NormalizedScreenX { get; init; }
+
+    /// <summary>Normalized vertical point in virtual desktop bounds (0..1).</summary>
+    public double NormalizedScreenY { get; init; }
 
     /// <summary>Element bounds relative to the containing top-level window.</summary>
     public Rectangle RelativeBoundingRect

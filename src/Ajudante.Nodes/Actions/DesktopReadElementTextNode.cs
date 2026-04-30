@@ -53,6 +53,15 @@ public class DesktopReadElementTextNode : IActionNode
         var element = BrowserSelectorHelper.FindElement(selector);
         if (element is null)
         {
+            if (selector.useRelativeFallback)
+                context.EmitPhase(RuntimePhases.FallbackVisualActive, "relative fallback active");
+            else if (selector.useScaledFallback)
+                context.EmitPhase(RuntimePhases.FallbackVisualActive, "scaled fallback active");
+            else if (selector.useAbsoluteFallback)
+                context.EmitPhase(RuntimePhases.FallbackVisualActive, "absolute fallback active");
+            else
+                context.EmitPhase(RuntimePhases.Error, "notFound");
+
             NodeValueHelper.SetVariableIfRequested(context, variableName, "");
             return Task.FromResult(NodeResult.Ok("notFound", new Dictionary<string, object?>
             {

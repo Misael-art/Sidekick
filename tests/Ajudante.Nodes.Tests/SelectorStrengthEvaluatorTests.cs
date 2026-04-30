@@ -27,7 +27,7 @@ public class SelectorStrengthEvaluatorTests
         {
             Name = "Continue",
             ControlType = "Button",
-            ProcessPath = @"C:\Users\misae\AppData\Local\Programs\Trae\Trae.exe"
+            ProcessPath = @"%LOCALAPPDATA%\Programs\Trae\Trae.exe"
         };
 
         Assert.Equal(SelectorStrength.Medium, SelectorStrengthEvaluator.Evaluate(element));

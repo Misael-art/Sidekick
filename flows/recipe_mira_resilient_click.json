@@ -1,0 +1,114 @@
+{
+  "id": "recipe-mira-resilient-click",
+  "name": "Recipe - Mira Resilient Click",
+  "version": 1,
+  "variables": [
+    {
+      "name": "targetWindow",
+      "type": "String",
+      "default": "Trae"
+    },
+    {
+      "name": "targetProcessPath",
+      "type": "String",
+      "default": "%LOCALAPPDATA%\\Programs\\Trae\\Trae.exe"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "start",
+      "typeId": "trigger.manualStart",
+      "position": { "x": 80, "y": 190 },
+      "properties": {}
+    },
+    {
+      "id": "wait-button",
+      "typeId": "action.desktopWaitElement",
+      "position": { "x": 390, "y": 190 },
+      "properties": {
+        "windowTitle": "{{targetWindow}}",
+        "windowTitleMatch": "contains",
+        "processPath": "{{targetProcessPath}}",
+        "processName": "",
+        "automationId": "",
+        "elementName": "Continue",
+        "controlType": "button",
+        "timeoutMs": 6000,
+        "fallbackPipeline": "selector -> relativeWindow -> normalizedWindow -> scaledScreen -> absoluteDesktop -> image",
+        "useRelativeFallback": true,
+        "useScaledFallback": true,
+        "useAbsoluteFallback": true,
+        "restoreWindowBeforeFallback": true,
+        "expectedWindowState": "normal",
+        "relativeX": 320,
+        "relativeY": 460,
+        "normalizedX": 0.45,
+        "normalizedY": 0.7,
+        "absoluteX": 960,
+        "absoluteY": 680
+      }
+    },
+    {
+      "id": "click-button",
+      "typeId": "action.desktopClickElement",
+      "position": { "x": 760, "y": 190 },
+      "properties": {
+        "windowTitle": "{{targetWindow}}",
+        "windowTitleMatch": "contains",
+        "processPath": "{{targetProcessPath}}",
+        "processName": "",
+        "automationId": "",
+        "elementName": "Continue",
+        "controlType": "button",
+        "timeoutMs": 3000,
+        "clickType": "single",
+        "fallbackPipeline": "selector -> relativeWindow -> normalizedWindow -> scaledScreen -> absoluteDesktop -> image",
+        "useRelativeFallback": true,
+        "useScaledFallback": true,
+        "useAbsoluteFallback": true,
+        "restoreWindowBeforeFallback": true,
+        "expectedWindowState": "normal",
+        "relativeX": 320,
+        "relativeY": 460,
+        "normalizedX": 0.45,
+        "normalizedY": 0.7,
+        "absoluteX": 960,
+        "absoluteY": 680
+      }
+    },
+    {
+      "id": "log-click",
+      "typeId": "action.logMessage",
+      "position": { "x": 1100, "y": 190 },
+      "properties": {
+        "message": "Clique resiliente executado (fallback={{click-button.fallbackUsed}})",
+        "level": "info"
+      }
+    }
+  ],
+  "connections": [
+    {
+      "id": "c1",
+      "sourceNodeId": "start",
+      "sourcePort": "triggered",
+      "targetNodeId": "wait-button",
+      "targetPort": "in"
+    },
+    {
+      "id": "c2",
+      "sourceNodeId": "wait-button",
+      "sourcePort": "out",
+      "targetNodeId": "click-button",
+      "targetPort": "in"
+    },
+    {
+      "id": "c3",
+      "sourceNodeId": "click-button",
+      "sourcePort": "out",
+      "targetNodeId": "log-click",
+      "targetPort": "in"
+    }
+  ],
+  "createdAt": "2026-04-30T00:00:00Z",
+  "modifiedAt": "2026-04-30T00:00:00Z"
+}

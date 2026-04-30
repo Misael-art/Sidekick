@@ -75,6 +75,7 @@ export interface FlowNodeData extends Record<string, unknown> {
   displayName: string;
   nodeAlias?: string;
   nodeComment?: string;
+  nodeDisabled?: boolean;
   category: NodeCategory;
   color: string;
   inputPorts: PortDefinition[];
@@ -234,6 +235,19 @@ export interface InspectionAssetLocator {
   selector: InspectionAssetSelector;
   relativeBounds: InspectionAssetBounds;
   absoluteBounds: InspectionAssetBounds;
+  fallback?: {
+    useRelativeFallback?: boolean;
+    useScaledFallback?: boolean;
+    useAbsoluteFallback?: boolean;
+    restoreWindowBeforeFallback?: boolean;
+    expectedWindowState?: string;
+    relativeX?: number;
+    relativeY?: number;
+    normalizedX?: number;
+    normalizedY?: number;
+    absoluteX?: number;
+    absoluteY?: number;
+  };
 }
 
 export interface InspectionAssetContent {
@@ -249,6 +263,17 @@ export interface InspectionAssetContent {
   isVisible?: boolean;
   hostScreenWidth: number;
   hostScreenHeight: number;
+  windowStateAtCapture?: string;
+  windowHandle?: number | null;
+  monitorDeviceName?: string | null;
+  monitorBounds?: InspectionAssetBounds;
+  dpiScale?: number;
+  relativePointX?: number;
+  relativePointY?: number;
+  normalizedWindowX?: number;
+  normalizedWindowY?: number;
+  normalizedScreenX?: number;
+  normalizedScreenY?: number;
 }
 
 export interface InspectionAsset {
@@ -282,6 +307,19 @@ export interface CapturedElement {
   isFocused?: boolean;
   isEnabled?: boolean;
   isVisible?: boolean;
+  windowStateAtCapture?: string;
+  windowHandle?: number | null;
+  monitorDeviceName?: string;
+  monitorBounds?: InspectionAssetBounds;
+  hostScreenWidth?: number;
+  hostScreenHeight?: number;
+  dpiScale?: number;
+  relativePointX?: number;
+  relativePointY?: number;
+  normalizedWindowX?: number;
+  normalizedWindowY?: number;
+  normalizedScreenX?: number;
+  normalizedScreenY?: number;
   selectorStrength?: string;
   selectorStrategy?: string;
   asset?: InspectionAsset | null;

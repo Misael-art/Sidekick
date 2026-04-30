@@ -10,7 +10,19 @@ vi.mock('@xyflow/react', async (importOriginal) => {
 
       return {
     ...actual,
-    ReactFlow: ({ children, connectionRadius, onInit, onPaneContextMenu, onConnectStart, onConnectEnd }: any) => {
+    ReactFlow: ({
+      children,
+      connectionRadius,
+      edges,
+      isValidConnection,
+      nodes,
+      onEdgeContextMenu,
+      onInit,
+      onNodeContextMenu,
+      onPaneContextMenu,
+      onConnectStart,
+      onConnectEnd,
+    }: any) => {
       const paneRef = React.useRef<HTMLDivElement | null>(null);
       const rendererRef = React.useRef<HTMLDivElement | null>(null);
       const sourceHandleRef = React.useRef<HTMLButtonElement | null>(null);
@@ -48,6 +60,37 @@ vi.mock('@xyflow/react', async (importOriginal) => {
               onClick={() => onConnectEnd?.({ target: paneRef.current, clientX: 460, clientY: 240 })}
             >
               connect-end-pane
+            </button>
+            <button
+              data-testid="open-node-menu"
+              onClick={() => onNodeContextMenu?.({
+                preventDefault: () => {},
+                clientX: 300,
+                clientY: 220,
+              }, nodes?.[0])}
+            >
+              node-menu
+            </button>
+            <button
+              data-testid="open-edge-menu"
+              onClick={() => onEdgeContextMenu?.({
+                preventDefault: () => {},
+                clientX: 360,
+                clientY: 260,
+              }, edges?.[0])}
+            >
+              edge-menu
+            </button>
+            <button
+              data-testid="validate-incompatible"
+              onClick={() => isValidConnection?.({
+                source: 'node-source',
+                sourceHandle: 'value',
+                target: 'node-target',
+                targetHandle: 'in',
+              })}
+            >
+              validate-incompatible
             </button>
             {children}
           </div>
@@ -106,7 +149,7 @@ describe('FlowCanvas context menu', () => {
         boundingRect: { x: 100, y: 100, width: 80, height: 24 },
         processId: 1234,
         processName: 'Trae',
-        processPath: 'C:\\Users\\misae\\AppData\\Local\\Programs\\Trae\\Trae.exe',
+        processPath: '%LOCALAPPDATA%\\Programs\\Trae\\Trae.exe',
         windowTitle: 'Trae',
       },
       capturedRegion: null,
@@ -144,7 +187,7 @@ describe('FlowCanvas context menu', () => {
       windowTitle: 'Trae',
       windowTitleMatch: 'contains',
       processName: 'Trae',
-      processPath: 'C:\\Users\\misae\\AppData\\Local\\Programs\\Trae\\Trae.exe',
+      processPath: '%LOCALAPPDATA%\\Programs\\Trae\\Trae.exe',
       automationId: 'continue-button',
       elementName: 'Continue',
       controlType: 'button',
@@ -349,6 +392,179 @@ describe('FlowCanvas context menu', () => {
 
     expect(container.querySelector('.flow-context-menu')).toBeTruthy();
     expect(container.querySelector('[data-testid="connection-radius"]')?.textContent).toBe('48');
+
+    act(() => {
+      root.unmount();
+    });
+  }, 15_000);
+
+  it('duplicates and disables nodes from the node context menu', async () => {
+    const React = await import('react');
+    const { default: FlowCanvas } = await import('./FlowCanvas');
+    const { useFlowStore } = await import('../../store/flowStore');
+    const { getDevNodeDefinitions } = await import('../../devNodeDefinitions');
+
+    useFlowStore.setState({
+      flowId: 'flow-node-menu',
+      flowName: 'Node Menu Flow',
+      nodeDefinitions: getDevNodeDefinitions(),
+      nodes: [
+        {
+          id: 'node-source',
+          type: 'logicNode',
+          position: { x: 50, y: 50 },
+          data: {
+            typeId: 'logic.delay',
+            displayName: 'Delay',
+            nodeAlias: '',
+            nodeComment: '',
+            category: 'Logic',
+            color: '#EAB308',
+            inputPorts: [{ id: 'in', name: 'In', dataType: 'Flow' }],
+            outputPorts: [{ id: 'out', name: 'Out', dataType: 'Flow' }],
+            properties: [],
+            propertyValues: {},
+          },
+        },
+      ],
+      edges: [],
+      selectedNodeId: null,
+    });
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    act(() => {
+      root.render(React.createElement(FlowCanvas));
+    });
+
+    act(() => {
+      (container.querySelector('[data-testid="open-node-menu"]') as HTMLButtonElement)
+        .dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    const duplicateButton = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Duplicar'));
+    const disableButton = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Desabilitar'));
+    expect(duplicateButton).toBeTruthy();
+    expect(disableButton).toBeTruthy();
+
+    act(() => {
+      duplicateButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(useFlowStore.getState().nodes).toHaveLength(2);
+
+    act(() => {
+      (container.querySelector('[data-testid="open-node-menu"]') as HTMLButtonElement)
+        .dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    const disableButtonAfterDuplicate = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Desabilitar'));
+    act(() => {
+      disableButtonAfterDuplicate!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(useFlowStore.getState().nodes[0].data.nodeDisabled).toBe(true);
+
+    act(() => {
+      root.unmount();
+    });
+  }, 15_000);
+
+  it('inserts a node into an edge from the edge context menu', async () => {
+    const React = await import('react');
+    const { default: FlowCanvas } = await import('./FlowCanvas');
+    const { useFlowStore } = await import('../../store/flowStore');
+    const { getDevNodeDefinitions } = await import('../../devNodeDefinitions');
+
+    useFlowStore.setState({
+      flowId: 'flow-edge-menu',
+      flowName: 'Edge Menu Flow',
+      nodeDefinitions: getDevNodeDefinitions(),
+      nodes: [
+        {
+          id: 'node-source',
+          type: 'triggerNode',
+          position: { x: 50, y: 50 },
+          data: {
+            typeId: 'trigger.manualStart',
+            displayName: 'Start Manual',
+            nodeAlias: '',
+            nodeComment: '',
+            category: 'Trigger',
+            color: '#EF4444',
+            inputPorts: [],
+            outputPorts: [{ id: 'triggered', name: 'Triggered', dataType: 'Flow' }],
+            properties: [],
+            propertyValues: {},
+          },
+        },
+        {
+          id: 'node-target',
+          type: 'actionNode',
+          position: { x: 360, y: 50 },
+          data: {
+            typeId: 'action.logMessage',
+            displayName: 'Log',
+            nodeAlias: '',
+            nodeComment: '',
+            category: 'Action',
+            color: '#22C55E',
+            inputPorts: [{ id: 'in', name: 'In', dataType: 'Flow' }],
+            outputPorts: [{ id: 'out', name: 'Out', dataType: 'Flow' }],
+            properties: [],
+            propertyValues: {},
+          },
+        },
+      ],
+      edges: [
+        {
+          id: 'edge-source-target',
+          source: 'node-source',
+          sourceHandle: 'triggered',
+          target: 'node-target',
+          targetHandle: 'in',
+          type: 'smoothstep',
+        },
+      ],
+      selectedNodeId: null,
+    });
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    act(() => {
+      root.render(React.createElement(FlowCanvas));
+    });
+
+    act(() => {
+      (container.querySelector('[data-testid="open-edge-menu"]') as HTMLButtonElement)
+        .dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    const insertButton = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Inserir passo'));
+    expect(insertButton).toBeTruthy();
+
+    act(() => {
+      insertButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    const addDelayButton = Array.from(container.querySelectorAll('.flow-context-menu__item'))
+      .find((button) => button.textContent?.includes('Delay')) as HTMLButtonElement | undefined;
+    expect(addDelayButton).toBeTruthy();
+
+    act(() => {
+      addDelayButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    const state = useFlowStore.getState();
+    expect(state.nodes).toHaveLength(3);
+    expect(state.edges).toHaveLength(2);
+    expect(state.edges.some((edge) => edge.source === 'node-source' && edge.target === state.selectedNodeId)).toBe(true);
+    expect(state.edges.some((edge) => edge.source === state.selectedNodeId && edge.target === 'node-target')).toBe(true);
 
     act(() => {
       root.unmount();

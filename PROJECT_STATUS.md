@@ -34,6 +34,7 @@ Traduzindo isso para o estado real:
 - o pipeline de publish oficial foi revalidado em `src/Ajudante.App/bin/publish/Sidekick.exe`; ainda exige fechar qualquer instancia em execucao antes de republicar
 - `Snip` e `Mira` existem como ferramentas reutilizaveis; `Mira` agora exibe seletor, janela, processo, caminho do executavel, bounds absolutos/relativos, cursor/pixel e score de robustez
 - a jornada de criacao de fluxos recebeu recipes oficiais para desktop automation, wait text then click, popup auto-confirm, Trae auto-continue, fallback visual e scheduler
+- o editor visual foi reforcado no recorte P0: criar proximo passo soltando fio no vazio, inserir node no meio de edge, reconectar edge, remover edge por menu, duplicar node, habilitar/desabilitar node, bypass de node desabilitado em runtime view, auto layout, atalhos e categorias de produto no palette
 - Marketplace local de recipes oficiais existe na toolbar; marketplace remoto foi avaliado em `MARKETPLACE_EVALUATION.md` e segue bloqueado para execucao irrestrita ate existir manifesto seguro, hash/assinatura, aviso de nodes sensiveis e importacao desarmada
 
 Resumo de release em `2026-04-29`:
@@ -68,6 +69,36 @@ Atualizacao de produto em `2026-04-30`:
   - `flows/recipe_overlay_visual_message.json`
   - `flows/recipe_console_pwd_command.json`
   - `flows/recipe_hardware_quick_controls.json`
+
+Atualizacao de produto em `2026-04-30` (captura/gravao/Mira resiliente):
+
+- Novo node `action.captureScreenshot` com targets `fullDesktop`, `monitor`, `region`, `activeWindow` e `windowSelector`, com formato `png/jpg/bmp`, delay, cursor, escala e efeitos (`none/grayscale/blur/highlightCursor`).
+- Novo node `action.recordDesktop` com captura por `ScreenCapture` e escrita via `Emgu CV VideoWriter`, cancelamento limpo por `CancellationToken`, saidas de `filePath/durationMs/framesWritten/fps/target`.
+- Novo node `action.recordCamera` com `Emgu.CV.VideoCapture` + `VideoWriter`, espelhamento, crop, efeitos e `overlayTimestamp`.
+- Novo node `logic.conditionGroup` com `ANY/ALL`, grupos aninhados simples e operadores `equals/contains/regex/greater/less/exists/changed`.
+- Contrato do Mira ampliado com metadados de resiliencia: `windowStateAtCapture`, `windowHandle`, monitor, host screen, normalizados e pontos relativos; payload da bridge e prefill de node atualizados para fallback pipeline.
+- Desktop selectors agora aceitam propriedades formais de fallback (`useRelativeFallback`, `useScaledFallback`, `useAbsoluteFallback`, `restoreWindowBeforeFallback`, `expectedWindowState`, coordenadas relativas/normalizadas/absolutas) e fases semanticas de fallback.
+- Novas recipes oficiais:
+  - `flows/recipe_screenshot_window_support.json`
+  - `flows/recipe_desktop_recording.json`
+  - `flows/recipe_camera_recording.json`
+  - `flows/recipe_mira_resilient_click.json`
+  - `flows/recipe_whatsapp_status_assistant.json`
+- Regra de seguranca mantida no recipe WhatsApp: modo padrao `draftOnly`; envio sensivel exige `allowSendSensitiveData=true` e `sendMode=sendAfterConfirm`.
+- Limitacao honesta mantida: gravacao de audio do sistema/camera nao foi implementada nesta rodada.
+
+Atualizacao de produto em `2026-04-30` (editor visual P0):
+
+- Conexoes agora passam por validacao local de compatibilidade de portas antes de criar/reconectar fios; portas `Flow` conectam apenas com `Flow`, e conexoes rejeitadas geram mensagem clara no runtime/status.
+- O canvas ganhou menus de contexto separados para canvas, node e edge:
+  - canvas: adicionar passo por busca e executar auto layout
+  - node: duplicar, habilitar/desabilitar e remover
+  - edge: inserir passo no meio do fio ou remover o fio
+- O fluxo pode ser montado sem arrastar da sidebar: iniciar a partir do menu, usar `C` no node selecionado ou soltar uma conexao no vazio abre o menu `Adicionar passo`.
+- O store cobre operacoes estruturais novas: `connectNodes`, `reconnectEdge`, `insertNodeOnEdge`, `removeEdge`, `duplicateNode`, `toggleNodeDisabled` e `autoLayout`.
+- A conversao frontend/backend preserva `__ui.disabled` quando salvando metadata de UI e usa `runtimeView` para desviar nodes desabilitados com uma entrada e uma saida.
+- Palette passou a agrupar nodes por categorias publicas: Trigger, Desktop, Window, Hardware, Media, Console, Logic, Data e Utility.
+- Atalhos adicionados: `Ctrl+D` duplicar, `Ctrl+0` fit view, `Ctrl+K` ou `/` busca rapida, `C` conectar proximo passo a partir do node selecionado, `L` auto layout.
 
 ## O Que Ja Foi Concluido E Validado
 
@@ -137,25 +168,26 @@ dotnet publish .\src\Ajudante.App\Ajudante.App.csproj -c Release -o .\src\Ajudan
 
 ## Validacao Mais Recente Conhecida
 
-Executada com sucesso em `2026-04-30` apos overlay/console/link assistido/Marketplace local/hardware:
+Executada com sucesso em `2026-04-30` apos editor visual P0, overlay/console/link assistido/Marketplace local/hardware/captura:
 
 - `dotnet build Ajudante.sln`
-- `dotnet test Ajudante.sln --no-build`
+- `dotnet test Ajudante.sln`
 - `npm run test` em `src/Ajudante.UI`
 - `npm run build` em `src/Ajudante.UI`
+- `dotnet publish .\src\Ajudante.App\Ajudante.App.csproj -c Release -o .\src\Ajudante.App\bin\publish`
 
 Resultados:
 
 - build .NET: `0` erros, `0` avisos
-- testes .NET: `250` aprovados (`105` Core, `145` Nodes)
-- testes UI: `37` aprovados
-- build UI: assets gerados em `src/Ajudante.App/wwwroot` (`index-C3Fnfy_n.js`, `index-xxIiRT3a.css`)
-- publish alternativo: `dotnet publish .\src\Ajudante.App\Ajudante.App.csproj -c Release -o .\src\Ajudante.App\bin\publish-overlay-rc` passou e gerou `Sidekick.exe` com assets atuais
-- publish oficial: apos fechar a instancia aberta do Sidekick (PID 16208), `dotnet publish .\src\Ajudante.App\Ajudante.App.csproj -c Release -o .\src\Ajudante.App\bin\publish` passou e gerou `Sidekick.exe` com assets atuais em `src/Ajudante.App/bin/publish`
+- testes .NET: `257` aprovados (`105` Core, `152` Nodes)
+- testes UI: `49` aprovados
+- build UI: assets gerados em `src/Ajudante.App/wwwroot` (`index-01CQn3UE.js`, `index-D-P62VrZ.css`)
+- publish oficial: `Sidekick.exe` gerado em `src/Ajudante.App/bin/publish`; `wwwroot` publicado com assets atuais; recipes oficiais publicados como `seed-flows/*.json`
 
 Limitacao operacional desta validacao:
 
 - validacao manual interativa do executavel publicado ainda precisa ser feita no ambiente do usuario antes de chamar de RC final de distribuicao.
+- o publish atual nao cria pasta `recipes/` separada; o contrato publicado vigente usa `seed-flows/` para os recipes vindos de `flows/*.json`.
 
 Executada com sucesso em `2026-04-29`:
 
@@ -202,7 +234,7 @@ Objetivo desta estrutura:
 
 ### 1. Editor Visual E Runtime
 
-Estado: `estavel`
+Estado: `fortalecido para RC tecnico; validacao manual interativa ainda pendente`
 
 Ja existe:
 
@@ -211,10 +243,20 @@ Ja existe:
 - runtime manual
 - runtime continuo com triggers
 - sincronizacao de estado com a UI
+- criacao por menu no canvas sem usar sidebar
+- soltar fio no vazio para adicionar proximo passo
+- menu de contexto de node e edge
+- insercao de node no meio de edge
+- reconexao e remocao de edge
+- duplicacao e enable/disable de node
+- bypass de node desabilitado na view de runtime quando ha uma entrada e uma saida
+- auto layout basico
+- atalhos de duplicar, fit view, busca, conectar e layout
 
 Ainda precisa evoluir:
 
-- jornada guiada de criacao
+- validacao manual do editor publicado
+- preview visual mais rico do fio/magnetismo alem do que o React Flow ja oferece
 - ativos reutilizaveis originados de captura e inspecao
 - assistencia contextual no editor
 
@@ -258,15 +300,20 @@ Ainda nao existe:
 
 ### 4. Marketplace / Pacotes
 
-Estado: `nao iniciado`
+Estado: `local funcional; remoto bloqueado por governanca`
 
-Nao existe ainda:
+Ja existe:
 
-- formato oficial de pacote
-- manifesto versionado
-- politica de permissao e compatibilidade
 - catalogo local
-- marketplace remoto
+- busca de recipes oficiais locais na toolbar
+- recipes publicados no executavel como `seed-flows/*.json`
+
+Ainda nao existe:
+
+- marketplace remoto publico
+- assinatura/hash obrigatoria de pacote remoto
+- instalacao remota com manifesto de permissoes/capabilities completo
+- desinstalacao/atualizacao remota com governanca de versao
 
 ## Proxima Iniciativa Aprovada
 

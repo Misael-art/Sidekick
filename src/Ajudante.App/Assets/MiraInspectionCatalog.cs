@@ -115,6 +115,7 @@ public sealed class MiraInspectionCatalog
         var strength = SelectorStrengthEvaluator.Evaluate(element);
         var bounds = ToBounds(element.BoundingRect);
         var relativeBounds = ToBounds(element.RelativeBoundingRect);
+        var monitorBounds = ToBounds(element.MonitorBounds);
 
         return new MiraInspectionManifest
         {
@@ -144,7 +145,21 @@ public sealed class MiraInspectionCatalog
                     ControlType = NullIfWhiteSpace(element.ControlType)
                 },
                 RelativeBounds = relativeBounds,
-                AbsoluteBounds = bounds
+                AbsoluteBounds = bounds,
+                Fallback = new MiraInspectionFallback
+                {
+                    UseRelativeFallback = true,
+                    UseScaledFallback = true,
+                    UseAbsoluteFallback = true,
+                    RestoreWindowBeforeFallback = true,
+                    ExpectedWindowState = string.IsNullOrWhiteSpace(element.WindowStateAtCapture) ? "normal" : element.WindowStateAtCapture,
+                    RelativeX = element.RelativePointX,
+                    RelativeY = element.RelativePointY,
+                    NormalizedX = element.NormalizedWindowX,
+                    NormalizedY = element.NormalizedWindowY,
+                    AbsoluteX = element.CursorScreen.X,
+                    AbsoluteY = element.CursorScreen.Y
+                }
             },
             Content = new MiraInspectionContent
             {
@@ -158,8 +173,19 @@ public sealed class MiraInspectionCatalog
                 IsFocused = element.IsFocused,
                 IsEnabled = element.IsEnabled,
                 IsVisible = !element.IsOffscreen,
-                HostScreenWidth = Screen.PrimaryScreen?.Bounds.Width ?? 0,
-                HostScreenHeight = Screen.PrimaryScreen?.Bounds.Height ?? 0
+                HostScreenWidth = element.HostScreenWidth <= 0 ? (Screen.PrimaryScreen?.Bounds.Width ?? 0) : element.HostScreenWidth,
+                HostScreenHeight = element.HostScreenHeight <= 0 ? (Screen.PrimaryScreen?.Bounds.Height ?? 0) : element.HostScreenHeight,
+                WindowStateAtCapture = string.IsNullOrWhiteSpace(element.WindowStateAtCapture) ? "normal" : element.WindowStateAtCapture,
+                WindowHandle = element.WindowHandle == 0 ? null : element.WindowHandle,
+                MonitorDeviceName = NullIfWhiteSpace(element.MonitorDeviceName),
+                MonitorBounds = monitorBounds,
+                DpiScale = element.DpiScale <= 0 ? 1.0 : element.DpiScale,
+                RelativePointX = element.RelativePointX,
+                RelativePointY = element.RelativePointY,
+                NormalizedWindowX = element.NormalizedWindowX,
+                NormalizedWindowY = element.NormalizedWindowY,
+                NormalizedScreenX = element.NormalizedScreenX,
+                NormalizedScreenY = element.NormalizedScreenY
             }
         };
     }

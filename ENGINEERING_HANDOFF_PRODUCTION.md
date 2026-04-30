@@ -28,6 +28,31 @@ Atualizacao `2026-04-30`:
 - Nodes de overlay, console/PWD e hardware/sistema foram adicionados.
 - Hardware/sistema inclui audio, mute de microfone, dispositivos PnP de camera/microfone/Wi-Fi, energia e display; mudancas de sistema usam `allowSystemChanges` ou frase `CONFIRM`.
 - Validacao mais recente antes do publish final desta rodada: `.NET 250 testes`, `UI 37 testes`, `npm run build`, `dotnet build`.
+- Entregas P0 adicionais de captura/gravao:
+  - `action.captureScreenshot`
+  - `action.recordDesktop`
+  - `action.recordCamera`
+- Entrega P0 adicional de logica:
+  - `logic.conditionGroup` com `ANY/ALL`, nested groups simples e operadores `equals/contains/regex/greater/less/exists/changed`.
+- Mira antiquebra ampliado no contrato (`ElementInfo` + payload bridge + prefill) para fallback selector -> relative -> scaled -> absolute.
+- Recipes oficiais adicionados:
+  - `recipe_screenshot_window_support.json`
+  - `recipe_desktop_recording.json`
+  - `recipe_camera_recording.json`
+  - `recipe_mira_resilient_click.json`
+  - `recipe_whatsapp_status_assistant.json`
+- Regra de seguranca para WhatsApp reforcada: draft por padrao, envio apenas com consentimento explicito (`allowSendSensitiveData=true` + `sendMode=sendAfterConfirm`).
+- Limitacao honesta desta rodada: gravacao de audio (sistema/camera) nao implementada.
+
+Atualizacao `2026-04-30` (editor visual P0 e publish):
+
+- Editor visual recebeu operacoes de produto para construcao sem sidebar: soltar fio no vazio para adicionar proximo passo, menu de contexto no canvas/node/edge, busca rapida, duplicar node, habilitar/desabilitar node, inserir node em edge, reconectar/remover edge e auto layout.
+- Store/conversor cobertos por testes para criacao, conexao, reconexao, insercao, remocao, disabled metadata e runtime bypass de node desabilitado.
+- `Run Now`, `Arm` e validacao pre-run usam `runtimeView`, desviando nodes desabilitados quando o grafo permite.
+- Categorias publicas no palette agora refletem areas de produto: Trigger, Desktop, Window, Hardware, Media, Console, Logic, Data e Utility.
+- Gates executados com sucesso nesta rodada: `dotnet build Ajudante.sln`, `dotnet test Ajudante.sln` (`257` testes), `npm run test` (`49` testes), `npm run build`, `dotnet publish` oficial para `src/Ajudante.App/bin/publish`.
+- `Sidekick.exe` publicado existe; `wwwroot` publicado contem assets atuais; recipes oficiais foram publicados em `seed-flows/`.
+- Validacao manual interativa do exe publicado ainda esta pendente; nao declarar RC final de distribuicao sem abrir o app e validar fluxo de canvas/Mira/Snip/Marketplace no WebView2.
 
 ## Resumo Executivo
 
@@ -55,7 +80,7 @@ Classificacao proposta:
 
 - `runtime e arquitetura`: `fortes`
 - `automacao desktop moderna`: `promissora, mas incompleta`
-- `UX de construcao de macros`: `boa para time tecnico, insuficiente para publico amplo`
+- `UX de construcao de macros`: `fortalecida no editor visual, ainda pendente de validacao manual e onboarding completo`
 - `operacao e suporte`: `abaixo de producao`
 - `release readiness`: `quase pronta tecnicamente, ainda nao pronta como produto`
 
@@ -70,7 +95,7 @@ Conclusao pratica:
 Objetivo funcional:
 
 - quando o app alvo for `Trae.exe`
-- localizado em `C:\\Users\\misae\\AppData\\Local\\Programs\\Trae`
+- localizado em `%LOCALAPPDATA%\\Programs\\Trae\\Trae.exe` ou caminho equivalente configurado pelo usuario
 - e aparecer a mensagem:
   - `Model thinking limit reached, please enter 'Continue' to get more. Continue`
 - o Sidekick deve clicar em `Continue`

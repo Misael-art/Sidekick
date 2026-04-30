@@ -54,6 +54,17 @@ public class DesktopWaitElementNode : IActionNode
         NodeValueHelper.SetVariableIfRequested(context, variableName, found);
         if (found)
             context.EmitPhase(RuntimePhases.ElementMatched, "Desktop element matched");
+        else
+        {
+            if (selector.useRelativeFallback)
+                context.EmitPhase(RuntimePhases.FallbackVisualActive, "relative fallback active");
+            else if (selector.useScaledFallback)
+                context.EmitPhase(RuntimePhases.FallbackVisualActive, "scaled fallback active");
+            else if (selector.useAbsoluteFallback)
+                context.EmitPhase(RuntimePhases.FallbackVisualActive, "absolute fallback active");
+            else
+                context.EmitPhase(RuntimePhases.Error, "notFound");
+        }
 
         return Task.FromResult(found
             ? NodeResult.Ok("out", new Dictionary<string, object?> { ["found"] = true })

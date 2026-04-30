@@ -31,21 +31,40 @@
 Um flow e uma automacao completa formada por nodes conectados por fios.
 
 ### 2.2 Categorias de nodes
-| Categoria | Cor | Funcao |
-|-----------|-----|--------|
-| Trigger | Vermelho | Inicia o flow quando um evento ocorre |
-| Logic | Amarelo | Controla condicoes, loops, variaveis e delays |
-| Action | Verde | Executa uma acao concreta |
+O palette organiza nodes por area de uso, nao apenas por tipo tecnico:
 
-### 2.3 Ports
+| Categoria | Funcao |
+|-----------|--------|
+| Trigger | Inicia o flow quando um evento ocorre |
+| Desktop | Clica, le, espera ou manipula elementos e entrada do desktop |
+| Window | Controla janelas e processos |
+| Hardware | Audio, microfone, camera, Wi-Fi, energia e display |
+| Media | Screenshot, gravacao, imagem, som e overlays |
+| Console | Comandos, PowerShell/CMD, PWD e variaveis de ambiente |
+| Logic | Condicoes, loops, variaveis, delays e composicao |
+| Data | Arquivos, clipboard, HTTP, CSV/JSON e dados |
+| Utility | Nodes auxiliares que nao se encaixam nas categorias acima |
+
+### 2.3 Criacao visual no canvas
+Voce nao precisa arrastar tudo da sidebar.
+
+- Clique com botao direito no canvas para abrir o menu de busca e adicionar um node.
+- Arraste um fio de uma porta de saida e solte no vazio para abrir **Adicionar passo**; ao escolher um node compativel, o Sidekick conecta automaticamente.
+- Clique com botao direito em um fio para inserir um novo node no meio ou remover a conexao.
+- Clique com botao direito em um node para duplicar, desabilitar/habilitar ou remover.
+- Node desabilitado nao e apagado. Ao executar/validar, o Sidekick tenta fazer bypass quando o node tem uma entrada e uma saida de fluxo.
+- Use `Ctrl+D` para duplicar, `Ctrl+0` para ajustar a visao, `Ctrl+K` ou `/` para busca rapida, `C` para conectar um proximo passo a partir do node selecionado e `L` para auto layout.
+- Se uma conexao falhar, leia a mensagem: portas `Flow` so conectam com `Flow`; saidas de dados devem entrar em portas de dados compativeis.
+
+### 2.4 Ports
 - Triggers nao possuem entrada.
 - A maioria dos nodes usa `In` e `Out`.
 - Nodes de decisao podem expor saidas como `True/False` ou `Match/NoMatch`.
 
-### 2.4 Variaveis
+### 2.5 Variaveis
 Use `{{nomeDaVariavel}}` em campos de texto para interpolar valores do contexto.
 
-### 2.5 Run Now vs Arm
+### 2.6 Run Now vs Arm
 O runtime do Sidekick separa claramente os conceitos:
 
 - **Run Now:** executa o flow uma vez usando o snapshot atual do editor.
@@ -116,6 +135,7 @@ Dica: para criar como n8n/Blender, arraste o ponto de saida de um node e solte e
 - **Set Variable / Get Variable:** grava e le variaveis.
 - **Compare Text:** compara strings.
 - **Cooldown:** evita repeticoes muito proximas na mesma execucao.
+- **Condition Group:** combina condicoes `ANY/ALL` com operadores `equals/contains/regex/greater/less/exists/changed`.
 
 ### 4.3 Actions
 - **Mouse Click / Move / Drag**
@@ -128,6 +148,9 @@ Dica: para criar como n8n/Blender, arraste o ponto de saida de um node e solte e
 - **Desktop Click Element**
 - **Desktop Read Element Text**
 - **Click Image Match**
+- **Capture Screenshot**
+- **Record Desktop**
+- **Record Camera**
 - **Overlay Solid Color**
 - **Overlay Image**
 - **Overlay Text**
@@ -197,7 +220,24 @@ Propriedades comuns:
 - `Full Screen`: cobre todos os monitores; desligue para usar `x/y/width/height`.
 - `Opacity`, `Click Through`, `Motion`, `Fade In` e `Fade Out`.
 
-### 5.4 Console e PWD
+### 5.4 Captura e gravacao
+Use **Capture Screenshot** para capturar:
+
+- tela completa (`fullDesktop`)
+- monitor especifico
+- regiao (`x/y/width/height`)
+- janela ativa
+- janela por seletor (`windowTitle/processName/processPath`)
+
+Saidas principais: `filePath`, `width`, `height`, `target` e `error`.
+
+Use **Record Desktop** para gravar video da tela. O node grava frames com `ScreenCapture` e codifica com `VideoWriter` (Emgu CV). A gravacao respeita cancelamento do runtime.
+
+Use **Record Camera** para gravar webcam com `VideoCapture` + `VideoWriter` (Emgu CV), com opcao de mirror, crop, efeito e timestamp.
+
+Limitacao atual (honesta): gravacao de audio ainda nao esta implementada.
+
+### 5.5 Console e PWD
 Use **Console Set Directory** para definir a variavel `pwd` do flow.
 
 Use **Console Command** para executar comandos com:
@@ -210,7 +250,7 @@ Use **Console Command** para executar comandos com:
 
 Importante: comandos de console podem alterar arquivos, processos e sistema. Revise sempre o comando antes de executar ou armar um flow.
 
-### 5.5 Hardware e sistema
+### 5.6 Hardware e sistema
 Use **System Audio** para aumentar, abaixar ou definir volume, mutar/desmutar saida de audio e mutar/desmutar microfone.
 
 Use **Hardware Device** para listar ou ligar/desligar dispositivos de camera, microfone e Wi-Fi. Alteracoes reais exigem `Allow System Changes=true` e podem precisar de permissao de administrador do Windows.
@@ -221,7 +261,7 @@ Use **Display Settings** para descrever monitores e, quando liberado, alterar re
 
 Regra pratica: teste primeiro com operacoes de leitura como `getState`, `listDevices` e `describe`. So libere mudancas de sistema depois de revisar o flow inteiro.
 
-### 5.6 Sample flows uteis
+### 5.7 Sample flows uteis
 Os exemplos abaixo mostram o uso de ativos reutilizaveis no editor:
 
 - `portfolio_snip_reuse_demo.json`: reaproveita um ativo de `Snip` em `Image Detected Trigger`.
@@ -236,13 +276,29 @@ Os exemplos abaixo mostram o uso de ativos reutilizaveis no editor:
 - `recipe_console_pwd_command.json`: demonstra PWD, comando de console, stdout e log.
 - `recipe_hardware_quick_controls.json`: demonstra leitura segura de audio, monitores e dispositivos.
 - `trae_auto_continue.json`: flow oficial para Trae, usando trigger de elemento desktop, foco de janela e click protegido contra click storm.
+- `recipe_screenshot_window_support.json`: captura screenshot por seletor de janela/processo.
+- `recipe_desktop_recording.json`: gravacao desktop com duracao/fps e guard de tamanho.
+- `recipe_camera_recording.json`: gravacao de camera com timestamp.
+- `recipe_mira_resilient_click.json`: clique resiliente usando pipeline de fallback.
+- `recipe_whatsapp_status_assistant.json`: assistente WhatsApp em modo seguro.
 
-### 5.7 Marketplace
+### 5.8 Marketplace
 Use o botao **Marketplace** na toolbar para abrir recipes oficiais locais e procurar por automacoes prontas incluidas no produto.
+
+No executavel publicado, esses recipes sao copiados para `seed-flows/`. A pasta raiz `flows/` continua sendo a fonte editavel no repositorio.
 
 Marketplace remoto e viavel, mas esta bloqueado como recurso publico ate existir manifesto seguro, hash/assinatura, validacao de schema, aviso de nodes sensiveis e importacao sempre desarmada.
 
 Nesta versao, o Marketplace carrega apenas recipes oficiais locais. A avaliacao tecnica esta em `MARKETPLACE_EVALUATION.md`.
+
+Sobre o recipe WhatsApp:
+
+- abre `https://web.whatsapp.com/`
+- exige login ativo (ou aguardo de QR scan)
+- prepara rascunho por padrao (`draftOnly`)
+- nao deve enviar automaticamente sem consentimento explicito
+- envio sensivel exige `allowSendSensitiveData=true` e `sendMode=sendAfterConfirm`
+- a UI do WhatsApp Web pode mudar; use fallback visual/selector e acompanhe logs.
 
 ---
 

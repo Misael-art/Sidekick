@@ -5,8 +5,8 @@
 
 ## Status
 
-- Estado: `executado parcialmente para release candidate tecnico`
-- Data de consolidacao: `2026-04-29`
+- Estado: `executado parcialmente para release candidate tecnico; editor visual P0 reforcado`
+- Data de consolidacao: `2026-04-30`
 - Escopo: `fechar a cobertura Windows do Sidekick com criterio de produto, nao apenas de arquitetura`
 
 Resultado da rodada `2026-04-29`:
@@ -21,6 +21,25 @@ Resultado da rodada `2026-04-29`:
 - Bloco de publish: publish oficial em `src/Ajudante.App/bin/publish` foi revalidado apos fechar a instancia que bloqueava DLLs.
 - Canvas: conexao assistida abre `Adicionar passo` quando o usuario solta fio sem alvo, com raio de conexao maior para comportamento magnetico.
 - Hardware/sistema: nodes publicos para audio, microfone, camera, Wi-Fi, energia e display foram adicionados com guardas explicitas.
+
+Atualizacao da rodada `2026-04-30` (captura/gravao + resiliencia):
+
+- Novo bloco de captura entregue: `action.captureScreenshot` com targets desktop/monitor/regiao/janela ativa/window selector e efeitos de imagem.
+- Gravacao desktop entregue em baseline honesta: `action.recordDesktop` com `ScreenCapture` + `VideoWriter`, cancelamento limpo e limite opcional de tamanho.
+- Gravacao de camera entregue em baseline honesta: `action.recordCamera` com `VideoCapture` + `VideoWriter`, crop, efeitos e timestamp.
+- `logic.conditionGroup` entregue para condicoes compostas `ANY/ALL` com operadores `equals/contains/regex/greater/less/exists/changed`.
+- Mira antiquebra ampliado no contrato de captura e prefill de selectors para fallback pipeline (`selector -> relativeWindow -> normalizedWindow -> scaledScreen -> absoluteDesktop -> image`).
+- Recipes oficiais locais adicionados para screenshot, gravacao desktop, gravacao camera, clique resiliente Mira e assistente WhatsApp em modo draft seguro.
+- Limite residual documentado: gravacao de audio ainda nao implementada nesta rodada.
+
+Atualizacao da rodada `2026-04-30` (criacao de fluxo):
+
+- Canvas agora cobre o caminho principal de criacao visual: menu de contexto, busca rapida, soltar fio no vazio para adicionar proximo passo e inserir node no meio de edge.
+- Node e edge ganharam menus de contexto: duplicar, habilitar/desabilitar, remover node, remover edge, reconectar e inserir passo no fio.
+- Validacao de porta acontece antes de criar/reconectar edge; falhas retornam mensagem clara em vez de falhar silenciosamente.
+- Nodes desabilitados sao preservados no arquivo quando metadata de UI e salva e sao desviados em `runtimeView` quando ha exatamente uma entrada e uma saida.
+- Auto layout basico e atalhos de produtividade foram adicionados (`Ctrl+D`, `Ctrl+0`, `Ctrl+K`/`/`, `C`, `L`).
+- Validado por testes de store/conversao/canvas e pelos gates completos: `dotnet build`, `dotnet test`, `npm run test`, `npm run build`, `dotnet publish`.
 
 ## Objetivo
 

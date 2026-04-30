@@ -1,0 +1,71 @@
+{
+  "id": "recipe-camera-recording",
+  "name": "Recipe - Camera Recording",
+  "version": 1,
+  "variables": [
+    {
+      "name": "cameraFolder",
+      "type": "String",
+      "default": "%USERPROFILE%\\Videos\\Sidekick"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "start",
+      "typeId": "trigger.manualStart",
+      "position": { "x": 80, "y": 170 },
+      "properties": {}
+    },
+    {
+      "id": "record-camera",
+      "typeId": "action.recordCamera",
+      "position": { "x": 390, "y": 170 },
+      "properties": {
+        "cameraIndex": 0,
+        "cameraNameFilter": "",
+        "width": 1280,
+        "height": 720,
+        "fps": 24,
+        "durationMs": 10000,
+        "outputFolder": "{{cameraFolder}}",
+        "filenameTemplate": "camera_record_{{timestamp}}",
+        "codec": "MJPG",
+        "format": "avi",
+        "mirror": true,
+        "cropX": 0,
+        "cropY": 0,
+        "cropWidth": 0,
+        "cropHeight": 0,
+        "effect": "none",
+        "overlayTimestamp": true
+      }
+    },
+    {
+      "id": "log-camera",
+      "typeId": "action.logMessage",
+      "position": { "x": 760, "y": 170 },
+      "properties": {
+        "message": "Video da camera salvo em {{record-camera.filePath}}",
+        "level": "info"
+      }
+    }
+  ],
+  "connections": [
+    {
+      "id": "c1",
+      "sourceNodeId": "start",
+      "sourcePort": "triggered",
+      "targetNodeId": "record-camera",
+      "targetPort": "in"
+    },
+    {
+      "id": "c2",
+      "sourceNodeId": "record-camera",
+      "sourcePort": "out",
+      "targetNodeId": "log-camera",
+      "targetPort": "in"
+    }
+  ],
+  "createdAt": "2026-04-30T00:00:00Z",
+  "modifiedAt": "2026-04-30T00:00:00Z"
+}

@@ -1,0 +1,245 @@
+{
+  "id": "recipe-whatsapp-status-assistant",
+  "name": "Recipe - WhatsApp Status Assistant (Draft Safe)",
+  "version": 1,
+  "variables": [
+    {
+      "name": "contactName",
+      "type": "String",
+      "default": "Equipe Operacoes"
+    },
+    {
+      "name": "customText",
+      "type": "String",
+      "default": "Status automatico Sidekick"
+    },
+    {
+      "name": "allowSendSensitiveData",
+      "type": "Boolean",
+      "default": false
+    },
+    {
+      "name": "sendMode",
+      "type": "String",
+      "default": "draftOnly"
+    },
+    {
+      "name": "lastDownload",
+      "type": "String",
+      "default": "desconhecido"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "start",
+      "typeId": "trigger.manualStart",
+      "position": { "x": 80, "y": 220 },
+      "properties": {}
+    },
+    {
+      "id": "open-whatsapp",
+      "typeId": "action.browserOpenUrl",
+      "position": { "x": 320, "y": 220 },
+      "properties": {
+        "url": "https://web.whatsapp.com/",
+        "browserPath": ""
+      }
+    },
+    {
+      "id": "wait-login",
+      "typeId": "action.browserWaitElement",
+      "position": { "x": 600, "y": 220 },
+      "properties": {
+        "windowTitle": "WhatsApp",
+        "automationId": "",
+        "elementName": "Search",
+        "controlType": "edit",
+        "timeoutMs": 120000
+      }
+    },
+    {
+      "id": "compose-message",
+      "typeId": "logic.textTemplate",
+      "position": { "x": 1720, "y": 120 },
+      "properties": {
+        "template": "Status Sidekick\\nData/Hora: {{var:now}}\\nUltimo download: {{lastDownload}}\\nCPU: {{cpu-command.stdout}}\\nDisco: {{disk-command.stdout}}\\nRede/Wi-Fi: {{wifi-command.stdout}}\\nGPU/Temperatura: indisponivel sem fonte segura configurada\\nMensagem customizada: {{customText}}\\nEnvio automatico bloqueado sem confirmacao explicita.",
+        "storeInVariable": "whatsappDraftMessage"
+      }
+    },
+    {
+      "id": "search-contact",
+      "typeId": "action.browserType",
+      "position": { "x": 880, "y": 220 },
+      "properties": {
+        "windowTitle": "WhatsApp",
+        "windowTitleMatch": "contains",
+        "elementName": "Search",
+        "controlType": "edit",
+        "text": "{{contactName}}",
+        "timeoutMs": 7000
+      }
+    },
+    {
+      "id": "safety-gate",
+      "typeId": "logic.conditionGroup",
+      "position": { "x": 1160, "y": 220 },
+      "properties": {
+        "mode": "ALL",
+        "conditionsJson": "[{\"left\":\"{{allowSendSensitiveData}}\",\"operator\":\"equals\",\"right\":\"true\"},{\"left\":\"{{sendMode}}\",\"operator\":\"equals\",\"right\":\"sendAfterConfirm\"}]"
+      }
+    },
+    {
+      "id": "cpu-command",
+      "typeId": "action.consoleCommand",
+      "position": { "x": 1420, "y": 80 },
+      "properties": {
+        "shell": "powershell",
+        "command": "Get-CimInstance Win32_Processor | Select-Object -ExpandProperty LoadPercentage",
+        "arguments": "",
+        "workingDirectory": "",
+        "timeoutMs": 12000,
+        "captureOutput": true,
+        "failOnNonZeroExit": false,
+        "storeStdoutInVariable": "cpuStatus",
+        "storeStderrInVariable": "cpuError",
+        "storeExitCodeInVariable": "cpuExitCode"
+      }
+    },
+    {
+      "id": "disk-command",
+      "typeId": "action.consoleCommand",
+      "position": { "x": 1420, "y": 150 },
+      "properties": {
+        "shell": "powershell",
+        "command": "Get-CimInstance Win32_LogicalDisk -Filter \\\"DriveType=3\\\" | Select-Object DeviceID,FreeSpace,Size",
+        "arguments": "",
+        "workingDirectory": "",
+        "timeoutMs": 12000,
+        "captureOutput": true,
+        "failOnNonZeroExit": false
+      }
+    },
+    {
+      "id": "wifi-command",
+      "typeId": "action.consoleCommand",
+      "position": { "x": 1420, "y": 220 },
+      "properties": {
+        "shell": "cmd",
+        "command": "netsh",
+        "arguments": "wlan show interfaces",
+        "workingDirectory": "",
+        "timeoutMs": 12000,
+        "captureOutput": true,
+        "failOnNonZeroExit": false
+      }
+    },
+    {
+      "id": "draft-only-log",
+      "typeId": "action.logMessage",
+      "position": { "x": 1720, "y": 320 },
+      "properties": {
+        "message": "WhatsApp draft mode: mensagem montada, envio automatico NAO permitido. Usuario deve revisar e confirmar manualmente no WhatsApp Web.",
+        "level": "warning"
+      }
+    },
+    {
+      "id": "send-after-confirm-log",
+      "typeId": "action.logMessage",
+      "position": { "x": 1980, "y": 120 },
+      "properties": {
+        "message": "Send mode habilitado com consentimento explicito (sendAfterConfirm + allowSendSensitiveData=true). Ainda exige confirmacao humana antes do Enter final.",
+        "level": "info"
+      }
+    },
+    {
+      "id": "compose-lite",
+      "typeId": "logic.textTemplate",
+      "position": { "x": 1420, "y": 320 },
+      "properties": {
+        "template": "Status Sidekick\\nData/Hora: {{var:now}}\\nMensagem customizada: {{customText}}\\nDados sensiveis bloqueados (allowSendSensitiveData=false).",
+        "storeInVariable": "whatsappDraftMessage"
+      }
+    }
+  ],
+  "connections": [
+    {
+      "id": "c1",
+      "sourceNodeId": "start",
+      "sourcePort": "triggered",
+      "targetNodeId": "open-whatsapp",
+      "targetPort": "in"
+    },
+    {
+      "id": "c2",
+      "sourceNodeId": "open-whatsapp",
+      "sourcePort": "out",
+      "targetNodeId": "wait-login",
+      "targetPort": "in"
+    },
+    {
+      "id": "c3",
+      "sourceNodeId": "wait-login",
+      "sourcePort": "out",
+      "targetNodeId": "search-contact",
+      "targetPort": "in"
+    },
+    {
+      "id": "c4",
+      "sourceNodeId": "search-contact",
+      "sourcePort": "out",
+      "targetNodeId": "safety-gate",
+      "targetPort": "in"
+    },
+    {
+      "id": "c5",
+      "sourceNodeId": "safety-gate",
+      "sourcePort": "true",
+      "targetNodeId": "cpu-command",
+      "targetPort": "in"
+    },
+    {
+      "id": "c6",
+      "sourceNodeId": "cpu-command",
+      "sourcePort": "out",
+      "targetNodeId": "disk-command",
+      "targetPort": "in"
+    },
+    {
+      "id": "c7",
+      "sourceNodeId": "disk-command",
+      "sourcePort": "out",
+      "targetNodeId": "wifi-command",
+      "targetPort": "in"
+    },
+    {
+      "id": "c8",
+      "sourceNodeId": "wifi-command",
+      "sourcePort": "out",
+      "targetNodeId": "compose-message",
+      "targetPort": "in"
+    },
+    {
+      "id": "c9",
+      "sourceNodeId": "compose-message",
+      "sourcePort": "out",
+      "targetNodeId": "send-after-confirm-log",
+      "targetPort": "in"
+    },
+    {
+      "id": "c10",
+      "sourceNodeId": "safety-gate",
+      "sourcePort": "false",
+      "targetNodeId": "compose-lite",
+      "targetPort": "in"
+    },
+    {
+      "id": "c11",
+      "sourceNodeId": "compose-lite",
+      "sourcePort": "out",
+      "targetNodeId": "draft-only-log",
+      "targetPort": "in"
+    }
+  ],
+  "createdAt": "2026-04-30T00:00:00Z",
+  "modifiedAt": "2026-04-30T00:00:00Z"
+}

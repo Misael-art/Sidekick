@@ -5,8 +5,8 @@
 
 ## Status
 
-- Estado: `release candidate tecnico parcial`
-- Data de consolidacao: `2026-04-29`
+- Estado: `release candidate tecnico parcial com editor visual P0 fortalecido`
+- Data de consolidacao: `2026-04-30`
 - Objetivo: mapear tudo o que o Sidekick precisa ter para ser uma plataforma Windows realmente completa nas mais diversas situacoes
 - Caso de prova principal: `automacoes desktop reais, multiplos eventos, multiplas janelas, fallback visual, publish validado`
 
@@ -39,14 +39,21 @@ O Sidekick hoje ja possui:
 - actions de overlay visual (`overlayColor`, `overlayImage`, `overlayText`) para mensagens, planos de tela e recursos visuais temporizados
 - actions de console/PWD (`consoleSetDirectory`, `consoleCommand`) com timeout, stdout/stderr, exit code e porta de erro
 - actions de hardware/sistema para audio, microfone, camera, Wi-Fi, energia e display com guardas explicitas
-- handles visiveis de conexao no canvas e Marketplace local de recipes oficiais na toolbar
+- actions de captura e gravacao:
+  - `action.captureScreenshot`
+  - `action.recordDesktop`
+  - `action.recordCamera`
+- `logic.conditionGroup` para condicoes compostas `ANY/ALL` com grupos aninhados simples
+- handles visiveis de conexao no canvas, menu de contexto no canvas/node/edge, inserir node em edge, reconectar/remover edge, duplicar/desabilitar node, bypass em runtime view e auto layout basico
+- Marketplace local de recipes oficiais na toolbar
 
 O que ainda impede o produto de ser completo no Windows:
 
 1. OCR ainda nao esta funcional como produto
 2. automacao de Explorer/dialogs e menus ainda nao possui trilha dedicada
 3. recorder de macro e screenshot on failure ainda faltam
-4. validacao manual ampla em apps reais, incluindo `Trae.exe`, ainda precisa ser concluida
+4. wizard/onboarding completo ainda nao substitui a necessidade de entender nodes
+5. validacao manual ampla em apps reais, incluindo `Trae.exe`, ainda precisa ser concluida
 
 ## Matriz Completa
 
@@ -191,6 +198,9 @@ O que ainda impede o produto de ser completo no Windows:
 | Trigger por pixel | existe | `trigger.pixelChange` | fortalecer UX | P2 |
 | Biblioteca de `Snip` | parcial | persistencia existe, UX ainda incompleta | finalizar catalogo | P0 |
 | Match por imagem como action | existe | `action.clickImageMatch` clica no centro do match | validar DPI/escala | P0 |
+| Screenshot por desktop/monitor/regiao/janela | existe | `action.captureScreenshot` cobre targets, formatos, escala e efeitos | validar UX em multimonitor/DPI | P0 |
+| Gravacao desktop por frame capture | parcial | `action.recordDesktop` captura por `ScreenCapture` e grava via `VideoWriter` | audio ainda nao implementado | P0 |
+| Gravacao camera | parcial | `action.recordCamera` usa `VideoCapture` + `VideoWriter`, com crop/effects/timestamp | audio ainda nao implementado | P0 |
 | Wait por imagem | falta | hoje recai em trigger, nao action clara | criar action/recipe | P1 |
 | OCR de regiao | falta | nao existe como produto nesta rodada | importante para apps nao acessiveis | P0 |
 | OCR de elemento capturado | falta | nao existe como produto | muito util | P1 |
@@ -242,15 +252,20 @@ O que ainda impede o produto de ser completo no Windows:
 | Capacidade | Status | Realidade atual | Gap para produto | Prioridade |
 |---|---|---|---|---|
 | Editor visual base | existe | canvas, palette, property panel ok | manter | P0 |
-| Recipe/wizard de desktop automation | falta | nao existe | essencial para usuario final | P0 |
-| Recipe `wait text then click` | falta | nao existe | essencial | P0 |
-| Recipe `Trae auto-continue` | falta | enquanto nao validado real, nao existe como produto | tornar sample oficial util | P0 |
-| Recipe popup auto-confirm | falta | nao existe | muito util | P1 |
-| Recipe horario + repeticoes | falta | nao existe | muito util | P1 |
+| Criacao sem sidebar | existe | canvas permite menu/busca, soltar fio no vazio e atalho `C` para proximo passo | validar manualmente no exe publicado | P0 |
+| Inserir node em edge | existe | menu da edge cria node no meio e reconecta em duas edges | ampliar affordance visual no fio | P0 |
+| Reconectar/remover edge | existe | edge pode ser reconectada e removida com validacao local | validar com mouse real no WebView2 | P0 |
+| Duplicar/desabilitar node | existe | menu de node duplica, habilita/desabilita e runtime view desvia node simples | UI pode explicar melhor bypass | P0 |
+| Auto layout basico | existe | store organiza por profundidade do fluxo | layout avancado ainda nao existe | P1 |
+| Recipe/wizard de desktop automation | parcial | recipes oficiais existem; wizard dedicado nao existe | essencial para usuario final | P0 |
+| Recipe `wait text then click` | existe | `flows/recipe_wait_text_then_click.json` existe | validar no app alvo real | P0 |
+| Recipe `Trae auto-continue` | parcial | sample oficial existe; ainda depende de validacao em Trae real | tornar prova manual oficial | P0 |
+| Recipe popup auto-confirm | existe | `flows/recipe_popup_auto_confirm.json` existe | validar em apps reais | P1 |
+| Recipe horario + repeticoes | existe | `flows/recipe_scheduler_interval.json` existe | melhorar wizard | P1 |
 | Macro recorder visual | falta | nao existe | enorme ganho de UX | P1 |
-| Validacao pre-armar | parcial | ha validacoes tecnicas, nao jornada clara | tornar explicito | P0 |
-| Hints contextuais no editor | falta | ainda fraco | melhorar onboarding | P1 |
-| Exemplos reais uteis | parcial | muitos examples ainda mock-like | substituir/complementar | P0 |
+| Validacao pre-armar | parcial | ha validacoes tecnicas e validacao de portas, mas nao jornada completa | tornar explicito | P0 |
+| Hints contextuais no editor | parcial | mensagens de conexao e menus ajudam, mas onboarding ainda fraco | melhorar onboarding | P1 |
+| Exemplos reais uteis | parcial | recipes oficiais cobrem desktop, media, console, hardware e WhatsApp draft seguro | validar em apps reais | P0 |
 
 ## L. Observabilidade, Diagnostico e Debug
 
@@ -258,8 +273,8 @@ O que ainda impede o produto de ser completo no Windows:
 |---|---|---|---|---|
 | Logs basicos | existe | ja ha logs e eventos | enriquecer | P0 |
 | Runtime status global | existe | UI mostra estado basico | ampliar semantica | P0 |
-| Timeline de execucao | falta | usuario ainda nao ve bem a historia | implementar | P0 |
-| Estados semanticos (`waiting`, `matched`, `retrying`, `cooldown`) | falta | ainda opaco para usuario | implementar | P0 |
+| Timeline de execucao | parcial | logs/status exibem fases, mas ainda nao e timeline rica | implementar painel dedicado | P0 |
+| Estados semanticos (`waiting`, `matched`, `retrying`, `cooldown`) | parcial | runtime emite fases semanticas em varios nodes | padronizar visualmente por flow/node | P0 |
 | Erro explicito por node/selector | parcial | alguns erros existem, mas UX ainda pobre | melhorar | P1 |
 | Screenshot on failure | falta | nao existe | muito util para suporte | P2 |
 | Dry run / debug step by step | falta | nao existe | muito util | P2 |
@@ -270,7 +285,7 @@ O que ainda impede o produto de ser completo no Windows:
 
 | Capacidade | Status | Realidade atual | Gap para produto | Prioridade |
 |---|---|---|---|---|
-| Limites contra loops destrutivos | falta | guardas globais ainda insuficientes | cooldown/debounce/max repeat | P0 |
+| Limites contra loops destrutivos | parcial | cooldown/debounce/max repeat existem em nodes/recipes criticos; politica global ainda falta | padronizar no runtime | P0 |
 | Kill switch local | falta | nao ha botao/atalho global forte de emergencia | necessario | P1 |
 | Secrets handling | falta | sem camada clara | necessario | P1 |
 | Permissoes/capabilities por pacote | parcial | Marketplace local de recipes existe; marketplace remoto segue bloqueado sem assinatura/capabilities | preparar governanca remota | P2 |
