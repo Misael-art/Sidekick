@@ -1,5 +1,7 @@
 using Ajudante.Nodes.Actions;
 using Ajudante.Nodes.Triggers;
+using Ajudante.Core;
+using Ajudante.Core.Engine;
 using Ajudante.Platform.UIAutomation;
 
 namespace Ajudante.Nodes.Tests;
@@ -47,6 +49,51 @@ public class DesktopAutomationNodeTests
         Assert.Equal("trigger.processEvent", new ProcessEventTriggerNode().Definition.TypeId);
         Assert.Equal("action.windowControl", new WindowControlNode().Definition.TypeId);
         Assert.Equal("action.waitProcess", new WaitProcessNode().Definition.TypeId);
+    }
+
+    [Fact]
+    public void OverlayAndConsoleNodes_ArePublicProductNodes()
+    {
+        Assert.Equal("action.overlayColor", new OverlayColorNode().Definition.TypeId);
+        Assert.Equal("action.overlayImage", new OverlayImageNode().Definition.TypeId);
+        Assert.Equal("action.overlayText", new OverlayTextNode().Definition.TypeId);
+        Assert.Equal("action.consoleSetDirectory", new ConsoleSetDirectoryNode().Definition.TypeId);
+        Assert.Equal("action.consoleCommand", new ConsoleCommandNode().Definition.TypeId);
+
+        Assert.Contains(new OverlayTextNode().Definition.Properties, p => p.Id == "motion");
+        Assert.Contains(new OverlayImageNode().Definition.Properties, p => p.Id == "fit");
+        Assert.Contains(new OverlayColorNode().Definition.Properties, p => p.Id == "durationMs");
+        Assert.Contains(new ConsoleCommandNode().Definition.OutputPorts, p => p.Id == "error");
+        Assert.Contains(new ConsoleCommandNode().Definition.Properties, p => p.Id == "workingDirectory");
+    }
+
+    [Fact]
+    public async Task ConsoleSetDirectory_StoresPwdVariableAndOutput()
+    {
+        var tempDirectory = Path.Combine(Path.GetTempPath(), $"sidekick-console-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tempDirectory);
+        try
+        {
+            var node = new ConsoleSetDirectoryNode();
+            node.Configure(new Dictionary<string, object?>
+            {
+                ["workingDirectory"] = tempDirectory,
+                ["variableName"] = "pwd",
+                ["createIfMissing"] = false
+            });
+
+            var context = new FlowExecutionContext(new Flow { Id = "flow-console", Name = "Console Flow" }, CancellationToken.None);
+            var result = await node.ExecuteAsync(context, CancellationToken.None);
+
+            Assert.True(result.Success);
+            Assert.Equal("out", result.OutputPort);
+            Assert.Equal(tempDirectory, context.GetVariable<string>("pwd"));
+            Assert.Equal(tempDirectory, result.Outputs["workingDirectory"]);
+        }
+        finally
+        {
+            Directory.Delete(tempDirectory, recursive: true);
+        }
     }
 
     [Theory]

@@ -1,0 +1,75 @@
+{
+  "id": "recipe-console-pwd-command",
+  "name": "Recipe - Console PWD Command",
+  "version": 1,
+  "variables": [],
+  "nodes": [
+    {
+      "id": "start",
+      "typeId": "trigger.manualStart",
+      "position": { "x": 80, "y": 160 },
+      "properties": {}
+    },
+    {
+      "id": "set-pwd",
+      "typeId": "action.consoleSetDirectory",
+      "position": { "x": 390, "y": 160 },
+      "properties": {
+        "workingDirectory": ".",
+        "variableName": "pwd",
+        "createIfMissing": false
+      }
+    },
+    {
+      "id": "run-command",
+      "typeId": "action.consoleCommand",
+      "position": { "x": 720, "y": 160 },
+      "properties": {
+        "shell": "cmd",
+        "command": "echo Sidekick console ready && cd",
+        "arguments": "",
+        "workingDirectory": "{{pwd}}",
+        "timeoutMs": 5000,
+        "captureOutput": true,
+        "failOnNonZeroExit": true,
+        "storeStdoutInVariable": "lastConsoleOutput",
+        "storeStderrInVariable": "lastConsoleError",
+        "storeExitCodeInVariable": "lastConsoleExitCode"
+      }
+    },
+    {
+      "id": "log-output",
+      "typeId": "action.logMessage",
+      "position": { "x": 1050, "y": 160 },
+      "properties": {
+        "message": "Console output: {{lastConsoleOutput}}",
+        "level": "info"
+      }
+    }
+  ],
+  "connections": [
+    {
+      "id": "c1",
+      "sourceNodeId": "start",
+      "sourcePort": "triggered",
+      "targetNodeId": "set-pwd",
+      "targetPort": "in"
+    },
+    {
+      "id": "c2",
+      "sourceNodeId": "set-pwd",
+      "sourcePort": "out",
+      "targetNodeId": "run-command",
+      "targetPort": "in"
+    },
+    {
+      "id": "c3",
+      "sourceNodeId": "run-command",
+      "sourcePort": "out",
+      "targetNodeId": "log-output",
+      "targetPort": "in"
+    }
+  ],
+  "createdAt": "2026-04-30T00:00:00Z",
+  "modifiedAt": "2026-04-30T00:00:00Z"
+}

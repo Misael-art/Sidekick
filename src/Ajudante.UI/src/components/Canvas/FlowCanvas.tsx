@@ -27,6 +27,8 @@ const nodeTypes = {
 
 type CanvasPointerEvent = ReactMouseEvent<Element> | globalThis.MouseEvent;
 type CanvasPointerLikeEvent = CanvasPointerEvent | globalThis.TouchEvent;
+const CONTEXT_MENU_WIDTH = 320;
+const CONTEXT_MENU_MAX_HEIGHT = 620;
 
 interface PendingConnection {
   sourceNodeId: string;
@@ -113,9 +115,10 @@ export default function FlowCanvas() {
       return;
     }
 
+    const menuPosition = clampContextMenuPosition(event.clientX, event.clientY);
     setContextMenu({
-      x: event.clientX,
-      y: event.clientY,
+      x: menuPosition.x,
+      y: menuPosition.y,
       position,
       filter: '',
       pendingConnection: null,
@@ -226,17 +229,25 @@ export default function FlowCanvas() {
       return;
     }
 
-    const rawTarget = event.target;
-    const targetElement = rawTarget instanceof Element ? rawTarget : null;
-    const droppedOnPane = Boolean(targetElement?.closest('.react-flow__pane'));
-    const droppedOnHandle = Boolean(targetElement?.closest('.react-flow__handle'));
-    if (!droppedOnPane || droppedOnHandle) {
+    const clientPoint = resolveClientPoint(event);
+    if (!clientPoint) {
       setPendingConnection(null);
       return;
     }
 
-    const clientPoint = resolveClientPoint(event);
-    if (!clientPoint) {
+    const rawTarget = event.target;
+    const targetElement = rawTarget instanceof Element ? rawTarget : null;
+    const blockedTarget = Boolean(targetElement?.closest('.react-flow__handle, .react-flow__node, .flow-context-menu'));
+    const bounds = reactFlowWrapper.current?.getBoundingClientRect();
+    const hasUsableBounds = Boolean(bounds && (bounds.width > 0 || bounds.height > 0));
+    const droppedInsideCanvas = !hasUsableBounds || (
+      clientPoint.x >= bounds!.left
+      && clientPoint.x <= bounds!.right
+      && clientPoint.y >= bounds!.top
+      && clientPoint.y <= bounds!.bottom
+    );
+
+    if (!droppedInsideCanvas || blockedTarget) {
       setPendingConnection(null);
       return;
     }
@@ -250,9 +261,10 @@ export default function FlowCanvas() {
       return;
     }
 
+    const menuPosition = clampContextMenuPosition(clientPoint.x, clientPoint.y);
     setContextMenu({
-      x: clientPoint.x,
-      y: clientPoint.y,
+      x: menuPosition.x,
+      y: menuPosition.y,
       position: panePosition,
       filter: '',
       pendingConnection,
@@ -310,18 +322,18 @@ export default function FlowCanvas() {
         >
           <div className="flow-context-menu__header">
             <div>
-              <div className="flow-context-menu__title">Add automation step</div>
+              <div className="flow-context-menu__title">Adicionar passo</div>
               <div className="flow-context-menu__subtitle">
                 {contextMenu.pendingConnection
                   ? 'Selecione um node para criar e conectar automaticamente'
-                  : 'Right-click menu for building flows faster'}
+                  : 'Crie nodes com busca, receitas e capturas recentes'}
               </div>
             </div>
             <button
               type="button"
               className="flow-context-menu__close"
               onClick={() => setContextMenu(null)}
-              aria-label="Close add menu"
+              aria-label="Fechar menu"
             >
               ×
             </button>
@@ -329,26 +341,26 @@ export default function FlowCanvas() {
 
           {(capturedElement || capturedRegion) && (
             <div className="flow-context-menu__section">
-              <div className="flow-context-menu__section-title">From latest capture</div>
+              <div className="flow-context-menu__section-title">Usar captura recente</div>
               {capturedElement && (
                 <>
                   <button type="button" className="flow-context-menu__quick" onClick={() => addNodeFromContext('action.desktopClickElement', miraOverrides)}>
-                    <span>Click latest Mira target</span>
+                    <span>Clicar alvo da Mira</span>
                     <small>{capturedElement.name || capturedElement.automationId || capturedElement.windowTitle}</small>
                   </button>
                   <button type="button" className="flow-context-menu__quick" onClick={() => addNodeFromContext('action.desktopWaitElement', miraOverrides)}>
-                    <span>Wait for latest Mira target</span>
+                    <span>Aguardar alvo da Mira</span>
                     <small>{capturedElement.processName || 'Desktop selector'}</small>
                   </button>
                   <button type="button" className="flow-context-menu__quick" onClick={() => addNodeFromContext('action.desktopReadElementText', miraOverrides)}>
-                    <span>Read latest Mira text</span>
+                    <span>Ler texto da Mira</span>
                     <small>{capturedElement.controlType || 'Element text'}</small>
                   </button>
                 </>
               )}
               {capturedRegion && (
                 <button type="button" className="flow-context-menu__quick" onClick={() => addNodeFromContext('action.clickImageMatch', snipOverrides)}>
-                  <span>Click latest Snip image</span>
+                  <span>Clicar imagem do Snip</span>
                   <small>{capturedRegion.bounds.width} x {capturedRegion.bounds.height} px visual fallback</small>
                 </button>
               )}
@@ -356,11 +368,11 @@ export default function FlowCanvas() {
           )}
 
           <div className="flow-context-menu__section">
-            <div className="flow-context-menu__section-title">Node library</div>
+            <div className="flow-context-menu__section-title">Biblioteca de nodes</div>
             <input
               className="flow-context-menu__search"
               value={contextMenu.filter}
-              placeholder="Search nodes..."
+              placeholder="Buscar nodes..."
               autoFocus
               onChange={(event) => setContextMenu({ ...contextMenu, filter: event.target.value })}
               onKeyDown={(event) => {
@@ -371,7 +383,7 @@ export default function FlowCanvas() {
             />
             <div className="flow-context-menu__list">
               {filteredDefinitions.length === 0 ? (
-                <div className="flow-context-menu__empty">No matching nodes.</div>
+                <div className="flow-context-menu__empty">Nenhum node encontrado.</div>
               ) : filteredDefinitions.map((definition) => (
                 <button
                   key={definition.typeId}
@@ -392,4 +404,18 @@ export default function FlowCanvas() {
       )}
     </div>
   );
+}
+
+function clampContextMenuPosition(x: number, y: number): { x: number; y: number } {
+  if (typeof window === 'undefined') {
+    return { x, y };
+  }
+
+  const maxX = Math.max(8, window.innerWidth - CONTEXT_MENU_WIDTH - 8);
+  const maxY = Math.max(8, window.innerHeight - Math.min(CONTEXT_MENU_MAX_HEIGHT, window.innerHeight - 24) - 8);
+
+  return {
+    x: Math.min(Math.max(8, x), maxX),
+    y: Math.min(Math.max(8, y), maxY),
+  };
 }

@@ -64,6 +64,7 @@ function BaseNode({ id, data, selected }: BaseNodeProps) {
                 id={port.id}
                 className="base-node__handle base-node__handle--target"
                 style={{ top: 'auto' }}
+                title={`Entrada ${port.name}`}
               />
               <span className="base-node__port-label">{port.name}</span>
             </div>
@@ -81,6 +82,7 @@ function BaseNode({ id, data, selected }: BaseNodeProps) {
                 id={port.id}
                 className="base-node__handle base-node__handle--source"
                 style={{ top: 'auto' }}
+                title={`Arraste para conectar ${port.name}`}
               />
             </div>
           ))}

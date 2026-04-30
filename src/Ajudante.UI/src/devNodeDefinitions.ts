@@ -45,6 +45,28 @@ export function getDevNodeDefinitions(): NodeDefinition[] {
     { id: 'maxRepeat', name: 'Max Repeat', type: 'Integer', defaultValue: 0 },
   ];
 
+  const overlayProps = (): NodeDefinition['properties'] => [
+    { id: 'durationMs', name: 'Timer (ms)', type: 'Integer', defaultValue: 1000 },
+    { id: 'waitForClose', name: 'Wait For Timer', type: 'Boolean', defaultValue: true },
+    { id: 'plane', name: 'Plane', type: 'Dropdown', defaultValue: 'foreground', options: ['foreground', 'normal'] },
+    { id: 'fullScreen', name: 'Full Screen', type: 'Boolean', defaultValue: true },
+    { id: 'x', name: 'X', type: 'Integer', defaultValue: 0 },
+    { id: 'y', name: 'Y', type: 'Integer', defaultValue: 0 },
+    { id: 'width', name: 'Width', type: 'Integer', defaultValue: 640 },
+    { id: 'height', name: 'Height', type: 'Integer', defaultValue: 360 },
+    { id: 'opacity', name: 'Opacity', type: 'Float', defaultValue: 0.9 },
+    { id: 'clickThrough', name: 'Click Through', type: 'Boolean', defaultValue: true },
+    { id: 'motion', name: 'Motion', type: 'Dropdown', defaultValue: 'none', options: ['none', 'slideUp', 'slideDown', 'slideLeft', 'slideRight'] },
+    { id: 'fadeInMs', name: 'Fade In (ms)', type: 'Integer', defaultValue: 120 },
+    { id: 'fadeOutMs', name: 'Fade Out (ms)', type: 'Integer', defaultValue: 120 },
+  ];
+
+  const overlayOut = [
+    flowOut,
+    { id: 'overlayKind', name: 'Overlay Kind', dataType: 'String' as const },
+    { id: 'durationMs', name: 'Duration (ms)', dataType: 'Number' as const },
+  ];
+
   return [
     define('trigger.manualStart', 'Start Manual', 'Trigger', 'Explicit flow entry point for manually started automations', [], [triggeredOut], []),
     define('trigger.hotkey', 'Hotkey Trigger', 'Trigger', 'Starts the flow when a hotkey is pressed', [
@@ -323,6 +345,54 @@ export function getDevNodeDefinitions(): NodeDefinition[] {
       { id: 'x', name: 'X', dataType: 'Number' },
       { id: 'y', name: 'Y', dataType: 'Number' },
       { id: 'confidence', name: 'Confidence', dataType: 'Number' },
+    ]),
+    define('action.overlayColor', 'Overlay Solid Color', 'Action', 'Shows a customizable foreground color overlay on the screen', [
+      { id: 'color', name: 'Color', type: 'Color', defaultValue: '#000000' },
+      ...overlayProps(),
+    ], overlayOut),
+    define('action.overlayImage', 'Overlay Image', 'Action', 'Shows an image overlay with fit, background, motion, timer, and fullscreen controls', [
+      { id: 'imagePath', name: 'Image Path', type: 'FilePath', defaultValue: '' },
+      { id: 'fit', name: 'Fit', type: 'Dropdown', defaultValue: 'contain', options: ['contain', 'cover', 'stretch', 'none'] },
+      { id: 'backgroundColor', name: 'Background', type: 'Color', defaultValue: '#000000' },
+      ...overlayProps(),
+    ], overlayOut),
+    define('action.overlayText', 'Overlay Text', 'Action', 'Shows fully customizable text on top of the desktop', [
+      { id: 'text', name: 'Text', type: 'String', defaultValue: 'Sidekick' },
+      { id: 'fontFamily', name: 'Font Family', type: 'String', defaultValue: 'Segoe UI' },
+      { id: 'fontSize', name: 'Font Size', type: 'Float', defaultValue: 48 },
+      { id: 'textColor', name: 'Text Color', type: 'Color', defaultValue: '#FFFFFF' },
+      { id: 'backgroundColor', name: 'Background', type: 'Color', defaultValue: '#000000' },
+      { id: 'horizontalAlign', name: 'Horizontal Align', type: 'Dropdown', defaultValue: 'center', options: ['left', 'center', 'right', 'stretch'] },
+      { id: 'verticalAlign', name: 'Vertical Align', type: 'Dropdown', defaultValue: 'center', options: ['top', 'center', 'bottom', 'stretch'] },
+      { id: 'effect', name: 'Text Effect', type: 'Dropdown', defaultValue: 'shadow', options: ['none', 'shadow', 'outline'] },
+      ...overlayProps(),
+    ], overlayOut),
+    define('action.consoleSetDirectory', 'Console Set Directory', 'Action', 'Sets the working directory variable used by console command nodes', [
+      { id: 'workingDirectory', name: 'Working Directory', type: 'FolderPath', defaultValue: '' },
+      { id: 'variableName', name: 'Variable Name', type: 'String', defaultValue: 'pwd' },
+      { id: 'createIfMissing', name: 'Create If Missing', type: 'Boolean', defaultValue: false },
+    ], [
+      flowOut,
+      { id: 'workingDirectory', name: 'Working Directory', dataType: 'String' },
+    ]),
+    define('action.consoleCommand', 'Console Command', 'Action', 'Runs a command with working directory, shell, timeout, stdout, and stderr control', [
+      { id: 'shell', name: 'Shell', type: 'Dropdown', defaultValue: 'direct', options: ['direct', 'cmd', 'powershell'] },
+      { id: 'command', name: 'Command', type: 'String', defaultValue: '' },
+      { id: 'arguments', name: 'Arguments', type: 'String', defaultValue: '' },
+      { id: 'workingDirectory', name: 'Working Directory', type: 'FolderPath', defaultValue: '{{pwd}}' },
+      { id: 'timeoutMs', name: 'Timeout (ms)', type: 'Integer', defaultValue: 30000 },
+      { id: 'captureOutput', name: 'Capture Output', type: 'Boolean', defaultValue: true },
+      { id: 'failOnNonZeroExit', name: 'Fail On Non-zero Exit', type: 'Boolean', defaultValue: true },
+      { id: 'storeStdoutInVariable', name: 'Store Stdout In Variable', type: 'String', defaultValue: '' },
+      { id: 'storeStderrInVariable', name: 'Store Stderr In Variable', type: 'String', defaultValue: '' },
+      { id: 'storeExitCodeInVariable', name: 'Store Exit Code In Variable', type: 'String', defaultValue: '' },
+    ], [
+      flowOut,
+      { id: 'error', name: 'Error', dataType: 'Flow' },
+      { id: 'exitCode', name: 'Exit Code', dataType: 'Number' },
+      { id: 'stdout', name: 'Stdout', dataType: 'String' },
+      { id: 'stderr', name: 'Stderr', dataType: 'String' },
+      { id: 'workingDirectory', name: 'Working Directory', dataType: 'String' },
     ]),
     define('action.windowControl', 'Window Control', 'Action', 'Focuses, brings forward, minimizes, maximizes, or restores a desktop window', [
       ...selectorProps(),

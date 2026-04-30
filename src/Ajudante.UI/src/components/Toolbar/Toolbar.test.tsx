@@ -192,4 +192,53 @@ describe('Toolbar runtime controls', () => {
       root.unmount();
     });
   });
+
+  it('opens a visible marketplace with local recipes', async () => {
+    const React = await import('react');
+    const { default: Toolbar } = await import('./Toolbar');
+    const { useFlowStore } = await import('../../store/flowStore');
+
+    useFlowStore.setState({
+      flowId: 'flow-1',
+      flowName: 'Toolbar Flow',
+      isDirty: false,
+      nodes: [],
+      edges: [],
+      selectedNodeId: null,
+    });
+
+    sendCommandMock.mockImplementation(async (_channel: string, action: string) => {
+      if (action === 'listFlows') {
+        return [
+          { id: 'recipe-overlay-visual-message', name: 'Recipe - Overlay Visual Message', isNative: true, nodeCount: 3 },
+          { id: 'custom-flow', name: 'Meu Fluxo', isNative: false, nodeCount: 2 },
+        ];
+      }
+      return null;
+    });
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(React.createElement(Toolbar));
+    });
+
+    const marketplaceButton = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Marketplace'));
+    expect(marketplaceButton).toBeTruthy();
+
+    await act(async () => {
+      marketplaceButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(container.textContent).toContain('Receitas prontas');
+    expect(container.textContent).toContain('Recipe - Overlay Visual Message');
+    expect(container.textContent).not.toContain('Meu Fluxo');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
 });

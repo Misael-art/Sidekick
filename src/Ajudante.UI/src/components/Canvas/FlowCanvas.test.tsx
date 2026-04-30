@@ -12,6 +12,7 @@ vi.mock('@xyflow/react', async (importOriginal) => {
     ...actual,
     ReactFlow: ({ children, onInit, onPaneContextMenu, onConnectStart, onConnectEnd }: any) => {
       const paneRef = React.useRef<HTMLDivElement | null>(null);
+      const rendererRef = React.useRef<HTMLDivElement | null>(null);
       React.useEffect(() => {
         onInit?.({
           screenToFlowPosition: ({ x, y }: { x: number; y: number }) => ({ x, y }),
@@ -19,25 +20,39 @@ vi.mock('@xyflow/react', async (importOriginal) => {
       }, [onInit]);
 
       return (
-        <div
-          data-testid="flow-pane"
-          className="react-flow__pane"
-          ref={paneRef}
-          onContextMenu={(event) => onPaneContextMenu?.(event)}
-        >
-          <button
-            data-testid="connect-start"
-            onClick={() => onConnectStart?.({}, { nodeId: 'node-source', handleId: 'out', handleType: 'source' })}
+        <div className="react-flow">
+          <div
+            data-testid="flow-pane"
+            className="react-flow__pane"
+            ref={paneRef}
+            onContextMenu={(event) => onPaneContextMenu?.(event)}
           >
-            connect-start
-          </button>
-          <button
-            data-testid="connect-end-pane"
-            onClick={() => onConnectEnd?.({ target: paneRef.current, clientX: 460, clientY: 240 })}
+            <button
+              data-testid="connect-start"
+              onClick={() => onConnectStart?.({}, { nodeId: 'node-source', handleId: 'out', handleType: 'source' })}
+            >
+              connect-start
+            </button>
+            <button
+              data-testid="connect-end-pane"
+              onClick={() => onConnectEnd?.({ target: paneRef.current, clientX: 460, clientY: 240 })}
+            >
+              connect-end-pane
+            </button>
+            {children}
+          </div>
+          <div
+            data-testid="flow-renderer"
+            className="react-flow__renderer"
+            ref={rendererRef}
           >
-            connect-end-pane
-          </button>
-          {children}
+            <button
+              data-testid="connect-end-renderer"
+              onClick={() => onConnectEnd?.({ target: rendererRef.current, clientX: 460, clientY: 240 })}
+            >
+              connect-end-renderer
+            </button>
+          </div>
         </div>
       );
     },
@@ -104,7 +119,7 @@ describe('FlowCanvas context menu', () => {
     });
 
     const quickAction = Array.from(container.querySelectorAll('button'))
-      .find((button) => button.textContent?.includes('Click latest Mira target'));
+      .find((button) => button.textContent?.includes('Clicar alvo da Mira'));
     expect(quickAction).toBeTruthy();
 
     act(() => {
@@ -198,6 +213,68 @@ describe('FlowCanvas context menu', () => {
     expect(state.edges[0].source).toBe('node-source');
     expect(state.edges[0].sourceHandle).toBe('out');
     expect(state.edges[0].targetHandle).toBe('in');
+
+    act(() => {
+      root.unmount();
+    });
+  }, 15_000);
+
+  it('opens the add menu when a connection ends on any empty canvas surface', async () => {
+    const React = await import('react');
+    const { default: FlowCanvas } = await import('./FlowCanvas');
+    const { useFlowStore } = await import('../../store/flowStore');
+    const { getDevNodeDefinitions } = await import('../../devNodeDefinitions');
+
+    useFlowStore.setState({
+      flowId: 'flow-connect-renderer',
+      flowName: 'Connect Renderer Flow',
+      nodeDefinitions: getDevNodeDefinitions(),
+      nodes: [
+        {
+          id: 'node-source',
+          type: 'logicNode',
+          position: { x: 50, y: 50 },
+          data: {
+            typeId: 'logic.delay',
+            displayName: 'Delay',
+            nodeAlias: '',
+            nodeComment: '',
+            category: 'Logic',
+            color: '#EAB308',
+            inputPorts: [{ id: 'in', name: 'In', dataType: 'Flow' }],
+            outputPorts: [{ id: 'out', name: 'Out', dataType: 'Flow' }],
+            properties: [],
+            propertyValues: {},
+          },
+        },
+      ],
+      edges: [],
+      selectedNodeId: null,
+    });
+
+    const container = document.createElement('div');
+    Object.defineProperty(container, 'getBoundingClientRect', {
+      value: () => ({ left: 0, top: 0, right: 1000, bottom: 800, width: 1000, height: 800 }),
+    });
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    act(() => {
+      root.render(React.createElement(FlowCanvas));
+    });
+
+    const startButton = container.querySelector('[data-testid="connect-start"]') as HTMLButtonElement;
+    const endButton = container.querySelector('[data-testid="connect-end-renderer"]') as HTMLButtonElement;
+
+    act(() => {
+      startButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    act(() => {
+      endButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(container.querySelector('.flow-context-menu')).toBeTruthy();
 
     act(() => {
       root.unmount();

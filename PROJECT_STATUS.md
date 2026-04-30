@@ -19,7 +19,7 @@ Nenhum agente deve iniciar mudancas relevantes sem ler:
 
 ## Data De Referencia
 
-- Ultima consolidacao manual: `2026-04-29`
+- Ultima consolidacao manual: `2026-04-30`
 
 ## Estagio Atual Do Produto
 
@@ -31,10 +31,10 @@ Traduzindo isso para o estado real:
 - o runtime manual e o runtime continuo ja foram integrados no app desktop
 - a bridge UI/backend esta alinhada com o contrato atual de runtime
 - o branding operacional do produto esta consolidado em `Sidekick`, com compatibilidade legada para `Ajudante`
-- o pipeline de publish foi endurecido, mas o caminho do executavel publicado exige atencao para evitar uso de binario antigo
+- o pipeline de publish oficial foi revalidado em `src/Ajudante.App/bin/publish/Sidekick.exe`; ainda exige fechar qualquer instancia em execucao antes de republicar
 - `Snip` e `Mira` existem como ferramentas reutilizaveis; `Mira` agora exibe seletor, janela, processo, caminho do executavel, bounds absolutos/relativos, cursor/pixel e score de robustez
 - a jornada de criacao de fluxos recebeu recipes oficiais para desktop automation, wait text then click, popup auto-confirm, Trae auto-continue, fallback visual e scheduler
-- marketplace, catalogo de pacotes e governanca de add-ons ainda nao foram implementados
+- Marketplace local de recipes oficiais existe na toolbar; marketplace remoto foi avaliado em `MARKETPLACE_EVALUATION.md` e segue bloqueado para execucao irrestrita ate existir manifesto seguro, hash/assinatura, aviso de nodes sensiveis e importacao desarmada
 
 Resumo de release em `2026-04-29`:
 
@@ -43,8 +43,24 @@ Resumo de release em `2026-04-29`:
 - Flow oficial `flows/trae_auto_continue.json` nao usa `manualStart`; usa trigger desktop real com cooldown/debounce/max repeat e selector de processo/caminho.
 - UX de criacao reforcada: palette nao fica vazia quando o registry do host falha/retorna vazio; canvas tem menu de contexto por botao direito; capturas do Mira/Snip podem criar nodes pre-preenchidos.
 - Mira ajustado para inspecionar o app abaixo do overlay durante o polling e nao o proprio overlay.
-- Publish validado em `src/Ajudante.App/bin/publish-rc`; publish no caminho oficial `src/Ajudante.App/bin/publish` ficou bloqueado por uma instancia ja aberta de `Sidekick` segurando DLLs.
+- Publish oficial revalidado em `src/Ajudante.App/bin/publish` apos fechar a instancia que segurava `Sidekick.dll`.
 - Limitacao residual honesta: OCR ainda nao esta funcional como produto; o fallback visual entregue nesta rodada e image matching/click por template.
+
+Atualizacao de produto em `2026-04-30`:
+
+- Link assistido no canvas foi endurecido: soltar um fio em qualquer area vazia do canvas abre o menu de criacao e conecta automaticamente quando as portas sao compativeis.
+- Handles dos nodes ficaram maiores, visiveis como circulos de conexao em cada linha de porta, com cursor de conexao para aproximar a experiencia de n8n/Blender.
+- Marketplace local agora aparece como botao dedicado na toolbar e lista recipes oficiais/nativos com busca; downloads remotos continuam bloqueados ate existir governanca segura.
+- Novas actions visuais:
+  - `action.overlayColor` para cobrir a tela/regiao com cor solida, timer, plano, fullscreen, opacidade, motion, fade e click-through.
+  - `action.overlayImage` para lancar imagens com fit `contain/cover/stretch/none`, background, timer, plano, fullscreen, motion e fade.
+  - `action.overlayText` para lancar texto com fonte, tamanho, cor, efeito, alinhamento, background, timer, plano, fullscreen, motion e fade.
+- Novas actions de console/PWD:
+  - `action.consoleSetDirectory` define a variavel de diretório de trabalho do fluxo.
+  - `action.consoleCommand` executa comando em modo `direct`, `cmd` ou `powershell`, com timeout, working directory, stdout/stderr, exit code e porta `error`.
+- Novos recipes:
+  - `flows/recipe_overlay_visual_message.json`
+  - `flows/recipe_console_pwd_command.json`
 
 ## O Que Ja Foi Concluido E Validado
 
@@ -113,6 +129,26 @@ dotnet publish .\src\Ajudante.App\Ajudante.App.csproj -c Release -o .\src\Ajudan
 ```
 
 ## Validacao Mais Recente Conhecida
+
+Executada com sucesso em `2026-04-30` apos overlay/console/link assistido/Marketplace local:
+
+- `dotnet build Ajudante.sln`
+- `dotnet test Ajudante.sln --no-build`
+- `npm run test` em `src/Ajudante.UI`
+- `npm run build` em `src/Ajudante.UI`
+
+Resultados:
+
+- build .NET: `0` erros, `0` avisos
+- testes .NET: `247` aprovados (`105` Core, `142` Nodes)
+- testes UI: `36` aprovados
+- build UI: assets gerados em `src/Ajudante.App/wwwroot` (`index-D1Xl9ODN.js`, `index-xxIiRT3a.css`)
+- publish alternativo: `dotnet publish .\src\Ajudante.App\Ajudante.App.csproj -c Release -o .\src\Ajudante.App\bin\publish-overlay-rc` passou e gerou `Sidekick.exe` com assets atuais
+- publish oficial: apos fechar a instancia aberta do Sidekick (PID 16208), `dotnet publish .\src\Ajudante.App\Ajudante.App.csproj -c Release -o .\src\Ajudante.App\bin\publish` passou e gerou `Sidekick.exe` com assets atuais em `src/Ajudante.App/bin/publish`
+
+Limitacao operacional desta validacao:
+
+- validacao manual interativa do executavel publicado ainda precisa ser feita no ambiente do usuario antes de chamar de RC final de distribuicao.
 
 Executada com sucesso em `2026-04-29`:
 

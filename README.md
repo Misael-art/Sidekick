@@ -33,7 +33,7 @@ Sidekick is a modern, node-based automation tool that lets you create macros, wo
 <td width="50%">
 
 ### 🎨 Visual Node Editor
-Drag-and-drop nodes, connect ports, or right-click the canvas to add steps from a searchable context menu.
+Drag-and-drop nodes, connect ports, drop a wire on empty canvas to create the next step, or right-click for a searchable context menu.
 
 ### ⌨️ Global Hotkeys
 Trigger any flow with system-wide keyboard shortcuts — even when Sidekick is minimized to tray.
@@ -58,6 +58,12 @@ If/Else branching, loops, variables, delays, and text comparisons — all withou
 
 ### 🪟 Desktop Automation
 Wait for, read, click, focus, restore, and monitor real Windows desktop elements with `processName`, `processPath`, and title matching.
+
+### 🖥️ Visual Overlays & Console
+Show foreground color, image, and text overlays with timers/motion, and run controlled console commands with PWD, timeout, stdout, stderr, and exit-code outputs.
+
+### 🛒 Local Recipe Marketplace
+Open official built-in recipes from the toolbar Marketplace with search and safe local loading. Remote downloads are intentionally gated until package signing and capability warnings are implemented.
 
 </td>
 </tr>
@@ -156,7 +162,7 @@ cd src/Ajudante.UI
 npm run test
 ```
 
-> **237 automated tests** cover the Core engine, runtime orchestration, sample flows, bridge contracts, trigger lifecycle, built-in nodes, and the React stores/components that surface runtime state.
+> Automated tests cover the Core engine, runtime orchestration, sample flows, bridge contracts, trigger lifecycle, built-in nodes, and the React stores/components that surface runtime state.
 
 ### Sample Flows
 
@@ -170,6 +176,8 @@ The `flows/` folder includes ready-to-open examples and recipes:
 - `recipe_popup_auto_confirm.json` arms an auto-confirm popup flow with debounce/cooldown/max repeat.
 - `recipe_visual_fallback_click.json` clicks a screen image match when UIAutomation is not enough.
 - `recipe_scheduler_interval.json` shows interval-based automation.
+- `recipe_overlay_visual_message.json` shows a fullscreen color/text overlay with timer and motion.
+- `recipe_console_pwd_command.json` shows PWD setup, console command execution, stdout capture, and logging.
 - `trae_auto_continue.json` is the official Trae Continue flow using a desktop element trigger, window focus, cooldown, debounce, and max repeat.
 
 ### Runtime Data & Compatibility
@@ -212,6 +220,11 @@ The `flows/` folder includes ready-to-open examples and recipes:
 | **Desktop Click Element** | Clicks a desktop element, falling back to coordinates when needed |
 | **Desktop Read Element Text** | Reads text from a desktop element |
 | **Click Image Match** | Finds a screen image and clicks the match center |
+| **Overlay Solid Color** | Covers the screen or a region with a configurable foreground color overlay |
+| **Overlay Image** | Shows image overlays with fit, background, timer, plane, fullscreen, and motion controls |
+| **Overlay Text** | Shows text overlays with font, color, effects, alignment, background, timer, plane, fullscreen, and motion controls |
+| **Console Set Directory** | Sets the flow PWD variable for command automation |
+| **Console Command** | Runs direct/cmd/powershell commands with timeout, stdout, stderr, exit code, and error routing |
 | **Delete File** | Removes a file from disk |
 | **Play Sound** | Plays a WAV audio file |
 
@@ -307,19 +320,18 @@ dotnet publish .\src\Ajudante.App\Ajudante.App.csproj -c Release -o .\src\Ajudan
 
 This produces `Sidekick.exe` and its runtime assets at `src/Ajudante.App/bin/publish/`. Close any running `Sidekick.exe` from that folder before publishing, otherwise Windows will keep DLLs locked.
 
-Release validation snapshot `2026-04-29`:
+Release validation snapshot `2026-04-30`:
 
-- `dotnet build Ajudante.sln --no-restore`: passed, 0 errors/0 warnings
-- `dotnet test Ajudante.sln --no-build`: passed, 245 tests
-- `npm run test`: passed, 24 tests
-- `npm run build`: passed
-- `dotnet publish ... -o .\src\Ajudante.App\bin\publish-rc --no-restore`: passed and produced `Sidekick.exe` with `wwwroot/assets`
+- `dotnet build Ajudante.sln`: passed, 0 errors/0 warnings
+- `dotnet test Ajudante.sln --no-build`: passed, 247 tests
+- `npm run test`: passed, 36 tests
+- `npm run build`: passed, generated `index-D1Xl9ODN.js` and `index-xxIiRT3a.css`
+- `dotnet publish .\src\Ajudante.App\Ajudante.App.csproj -c Release -o .\src\Ajudante.App\bin\publish`: passed, generated `Sidekick.exe`
 
 Known release caveats:
 
 - OCR is not yet a product feature; visual fallback currently means image template matching.
-- Full restore commands failed in the current agent environment with NuGet `Value cannot be null. (Parameter 'path1')`, before code compilation.
-- Publishing to `bin/publish` was blocked by an already-running `Sidekick` instance; the verified RC output is `bin/publish-rc`.
+- Re-publishing to `bin/publish` requires closing any running `Sidekick.exe` from that folder first, otherwise Windows keeps DLLs locked.
 
 ### Create an Installer
 

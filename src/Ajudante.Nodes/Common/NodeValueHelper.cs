@@ -30,6 +30,25 @@ internal static class NodeValueHelper
         };
     }
 
+    public static double GetDouble(Dictionary<string, object?> properties, string key, double fallback = 0)
+    {
+        if (!properties.TryGetValue(key, out var value) || value is null)
+            return fallback;
+
+        return value switch
+        {
+            double doubleValue => doubleValue,
+            float floatValue => floatValue,
+            decimal decimalValue => (double)decimalValue,
+            int intValue => intValue,
+            long longValue => longValue,
+            JsonElement element when element.ValueKind == JsonValueKind.Number && element.TryGetDouble(out var doubleValue) => doubleValue,
+            JsonElement element when element.ValueKind == JsonValueKind.String && double.TryParse(element.GetString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed) => parsed,
+            _ when double.TryParse(ConvertToString(value), NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed) => parsed,
+            _ => fallback
+        };
+    }
+
     public static bool GetBool(Dictionary<string, object?> properties, string key, bool fallback = false)
     {
         if (!properties.TryGetValue(key, out var value) || value is null)

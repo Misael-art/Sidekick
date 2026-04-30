@@ -185,6 +185,9 @@ export default function Toolbar() {
   const [isLoadDialogOpen, setIsLoadDialogOpen] = useState(false);
   const [selectedFlowId, setSelectedFlowId] = useState<string | null>(null);
   const [loadFilter, setLoadFilter] = useState('');
+  const [isMarketplaceOpen, setIsMarketplaceOpen] = useState(false);
+  const [marketplaceFilter, setMarketplaceFilter] = useState('');
+  const [selectedMarketplaceFlowId, setSelectedMarketplaceFlowId] = useState<string | null>(null);
   const [isLoadingFlowList, setIsLoadingFlowList] = useState(false);
   const [isApplyingLoadedFlow, setIsApplyingLoadedFlow] = useState(false);
   const [deletingFlowId, setDeletingFlowId] = useState<string | null>(null);
@@ -197,6 +200,7 @@ export default function Toolbar() {
   const [inspectionAssetTestResult, setInspectionAssetTestResult] = useState<string>('');
   const inputRef = useRef<HTMLInputElement>(null);
   const loadSearchInputRef = useRef<HTMLInputElement>(null);
+  const marketplaceSearchInputRef = useRef<HTMLInputElement>(null);
   const inspectionSearchInputRef = useRef<HTMLInputElement>(null);
 
   const filteredFlows = useMemo(() => {
@@ -211,6 +215,21 @@ export default function Toolbar() {
       return normalizedName.includes(normalizedFilter) || normalizedId.includes(normalizedFilter);
     });
   }, [availableFlows, loadFilter]);
+
+  const marketplaceFlows = useMemo(() => {
+    const normalizedFilter = normalizeSearchText(marketplaceFilter);
+    return availableFlows
+      .filter((flow) => {
+        const haystack = normalizeSearchText(`${flow.id} ${flow.name ?? ''}`);
+        const isRecipe = haystack.includes('recipe')
+          || haystack.includes('trae')
+          || haystack.includes('portfolio')
+          || Boolean(flow.isNative);
+
+        return isRecipe && (!normalizedFilter || haystack.includes(normalizedFilter));
+      })
+      .sort((left, right) => (left.name ?? left.id).localeCompare(right.name ?? right.id, 'pt-BR'));
+  }, [availableFlows, marketplaceFilter]);
 
   const filteredInspectionAssets = useMemo(() => {
     const normalizedFilter = normalizeSearchText(inspectionFilter);
@@ -258,6 +277,26 @@ export default function Toolbar() {
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [isLoadDialogOpen, isApplyingLoadedFlow]);
+
+  useEffect(() => {
+    if (!isMarketplaceOpen) {
+      return;
+    }
+
+    marketplaceSearchInputRef.current?.focus();
+    marketplaceSearchInputRef.current?.select();
+
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape' && !isApplyingLoadedFlow) {
+        setIsMarketplaceOpen(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isMarketplaceOpen, isApplyingLoadedFlow]);
 
   useEffect(() => {
     if (!isStopDialogOpen) {
@@ -310,6 +349,21 @@ export default function Toolbar() {
       setSelectedFlowId(filteredFlows[0].id);
     }
   }, [filteredFlows, isLoadDialogOpen, selectedFlowId]);
+
+  useEffect(() => {
+    if (!isMarketplaceOpen) {
+      return;
+    }
+
+    if (marketplaceFlows.length === 0) {
+      setSelectedMarketplaceFlowId(null);
+      return;
+    }
+
+    if (!selectedMarketplaceFlowId || !marketplaceFlows.some((flow) => flow.id === selectedMarketplaceFlowId)) {
+      setSelectedMarketplaceFlowId(marketplaceFlows[0].id);
+    }
+  }, [isMarketplaceOpen, marketplaceFlows, selectedMarketplaceFlowId]);
 
   useEffect(() => {
     if (queueLength === 0 && !isRunning) {
@@ -525,6 +579,29 @@ export default function Toolbar() {
     }
   };
 
+  const handleOpenMarketplace = async () => {
+    try {
+      setUserMessage(null);
+      setIsLoadingFlowList(true);
+      const flows = await sendCommand<FlowSummary[]>('flow', 'listFlows', {});
+      const normalizedFlows = Array.isArray(flows) ? flows : [];
+      setAvailableFlows(normalizedFlows);
+      setMarketplaceFilter('');
+      const firstRecipe = normalizedFlows.find((flow) => {
+        const haystack = normalizeSearchText(`${flow.id} ${flow.name ?? ''}`);
+        return haystack.includes('recipe') || haystack.includes('trae') || haystack.includes('portfolio') || Boolean(flow.isNative);
+      });
+      setSelectedMarketplaceFlowId(firstRecipe?.id ?? null);
+      setIsMarketplaceOpen(true);
+    } catch (error) {
+      const message = getErrorMessage(error, 'Nao foi possivel abrir o Marketplace.');
+      addLog({ timestamp: new Date().toISOString(), level: 'error', message });
+      setUserMessage({ type: 'error', text: message });
+    } finally {
+      setIsLoadingFlowList(false);
+    }
+  };
+
   const handleSelectFlow = async (targetFlowId = selectedFlowId) => {
     if (!targetFlowId) {
       setUserMessage({ type: 'info', text: 'Selecione um fluxo para carregar.' });
@@ -543,6 +620,7 @@ export default function Toolbar() {
       const selectedFlow = availableFlows.find((flow) => flow.id === targetFlowId);
       const loadedFlowName = selectedFlow?.name?.trim() || 'Fluxo';
       setIsLoadDialogOpen(false);
+      setIsMarketplaceOpen(false);
       setUserMessage({ type: 'success', text: `Fluxo "${loadedFlowName}" carregado com sucesso.` });
       addLog({
         timestamp: new Date().toISOString(),
@@ -714,6 +792,16 @@ export default function Toolbar() {
           >
             <span className="toolbar__btn-icon">&#x1F4C2;</span>
             <span className="toolbar__btn-label">{isLoadingFlowList ? 'Loading...' : 'Load'}</span>
+          </button>
+          <button
+            className={`toolbar__btn ${isLoadingFlowList ? 'toolbar__btn--disabled' : ''}`}
+            onClick={() => { void handleOpenMarketplace(); }}
+            title="Marketplace de receitas prontas"
+            disabled={isLoadingFlowList}
+            type="button"
+          >
+            <span className="toolbar__btn-icon">&#x1F6D2;</span>
+            <span className="toolbar__btn-label">Marketplace</span>
           </button>
         </div>
 
@@ -926,6 +1014,116 @@ export default function Toolbar() {
                 type="button"
               >
                 {isApplyingLoadedFlow ? 'Carregando...' : 'Carregar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isMarketplaceOpen && (
+        <div
+          className="toolbar__dialog-backdrop"
+          onClick={() => {
+            if (!isApplyingLoadedFlow) {
+              setIsMarketplaceOpen(false);
+            }
+          }}
+        >
+          <div
+            className="toolbar__dialog toolbar__dialog--wide"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="marketplace-dialog-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="toolbar__dialog-header">
+              <div>
+                <h2 id="marketplace-dialog-title" className="toolbar__dialog-title">Marketplace</h2>
+                <p className="toolbar__dialog-subtitle">
+                  Receitas locais oficiais. Marketplace remoto fica bloqueado ate existir validacao, hash/assinatura e avisos de seguranca.
+                </p>
+              </div>
+              <button
+                className="toolbar__dialog-close"
+                onClick={() => setIsMarketplaceOpen(false)}
+                disabled={isApplyingLoadedFlow}
+                title="Fechar"
+              >
+                x
+              </button>
+            </div>
+
+            <div className="toolbar__asset-summary">
+              <div className="toolbar__asset-summary-title">Receitas prontas para importar</div>
+              <div className="toolbar__asset-summary-copy">
+                Abra uma receita como copia editavel, revise os nodes e rode manualmente antes de armar qualquer automacao.
+              </div>
+              <div className="toolbar__asset-summary-copy toolbar__asset-summary-copy--warning">
+                Downloads da internet ainda nao sao executados automaticamente por seguranca.
+              </div>
+            </div>
+
+            <div className="toolbar__dialog-search">
+              <input
+                ref={marketplaceSearchInputRef}
+                className="toolbar__dialog-search-input"
+                type="text"
+                value={marketplaceFilter}
+                onChange={(event) => setMarketplaceFilter(event.target.value)}
+                placeholder="Buscar receita, Trae, overlay, console..."
+                aria-label="Buscar marketplace"
+              />
+              <span className="toolbar__dialog-search-count">
+                {marketplaceFlows.length} receita(s)
+              </span>
+            </div>
+
+            {marketplaceFlows.length === 0 ? (
+              <div className="toolbar__dialog-empty">
+                Nenhuma receita local encontrada. Reinicie o Sidekick para semear os flows oficiais se esta lista estiver vazia.
+              </div>
+            ) : (
+              <div className="toolbar__dialog-list" role="listbox" aria-label="Receitas do marketplace">
+                {marketplaceFlows.map((flow) => (
+                  <button
+                    key={flow.id}
+                    className={`toolbar__flow-option ${selectedMarketplaceFlowId === flow.id ? 'toolbar__flow-option--selected' : ''}`}
+                    onClick={() => setSelectedMarketplaceFlowId(flow.id)}
+                    onDoubleClick={() => { void handleSelectFlow(flow.id); }}
+                    type="button"
+                  >
+                    <span className="toolbar__flow-option-header">
+                      <span className="toolbar__flow-option-title">{flow.name?.trim() || flow.id}</span>
+                      <span className="toolbar__flow-option-badges">
+                        <span className="toolbar__flow-option-badge">Recipe</span>
+                        {flow.isNative && <span className="toolbar__flow-option-badge">Native</span>}
+                      </span>
+                    </span>
+                    <span className="toolbar__flow-option-meta">
+                      {flow.nodeCount ?? 0} no(s) • {formatModifiedAt(flow.modifiedAt)}
+                    </span>
+                    <span className="toolbar__flow-option-id">{flow.id}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <div className="toolbar__dialog-actions">
+              <button
+                className="toolbar__dialog-btn toolbar__dialog-btn--secondary"
+                onClick={() => setIsMarketplaceOpen(false)}
+                disabled={isApplyingLoadedFlow}
+                type="button"
+              >
+                Cancelar
+              </button>
+              <button
+                className="toolbar__dialog-btn toolbar__dialog-btn--primary"
+                onClick={() => { void handleSelectFlow(selectedMarketplaceFlowId); }}
+                disabled={!selectedMarketplaceFlowId || isApplyingLoadedFlow || marketplaceFlows.length === 0}
+                type="button"
+              >
+                {isApplyingLoadedFlow ? 'Abrindo...' : 'Abrir receita'}
               </button>
             </div>
           </div>

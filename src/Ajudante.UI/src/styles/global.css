@@ -903,8 +903,8 @@ body,
 /* ── Base Node ─────────────────────────────────────────────────── */
 
 .base-node {
-  min-width: 160px;
-  max-width: 240px;
+  min-width: 184px;
+  max-width: 280px;
   background: #1c2128;
   border: 2px solid transparent;
   border-radius: 8px;
@@ -961,8 +961,8 @@ body,
 .base-node__body {
   display: flex;
   justify-content: space-between;
-  padding: 8px 0;
-  gap: 12px;
+  padding: 10px 0;
+  gap: 18px;
 }
 
 .base-node__ports {
@@ -982,9 +982,10 @@ body,
 .base-node__port {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 7px;
   position: relative;
-  padding: 0 10px;
+  min-height: 24px;
+  padding: 0 12px;
 }
 
 .base-node__port--right {
@@ -998,24 +999,50 @@ body,
 }
 
 .base-node__handle {
-  width: 10px !important;
-  height: 10px !important;
+  position: relative !important;
+  inset: auto !important;
+  width: 22px !important;
+  height: 22px !important;
   border: 2px solid #30363d !important;
   background: #1c2128 !important;
-  transition: background 0.15s, border-color 0.15s;
+  transform: none !important;
+  display: grid !important;
+  place-items: center;
+  flex: 0 0 auto;
+  cursor: crosshair;
+  z-index: 20;
+  transition: background 0.15s, border-color 0.15s, transform 0.15s, box-shadow 0.15s;
 }
 
 .base-node__handle:hover {
   background: #58a6ff !important;
   border-color: #58a6ff !important;
+  box-shadow: 0 0 0 5px rgb(88 166 255 / 14%);
+  transform: scale(1.12);
 }
 
 .base-node__handle--target {
-  left: -5px !important;
+  margin-left: -22px;
+  margin-right: 4px;
+  border-color: #8b949e !important;
 }
 
 .base-node__handle--source {
-  right: -5px !important;
+  margin-left: 4px;
+  margin-right: -22px;
+  border-color: #58a6ff !important;
+}
+
+.base-node__handle--source::after {
+  content: "+";
+  color: #58a6ff;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.base-node__handle--source:hover::after {
+  color: #ffffff;
 }
 
 /* ── Property Panel ────────────────────────────────────────────── */

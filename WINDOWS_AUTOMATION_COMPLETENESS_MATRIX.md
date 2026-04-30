@@ -36,14 +36,16 @@ O Sidekick hoje ja possui:
 - `Mira` rico com biblioteca de inspecoes, score, estrategia sugerida e `Test Selector`
 - triggers de horario, intervalo, processo e elemento desktop
 - actions de janela/processo e elemento desktop
+- actions de overlay visual (`overlayColor`, `overlayImage`, `overlayText`) para mensagens, planos de tela e recursos visuais temporizados
+- actions de console/PWD (`consoleSetDirectory`, `consoleCommand`) com timeout, stdout/stderr, exit code e porta de erro
+- handles visiveis de conexao no canvas e Marketplace local de recipes oficiais na toolbar
 
 O que ainda impede o produto de ser completo no Windows:
 
 1. OCR ainda nao esta funcional como produto
 2. automacao de Explorer/dialogs e menus ainda nao possui trilha dedicada
 3. recorder de macro e screenshot on failure ainda faltam
-4. publish oficial precisa ser reexecutado depois de fechar a instancia `Sidekick` que bloqueia DLLs
-5. validacao manual ampla em apps reais, incluindo `Trae.exe`, ainda precisa ser concluida
+4. validacao manual ampla em apps reais, incluindo `Trae.exe`, ainda precisa ser concluida
 
 ## Matriz Completa
 
@@ -119,6 +121,10 @@ O que ainda impede o produto de ser completo no Windows:
 | Trigger de janela abrir/fechar/focar | existe | `trigger.windowEvent` ja cobre base | enriquecer filtros e UX | P0 |
 | Trigger de minimizar/restaurar | falta | nao coberto | casos reais | P1 |
 | Interagir com tray/system menu | falta | nao ha suporte de produto | shell Windows real | P2 |
+| Definir PWD de automacao | existe | `action.consoleSetDirectory` define variavel de working directory | validar em workflows longos | P1 |
+| Executar comando de console | existe | `action.consoleCommand` suporta `direct`, `cmd`, `powershell`, timeout e captura de saida | governanca para marketplace/importacao | P0 |
+| Capturar stdout/stderr/exit code | existe | outputs e variaveis opcionais no `action.consoleCommand` | melhorar visualizacao dedicada | P1 |
+| Politica de comandos perigosos | parcial | node existe, mas marketplace remoto ainda precisa aviso/assinatura | bloquear execucao automatica importada | P0 |
 
 ## E. UIAutomation E Elementos Desktop
 
@@ -178,6 +184,9 @@ O que ainda impede o produto de ser completo no Windows:
 | Cor/pixel inspector no `Mira` | existe | cor sob cursor aparece no overlay/manifesto | validar multimonitor/DPI | P1 |
 | Template scaling / DPI awareness visual | falta | nao ha camada de produto | necessario em multiplos monitores | P1 |
 | Pipeline oficial de fallback | parcial | selector/relative/image/absolute documentados e `clickImageMatch` existe | OCR e fallback automatico completo ainda faltam | P0 |
+| Overlay de cor solida | existe | `action.overlayColor` cobre fullscreen/regiao com timer, plano, opacidade, motion e click-through | validar multimonitor/DPI | P1 |
+| Overlay de imagem | existe | `action.overlayImage` suporta fit, background, timer, plano, fullscreen e motion | adicionar seletor de arquivo nativo melhor | P1 |
+| Overlay de texto | existe | `action.overlayText` suporta fonte, cor, efeito, alinhamento, background, timer, plano, fullscreen e motion | presets de produto podem melhorar UX | P1 |
 
 ## H. Explorer, Dialogs e Shell Do Usuario
 
@@ -250,14 +259,14 @@ O que ainda impede o produto de ser completo no Windows:
 | Limites contra loops destrutivos | falta | guardas globais ainda insuficientes | cooldown/debounce/max repeat | P0 |
 | Kill switch local | falta | nao ha botao/atalho global forte de emergencia | necessario | P1 |
 | Secrets handling | falta | sem camada clara | necessario | P1 |
-| Permissoes/capabilities por pacote | falta | marketplace ainda nao existe | preparar governanca | P2 |
+| Permissoes/capabilities por pacote | parcial | Marketplace local de recipes existe; marketplace remoto segue bloqueado sem assinatura/capabilities | preparar governanca remota | P2 |
 | Redacao de logs sensiveis | falta | nao ha politica clara | necessario | P2 |
 
 ## N. Packaging, Publish e Compatibilidade
 
 | Capacidade | Status | Realidade atual | Gap para produto | Prioridade |
 |---|---|---|---|---|
-| Publish desktop consistente | parcial | publish endurecido existe | validar sempre no exe certo | P0 |
+| Publish desktop consistente | existe | publish oficial revalidado em `src/Ajudante.App/bin/publish` | manter gate de exe correto | P0 |
 | Seed flows uteis no publish | parcial | ainda precisam ser menos mock e mais reais | revisar | P0 |
 | Validacao do exe publicado | parcial | precisa virar gate obrigatorio | institucionalizar | P0 |
 | Upgrade/migracao segura | parcial | base de `AppPaths` existe | ampliar para novos assets | P1 |

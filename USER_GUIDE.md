@@ -19,7 +19,7 @@
 ### 1.3 Estrutura da interface
 - **Toolbar:** novo flow, salvar, carregar, Run Now, Arm/Disarm, Stop, Mira, Snip e nome do flow.
 - **Palette:** coluna retratil com nodes agrupados por categoria.
-- **Canvas:** area onde o flow e montado. Clique com o botao direito para abrir o menu rapido de nodes e acoes baseadas na ultima captura do Mira/Snip.
+- **Canvas:** area onde o flow e montado. Clique com o botao direito para abrir o menu rapido, ou arraste um fio de saida e solte em area vazia para escolher o proximo node ja conectado.
 - **Property Panel:** configuracoes do node selecionado.
 - **Status Bar:** estado do runtime, fila, flows armados e logs.
 
@@ -70,6 +70,8 @@ Regra pratica:
 5. Conecte `Triggered` -> `In`.
 6. Clique em **Arm**.
 7. Pressione `Ctrl+F9` em qualquer lugar para disparar a automacao.
+
+Dica: para criar como n8n/Blender, arraste o ponto de saida de um node e solte em uma area vazia do canvas. O Sidekick abre a biblioteca de nodes exatamente naquele ponto e conecta automaticamente quando a porta for compativel.
 
 ### Exemplo 2: monitor de pasta com som
 1. Arraste `File System Trigger` e configure a pasta, filtro e tipo de evento.
@@ -126,6 +128,11 @@ Regra pratica:
 - **Desktop Click Element**
 - **Desktop Read Element Text**
 - **Click Image Match**
+- **Overlay Solid Color**
+- **Overlay Image**
+- **Overlay Text**
+- **Console Set Directory**
+- **Console Command**
 - **Play Sound**
 - **Delete File**
 
@@ -171,7 +178,35 @@ Fluxo pratico atual:
 
 Limite atual: OCR ainda nao e recurso de produto. Quando UIAutomation nao encontra um app moderno/hibrido, use `Snip` + `Click Image Match` como fallback visual honesto.
 
-### 5.3 Sample flows uteis
+### 5.3 Overlays visuais
+Use overlays quando o flow precisa sinalizar algo na tela, bloquear visualmente uma area, apresentar uma mensagem, ou projetar uma imagem/texto por tempo controlado.
+
+- **Overlay Solid Color:** cobre a tela inteira ou uma regiao com cor solida.
+- **Overlay Image:** exibe imagens com `contain`, `cover`, `stretch` ou tamanho original.
+- **Overlay Text:** exibe texto com fonte, cor, tamanho, efeito, alinhamento e background.
+
+Propriedades comuns:
+
+- `Timer (ms)`: tempo de exibicao.
+- `Wait For Timer`: se ligado, o flow espera o overlay terminar antes de seguir.
+- `Plane`: `foreground` fica acima das janelas normais; `normal` nao força topo.
+- `Full Screen`: cobre todos os monitores; desligue para usar `x/y/width/height`.
+- `Opacity`, `Click Through`, `Motion`, `Fade In` e `Fade Out`.
+
+### 5.4 Console e PWD
+Use **Console Set Directory** para definir a variavel `pwd` do flow.
+
+Use **Console Command** para executar comandos com:
+
+- modo `direct`, `cmd` ou `powershell`
+- `workingDirectory` com suporte a `{{pwd}}`
+- `timeoutMs`
+- captura de `stdout`, `stderr` e `exitCode`
+- porta `error` quando o comando falha, se `Fail On Non-zero Exit` estiver ligado
+
+Importante: comandos de console podem alterar arquivos, processos e sistema. Revise sempre o comando antes de executar ou armar um flow.
+
+### 5.5 Sample flows uteis
 Os exemplos abaixo mostram o uso de ativos reutilizaveis no editor:
 
 - `portfolio_snip_reuse_demo.json`: reaproveita um ativo de `Snip` em `Image Detected Trigger`.
@@ -182,7 +217,16 @@ Os exemplos abaixo mostram o uso de ativos reutilizaveis no editor:
 - `recipe_popup_auto_confirm.json`: clica automaticamente em um popup com cooldown/debounce/max repeat.
 - `recipe_visual_fallback_click.json`: usa image matching quando selector nao basta.
 - `recipe_scheduler_interval.json`: demonstra automacao por intervalo.
+- `recipe_overlay_visual_message.json`: demonstra overlay de cor/texto em tela cheia.
+- `recipe_console_pwd_command.json`: demonstra PWD, comando de console, stdout e log.
 - `trae_auto_continue.json`: flow oficial para Trae, usando trigger de elemento desktop, foco de janela e click protegido contra click storm.
+
+### 5.6 Marketplace
+Use o botao **Marketplace** na toolbar para abrir recipes oficiais locais e procurar por automacoes prontas incluidas no produto.
+
+Marketplace remoto e viavel, mas esta bloqueado como recurso publico ate existir manifesto seguro, hash/assinatura, validacao de schema, aviso de nodes sensiveis e importacao sempre desarmada.
+
+Nesta versao, o Marketplace carrega apenas recipes oficiais locais. A avaliacao tecnica esta em `MARKETPLACE_EVALUATION.md`.
 
 ---
 

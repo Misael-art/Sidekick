@@ -1,0 +1,73 @@
+{
+  "id": "recipe-overlay-visual-message",
+  "name": "Recipe - Overlay Visual Message",
+  "version": 1,
+  "variables": [],
+  "nodes": [
+    {
+      "id": "start",
+      "typeId": "trigger.manualStart",
+      "position": { "x": 80, "y": 160 },
+      "properties": {}
+    },
+    {
+      "id": "dim-screen",
+      "typeId": "action.overlayColor",
+      "position": { "x": 390, "y": 160 },
+      "properties": {
+        "color": "#101827",
+        "durationMs": 1800,
+        "waitForClose": false,
+        "plane": "foreground",
+        "fullScreen": true,
+        "opacity": 0.72,
+        "clickThrough": true,
+        "motion": "none",
+        "fadeInMs": 180,
+        "fadeOutMs": 220
+      }
+    },
+    {
+      "id": "show-message",
+      "typeId": "action.overlayText",
+      "position": { "x": 720, "y": 160 },
+      "properties": {
+        "text": "Automacao em execucao",
+        "fontFamily": "Segoe UI",
+        "fontSize": 64,
+        "textColor": "#FFFFFF",
+        "backgroundColor": "#00000000",
+        "horizontalAlign": "center",
+        "verticalAlign": "center",
+        "effect": "shadow",
+        "durationMs": 1800,
+        "waitForClose": true,
+        "plane": "foreground",
+        "fullScreen": true,
+        "opacity": 1,
+        "clickThrough": true,
+        "motion": "slideUp",
+        "fadeInMs": 180,
+        "fadeOutMs": 220
+      }
+    }
+  ],
+  "connections": [
+    {
+      "id": "c1",
+      "sourceNodeId": "start",
+      "sourcePort": "triggered",
+      "targetNodeId": "dim-screen",
+      "targetPort": "in"
+    },
+    {
+      "id": "c2",
+      "sourceNodeId": "dim-screen",
+      "sourcePort": "out",
+      "targetNodeId": "show-message",
+      "targetPort": "in"
+    }
+  ],
+  "createdAt": "2026-04-30T00:00:00Z",
+  "modifiedAt": "2026-04-30T00:00:00Z"
+}
