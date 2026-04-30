@@ -18,7 +18,9 @@ Resultado da rodada `2026-04-29`:
 - Bloco 5 concluido para RC: `trigger.scheduleTime` e `trigger.interval`.
 - Bloco 6 parcial/concluido para RC: recipes oficiais adicionados em `flows/`; wizard dedicado ainda nao existe.
 - Bloco 7 concluido para RC tecnico: fases semanticas do runtime, logs de fase, erro de ciclo/step budget e historico mais claro.
-- Bloco de publish: `publish-rc` gerado; publish oficial bloqueado por instancia `Sidekick` ja aberta no diretorio oficial.
+- Bloco de publish: publish oficial em `src/Ajudante.App/bin/publish` foi revalidado apos fechar a instancia que bloqueava DLLs.
+- Canvas: conexao assistida abre `Adicionar passo` quando o usuario solta fio sem alvo, com raio de conexao maior para comportamento magnetico.
+- Hardware/sistema: nodes publicos para audio, microfone, camera, Wi-Fi, energia e display foram adicionados com guardas explicitas.
 
 ## Objetivo
 

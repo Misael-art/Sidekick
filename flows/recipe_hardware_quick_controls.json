@@ -1,0 +1,92 @@
+{
+  "id": "recipe-hardware-quick-controls",
+  "name": "Recipe - Hardware Quick Controls",
+  "version": 1,
+  "variables": [],
+  "nodes": [
+    {
+      "id": "start",
+      "typeId": "trigger.manualStart",
+      "position": { "x": 80, "y": 160 },
+      "properties": {}
+    },
+    {
+      "id": "audio-state",
+      "typeId": "action.systemAudio",
+      "position": { "x": 390, "y": 120 },
+      "properties": {
+        "operation": "getState",
+        "percent": 50,
+        "stepPercent": 5,
+        "storeSummaryInVariable": "hardwareAudioSummary"
+      }
+    },
+    {
+      "id": "display-state",
+      "typeId": "action.displaySettings",
+      "position": { "x": 720, "y": 120 },
+      "properties": {
+        "operation": "describe",
+        "deviceName": "",
+        "width": 1920,
+        "height": 1080,
+        "refreshRate": 0,
+        "orientation": "landscape",
+        "positionX": 0,
+        "positionY": 0,
+        "allowSystemChanges": false
+      }
+    },
+    {
+      "id": "list-devices",
+      "typeId": "action.hardwareDevice",
+      "position": { "x": 1050, "y": 120 },
+      "properties": {
+        "operation": "listDevices",
+        "nameFilter": "",
+        "allowSystemChanges": false
+      }
+    },
+    {
+      "id": "log-result",
+      "typeId": "action.logMessage",
+      "position": { "x": 1380, "y": 120 },
+      "properties": {
+        "message": "Hardware ready. Audio: {{hardwareAudioSummary}}",
+        "level": "info"
+      }
+    }
+  ],
+  "connections": [
+    {
+      "id": "c1",
+      "sourceNodeId": "start",
+      "sourcePort": "triggered",
+      "targetNodeId": "audio-state",
+      "targetPort": "in"
+    },
+    {
+      "id": "c2",
+      "sourceNodeId": "audio-state",
+      "sourcePort": "out",
+      "targetNodeId": "display-state",
+      "targetPort": "in"
+    },
+    {
+      "id": "c3",
+      "sourceNodeId": "display-state",
+      "sourcePort": "out",
+      "targetNodeId": "list-devices",
+      "targetPort": "in"
+    },
+    {
+      "id": "c4",
+      "sourceNodeId": "list-devices",
+      "sourcePort": "out",
+      "targetNodeId": "log-result",
+      "targetPort": "in"
+    }
+  ],
+  "createdAt": "2026-04-30T00:00:00Z",
+  "modifiedAt": "2026-04-30T00:00:00Z"
+}

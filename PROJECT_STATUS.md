@@ -51,6 +51,7 @@ Atualizacao de produto em `2026-04-30`:
 - Link assistido no canvas foi endurecido: soltar um fio em qualquer area vazia do canvas abre o menu de criacao e conecta automaticamente quando as portas sao compativeis.
 - Handles dos nodes ficaram maiores, visiveis como circulos de conexao em cada linha de porta, com cursor de conexao para aproximar a experiencia de n8n/Blender.
 - Marketplace local agora aparece como botao dedicado na toolbar e lista recipes oficiais/nativos com busca; downloads remotos continuam bloqueados ate existir governanca segura.
+- Conexao magnetica do canvas agora usa raio de conexao maior e abre `Adicionar passo` quando o usuario solta um fio sem alvo, inclusive ao soltar sobre o proprio handle sem criar conexao.
 - Novas actions visuais:
   - `action.overlayColor` para cobrir a tela/regiao com cor solida, timer, plano, fullscreen, opacidade, motion, fade e click-through.
   - `action.overlayImage` para lancar imagens com fit `contain/cover/stretch/none`, background, timer, plano, fullscreen, motion e fade.
@@ -58,9 +59,15 @@ Atualizacao de produto em `2026-04-30`:
 - Novas actions de console/PWD:
   - `action.consoleSetDirectory` define a variavel de diretório de trabalho do fluxo.
   - `action.consoleCommand` executa comando em modo `direct`, `cmd` ou `powershell`, com timeout, working directory, stdout/stderr, exit code e porta `error`.
+- Novas actions de hardware/sistema:
+  - `action.systemAudio` controla volume de saida e mute/volume de microfone via Core Audio.
+  - `action.hardwareDevice` lista ou liga/desliga dispositivos de camera, microfone e Wi-Fi via PnP, com `allowSystemChanges`.
+  - `action.systemPower` bloqueia, suspende, hiberna, reinicia, desliga, faz logoff ou cancela shutdown, com frase de seguranca para operacoes destrutivas.
+  - `action.displaySettings` descreve monitores e altera resolucao, rotacao e posicao/layout quando `allowSystemChanges=true`.
 - Novos recipes:
   - `flows/recipe_overlay_visual_message.json`
   - `flows/recipe_console_pwd_command.json`
+  - `flows/recipe_hardware_quick_controls.json`
 
 ## O Que Ja Foi Concluido E Validado
 
@@ -130,7 +137,7 @@ dotnet publish .\src\Ajudante.App\Ajudante.App.csproj -c Release -o .\src\Ajudan
 
 ## Validacao Mais Recente Conhecida
 
-Executada com sucesso em `2026-04-30` apos overlay/console/link assistido/Marketplace local:
+Executada com sucesso em `2026-04-30` apos overlay/console/link assistido/Marketplace local/hardware:
 
 - `dotnet build Ajudante.sln`
 - `dotnet test Ajudante.sln --no-build`
@@ -140,9 +147,9 @@ Executada com sucesso em `2026-04-30` apos overlay/console/link assistido/Market
 Resultados:
 
 - build .NET: `0` erros, `0` avisos
-- testes .NET: `247` aprovados (`105` Core, `142` Nodes)
-- testes UI: `36` aprovados
-- build UI: assets gerados em `src/Ajudante.App/wwwroot` (`index-D1Xl9ODN.js`, `index-xxIiRT3a.css`)
+- testes .NET: `250` aprovados (`105` Core, `145` Nodes)
+- testes UI: `37` aprovados
+- build UI: assets gerados em `src/Ajudante.App/wwwroot` (`index-C3Fnfy_n.js`, `index-xxIiRT3a.css`)
 - publish alternativo: `dotnet publish .\src\Ajudante.App\Ajudante.App.csproj -c Release -o .\src\Ajudante.App\bin\publish-overlay-rc` passou e gerou `Sidekick.exe` com assets atuais
 - publish oficial: apos fechar a instancia aberta do Sidekick (PID 16208), `dotnet publish .\src\Ajudante.App\Ajudante.App.csproj -c Release -o .\src\Ajudante.App\bin\publish` passou e gerou `Sidekick.exe` com assets atuais em `src/Ajudante.App/bin/publish`
 

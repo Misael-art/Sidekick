@@ -38,6 +38,7 @@ O Sidekick hoje ja possui:
 - actions de janela/processo e elemento desktop
 - actions de overlay visual (`overlayColor`, `overlayImage`, `overlayText`) para mensagens, planos de tela e recursos visuais temporizados
 - actions de console/PWD (`consoleSetDirectory`, `consoleCommand`) com timeout, stdout/stderr, exit code e porta de erro
+- actions de hardware/sistema para audio, microfone, camera, Wi-Fi, energia e display com guardas explicitas
 - handles visiveis de conexao no canvas e Marketplace local de recipes oficiais na toolbar
 
 O que ainda impede o produto de ser completo no Windows:
@@ -125,6 +126,19 @@ O que ainda impede o produto de ser completo no Windows:
 | Executar comando de console | existe | `action.consoleCommand` suporta `direct`, `cmd`, `powershell`, timeout e captura de saida | governanca para marketplace/importacao | P0 |
 | Capturar stdout/stderr/exit code | existe | outputs e variaveis opcionais no `action.consoleCommand` | melhorar visualizacao dedicada | P1 |
 | Politica de comandos perigosos | parcial | node existe, mas marketplace remoto ainda precisa aviso/assinatura | bloquear execucao automatica importada | P0 |
+
+## F2. Hardware, Audio, Energia E Display
+
+| Capacidade | Status | Realidade atual | Gap para produto | Prioridade |
+|---|---|---|---|---|
+| Volume do sistema | existe | `action.systemAudio` usa Core Audio para volume de saida | presets de UI podem melhorar | P1 |
+| Mute de microfone | existe | `action.systemAudio` usa endpoint de captura padrao | alguns setups sem endpoint padrao podem retornar erro claro | P1 |
+| Ligar/desligar camera | parcial | `action.hardwareDevice` usa PnP com `allowSystemChanges` | requer admin em muitos Windows | P1 |
+| Ligar/desligar Wi-Fi | parcial | `action.hardwareDevice` usa PnP com filtros Wi-Fi/WLAN | requer admin e depende de nome/classe do adaptador | P1 |
+| Ligar/desligar dispositivo de microfone | parcial | `action.hardwareDevice` atua no device PnP, separado de mute | requer admin | P1 |
+| Bloquear/suspender/hibernar/desligar/reiniciar | existe | `action.systemPower` tem frase `CONFIRM` para operacoes destrutivas | UX pode adicionar confirmacao visual por recipe | P1 |
+| Descrever monitores | existe | `action.displaySettings describe` retorna layout via Windows Forms Screen | manter | P1 |
+| Resolucao, rotacao e layout multi-monitor | parcial | `action.displaySettings` usa `ChangeDisplaySettingsEx` com `allowSystemChanges` | validar em setups multi-monitor reais/DPI | P1 |
 
 ## E. UIAutomation E Elementos Desktop
 

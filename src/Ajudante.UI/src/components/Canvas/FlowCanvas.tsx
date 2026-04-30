@@ -8,6 +8,7 @@ import {
   type ReactFlowInstance,
   type Node,
   type Edge,
+  type Connection,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
@@ -38,6 +39,7 @@ interface PendingConnection {
 export default function FlowCanvas() {
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const reactFlowInstance = useRef<ReactFlowInstance<Node<FlowNodeData>, Edge> | null>(null);
+  const connectionCompletedRef = useRef(false);
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
@@ -213,6 +215,7 @@ export default function FlowCanvas() {
   }, []);
 
   const onConnectStart = useCallback((_: unknown, params: { nodeId?: string | null; handleId?: string | null; handleType?: 'source' | 'target' | null }) => {
+    connectionCompletedRef.current = false;
     if (params.handleType !== 'source' || !params.nodeId || !params.handleId) {
       setPendingConnection(null);
       return;
@@ -224,8 +227,19 @@ export default function FlowCanvas() {
     });
   }, []);
 
+  const handleConnect = useCallback((connection: Connection) => {
+    connectionCompletedRef.current = true;
+    onConnect(connection);
+  }, [onConnect]);
+
   const onConnectEnd = useCallback((event: CanvasPointerLikeEvent) => {
     if (!pendingConnection) {
+      return;
+    }
+
+    if (connectionCompletedRef.current) {
+      connectionCompletedRef.current = false;
+      setPendingConnection(null);
       return;
     }
 
@@ -237,7 +251,7 @@ export default function FlowCanvas() {
 
     const rawTarget = event.target;
     const targetElement = rawTarget instanceof Element ? rawTarget : null;
-    const blockedTarget = Boolean(targetElement?.closest('.react-flow__handle, .react-flow__node, .flow-context-menu'));
+    const blockedTarget = Boolean(targetElement?.closest('.flow-context-menu'));
     const bounds = reactFlowWrapper.current?.getBoundingClientRect();
     const hasUsableBounds = Boolean(bounds && (bounds.width > 0 || bounds.height > 0));
     const droppedInsideCanvas = !hasUsableBounds || (
@@ -279,7 +293,7 @@ export default function FlowCanvas() {
         edges={edges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
-        onConnect={onConnect}
+        onConnect={handleConnect}
         onInit={onInit}
         onPaneClick={onPaneClick}
         onPaneContextMenu={onPaneContextMenu}
@@ -295,6 +309,7 @@ export default function FlowCanvas() {
         deleteKeyCode="Delete"
         minZoom={0.1}
         maxZoom={3}
+        connectionRadius={48}
       >
         <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="#333355" />
         <MiniMap

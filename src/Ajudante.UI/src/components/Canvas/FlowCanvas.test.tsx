@@ -5,14 +5,15 @@ import { createRoot } from 'react-dom/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@xyflow/react', async (importOriginal) => {
-  const React = await import('react');
-  const actual = await importOriginal<typeof import('@xyflow/react')>();
+      const React = await import('react');
+      const actual = await importOriginal<typeof import('@xyflow/react')>();
 
-  return {
+      return {
     ...actual,
-    ReactFlow: ({ children, onInit, onPaneContextMenu, onConnectStart, onConnectEnd }: any) => {
+    ReactFlow: ({ children, connectionRadius, onInit, onPaneContextMenu, onConnectStart, onConnectEnd }: any) => {
       const paneRef = React.useRef<HTMLDivElement | null>(null);
       const rendererRef = React.useRef<HTMLDivElement | null>(null);
+      const sourceHandleRef = React.useRef<HTMLButtonElement | null>(null);
       React.useEffect(() => {
         onInit?.({
           screenToFlowPosition: ({ x, y }: { x: number; y: number }) => ({ x, y }),
@@ -29,9 +30,18 @@ vi.mock('@xyflow/react', async (importOriginal) => {
           >
             <button
               data-testid="connect-start"
+              className="react-flow__handle"
+              ref={sourceHandleRef}
               onClick={() => onConnectStart?.({}, { nodeId: 'node-source', handleId: 'out', handleType: 'source' })}
             >
               connect-start
+            </button>
+            <button
+              data-testid="connect-end-source-handle"
+              className="react-flow__handle"
+              onClick={() => onConnectEnd?.({ target: sourceHandleRef.current, clientX: 460, clientY: 240 })}
+            >
+              connect-end-source
             </button>
             <button
               data-testid="connect-end-pane"
@@ -53,6 +63,7 @@ vi.mock('@xyflow/react', async (importOriginal) => {
               connect-end-renderer
             </button>
           </div>
+          <div data-testid="connection-radius">{connectionRadius}</div>
         </div>
       );
     },
@@ -275,6 +286,69 @@ describe('FlowCanvas context menu', () => {
     });
 
     expect(container.querySelector('.flow-context-menu')).toBeTruthy();
+
+    act(() => {
+      root.unmount();
+    });
+  }, 15_000);
+
+  it('opens the add menu when a started connection is released without a target handle', async () => {
+    const React = await import('react');
+    const { default: FlowCanvas } = await import('./FlowCanvas');
+    const { useFlowStore } = await import('../../store/flowStore');
+    const { getDevNodeDefinitions } = await import('../../devNodeDefinitions');
+
+    useFlowStore.setState({
+      flowId: 'flow-connect-source-release',
+      flowName: 'Connect Source Release Flow',
+      nodeDefinitions: getDevNodeDefinitions(),
+      nodes: [
+        {
+          id: 'node-source',
+          type: 'triggerNode',
+          position: { x: 50, y: 50 },
+          data: {
+            typeId: 'trigger.manualStart',
+            displayName: 'Start Manual',
+            nodeAlias: '',
+            nodeComment: '',
+            category: 'Trigger',
+            color: '#EF4444',
+            inputPorts: [],
+            outputPorts: [{ id: 'triggered', name: 'Triggered', dataType: 'Flow' }],
+            properties: [],
+            propertyValues: {},
+          },
+        },
+      ],
+      edges: [],
+      selectedNodeId: null,
+    });
+
+    const container = document.createElement('div');
+    Object.defineProperty(container, 'getBoundingClientRect', {
+      value: () => ({ left: 0, top: 0, right: 1000, bottom: 800, width: 1000, height: 800 }),
+    });
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    act(() => {
+      root.render(React.createElement(FlowCanvas));
+    });
+
+    const startButton = container.querySelector('[data-testid="connect-start"]') as HTMLButtonElement;
+    const releaseButton = container.querySelector('[data-testid="connect-end-source-handle"]') as HTMLButtonElement;
+
+    act(() => {
+      startButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    act(() => {
+      releaseButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(container.querySelector('.flow-context-menu')).toBeTruthy();
+    expect(container.querySelector('[data-testid="connection-radius"]')?.textContent).toBe('48');
 
     act(() => {
       root.unmount();

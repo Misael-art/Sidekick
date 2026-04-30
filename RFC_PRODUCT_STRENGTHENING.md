@@ -14,6 +14,13 @@ Atualizacao `2026-04-29`:
 - Recipes oficiais foram adicionados em `flows/` para desktop automation, wait text then click, popup auto-confirm, Trae auto-continue, fallback visual e scheduler.
 - Marketplace remoto, package governance e OCR editavel continuam fora do RC desta rodada.
 
+Atualizacao `2026-04-30`:
+
+- Criacao de fluxo recebeu ajuste de produto: soltar fio sem conexao abre o menu `Adicionar passo`, e a conexao usa raio maior para facilitar ligacao magnetica.
+- Catalogo local aparece como Marketplace na toolbar para recipes oficiais.
+- A cobertura Windows foi ampliada com nodes de hardware/sistema para audio, microfone, camera, Wi-Fi, energia e display.
+- Operacoes que mudam sistema exigem guardas explicitas (`allowSystemChanges` ou frase `CONFIRM`), mantendo a importacao/execucao remota como fora de escopo seguro.
+
 ## Objetivo
 
 Fortalecer o produto alem da base tecnica atual, priorizando:

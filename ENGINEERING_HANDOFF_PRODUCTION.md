@@ -20,6 +20,15 @@ Atualizacao `2026-04-29`:
 - Restore NuGet completo (`dotnet build/test` sem `--no-restore`) falhou no ambiente da sessao antes de compilar com `Value cannot be null. (Parameter 'path1')`.
 - OCR ainda e limitacao residual; fallback visual entregue e `action.clickImageMatch` por template/image matching.
 
+Atualizacao `2026-04-30`:
+
+- Publish oficial em `src/Ajudante.App/bin/publish` foi revalidado apos fechar instancia que segurava DLLs.
+- Canvas recebeu conexao assistida mais tolerante: soltar fio sem alvo abre `Adicionar passo`, e o raio de conexao foi ampliado para facilitar comportamento magnetico.
+- Marketplace local de recipes oficiais esta visivel na toolbar.
+- Nodes de overlay, console/PWD e hardware/sistema foram adicionados.
+- Hardware/sistema inclui audio, mute de microfone, dispositivos PnP de camera/microfone/Wi-Fi, energia e display; mudancas de sistema usam `allowSystemChanges` ou frase `CONFIRM`.
+- Validacao mais recente antes do publish final desta rodada: `.NET 250 testes`, `UI 37 testes`, `npm run build`, `dotnet build`.
+
 ## Resumo Executivo
 
 O projeto ja possui base tecnica forte:

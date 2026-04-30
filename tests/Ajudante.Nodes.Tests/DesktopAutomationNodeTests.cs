@@ -68,6 +68,54 @@ public class DesktopAutomationNodeTests
     }
 
     [Fact]
+    public void HardwareNodes_ArePublicProductNodesWithSafetyGuards()
+    {
+        Assert.Equal("action.systemAudio", new SystemAudioNode().Definition.TypeId);
+        Assert.Equal("action.hardwareDevice", new HardwareDeviceNode().Definition.TypeId);
+        Assert.Equal("action.systemPower", new SystemPowerNode().Definition.TypeId);
+        Assert.Equal("action.displaySettings", new DisplaySettingsNode().Definition.TypeId);
+
+        Assert.Contains(new SystemAudioNode().Definition.Properties, p => p.Id == "operation");
+        Assert.Contains(new HardwareDeviceNode().Definition.Properties, p => p.Id == "allowSystemChanges");
+        Assert.Contains(new SystemPowerNode().Definition.Properties, p => p.Id == "safetyPhrase");
+        Assert.Contains(new DisplaySettingsNode().Definition.Properties, p => p.Id == "allowSystemChanges");
+    }
+
+    [Fact]
+    public async Task HardwareDeviceNode_BlocksDeviceChangesWithoutExplicitPermission()
+    {
+        var node = new HardwareDeviceNode();
+        node.Configure(new Dictionary<string, object?>
+        {
+            ["operation"] = "disableWifi",
+            ["allowSystemChanges"] = false
+        });
+
+        var context = new FlowExecutionContext(new Flow { Id = "flow-hardware", Name = "Hardware Flow" }, CancellationToken.None);
+        var result = await node.ExecuteAsync(context, CancellationToken.None);
+
+        Assert.False(result.Success);
+        Assert.Contains("allowSystemChanges", result.Error, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task SystemPowerNode_BlocksShutdownWithoutSafetyPhrase()
+    {
+        var node = new SystemPowerNode();
+        node.Configure(new Dictionary<string, object?>
+        {
+            ["operation"] = "shutdown",
+            ["safetyPhrase"] = ""
+        });
+
+        var context = new FlowExecutionContext(new Flow { Id = "flow-power", Name = "Power Flow" }, CancellationToken.None);
+        var result = await node.ExecuteAsync(context, CancellationToken.None);
+
+        Assert.False(result.Success);
+        Assert.Contains("CONFIRM", result.Error, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task ConsoleSetDirectory_StoresPwdVariableAndOutput()
     {
         var tempDirectory = Path.Combine(Path.GetTempPath(), $"sidekick-console-{Guid.NewGuid():N}");

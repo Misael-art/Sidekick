@@ -133,6 +133,10 @@ Dica: para criar como n8n/Blender, arraste o ponto de saida de um node e solte e
 - **Overlay Text**
 - **Console Set Directory**
 - **Console Command**
+- **System Audio**
+- **Hardware Device**
+- **System Power**
+- **Display Settings**
 - **Play Sound**
 - **Delete File**
 
@@ -206,7 +210,18 @@ Use **Console Command** para executar comandos com:
 
 Importante: comandos de console podem alterar arquivos, processos e sistema. Revise sempre o comando antes de executar ou armar um flow.
 
-### 5.5 Sample flows uteis
+### 5.5 Hardware e sistema
+Use **System Audio** para aumentar, abaixar ou definir volume, mutar/desmutar saida de audio e mutar/desmutar microfone.
+
+Use **Hardware Device** para listar ou ligar/desligar dispositivos de camera, microfone e Wi-Fi. Alteracoes reais exigem `Allow System Changes=true` e podem precisar de permissao de administrador do Windows.
+
+Use **System Power** para bloquear a sessao, suspender, hibernar, reiniciar, desligar, fazer logoff ou cancelar shutdown. Operacoes destrutivas exigem a frase `CONFIRM` em **Safety Phrase**.
+
+Use **Display Settings** para descrever monitores e, quando liberado, alterar resolucao, taxa, rotacao e posicao em layout multi-monitor. Alteracoes reais exigem `Allow System Changes=true`.
+
+Regra pratica: teste primeiro com operacoes de leitura como `getState`, `listDevices` e `describe`. So libere mudancas de sistema depois de revisar o flow inteiro.
+
+### 5.6 Sample flows uteis
 Os exemplos abaixo mostram o uso de ativos reutilizaveis no editor:
 
 - `portfolio_snip_reuse_demo.json`: reaproveita um ativo de `Snip` em `Image Detected Trigger`.
@@ -219,9 +234,10 @@ Os exemplos abaixo mostram o uso de ativos reutilizaveis no editor:
 - `recipe_scheduler_interval.json`: demonstra automacao por intervalo.
 - `recipe_overlay_visual_message.json`: demonstra overlay de cor/texto em tela cheia.
 - `recipe_console_pwd_command.json`: demonstra PWD, comando de console, stdout e log.
+- `recipe_hardware_quick_controls.json`: demonstra leitura segura de audio, monitores e dispositivos.
 - `trae_auto_continue.json`: flow oficial para Trae, usando trigger de elemento desktop, foco de janela e click protegido contra click storm.
 
-### 5.6 Marketplace
+### 5.7 Marketplace
 Use o botao **Marketplace** na toolbar para abrir recipes oficiais locais e procurar por automacoes prontas incluidas no produto.
 
 Marketplace remoto e viavel, mas esta bloqueado como recurso publico ate existir manifesto seguro, hash/assinatura, validacao de schema, aviso de nodes sensiveis e importacao sempre desarmada.

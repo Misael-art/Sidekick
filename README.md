@@ -62,6 +62,9 @@ Wait for, read, click, focus, restore, and monitor real Windows desktop elements
 ### 🖥️ Visual Overlays & Console
 Show foreground color, image, and text overlays with timers/motion, and run controlled console commands with PWD, timeout, stdout, stderr, and exit-code outputs.
 
+### 🎚️ Hardware & System Controls
+Control audio volume, microphone mute, camera/microphone/Wi-Fi devices, power operations, and display resolution/rotation/layout with explicit safety gates for system-changing actions.
+
 ### 🛒 Local Recipe Marketplace
 Open official built-in recipes from the toolbar Marketplace with search and safe local loading. Remote downloads are intentionally gated until package signing and capability warnings are implemented.
 
@@ -178,6 +181,7 @@ The `flows/` folder includes ready-to-open examples and recipes:
 - `recipe_scheduler_interval.json` shows interval-based automation.
 - `recipe_overlay_visual_message.json` shows a fullscreen color/text overlay with timer and motion.
 - `recipe_console_pwd_command.json` shows PWD setup, console command execution, stdout capture, and logging.
+- `recipe_hardware_quick_controls.json` shows safe hardware state checks for audio, displays, and device inventory.
 - `trae_auto_continue.json` is the official Trae Continue flow using a desktop element trigger, window focus, cooldown, debounce, and max repeat.
 
 ### Runtime Data & Compatibility
@@ -225,6 +229,10 @@ The `flows/` folder includes ready-to-open examples and recipes:
 | **Overlay Text** | Shows text overlays with font, color, effects, alignment, background, timer, plane, fullscreen, and motion controls |
 | **Console Set Directory** | Sets the flow PWD variable for command automation |
 | **Console Command** | Runs direct/cmd/powershell commands with timeout, stdout, stderr, exit code, and error routing |
+| **System Audio** | Controls speaker volume and microphone mute/volume |
+| **Hardware Device** | Lists or enables/disables camera, microphone, and Wi-Fi devices with explicit permission |
+| **System Power** | Locks, sleeps, hibernates, restarts, logs off, shuts down, or cancels shutdown with safety phrase gates |
+| **Display Settings** | Describes monitors and changes resolution, rotation, refresh rate, and multi-monitor position/layout |
 | **Delete File** | Removes a file from disk |
 | **Play Sound** | Plays a WAV audio file |
 
@@ -323,9 +331,9 @@ This produces `Sidekick.exe` and its runtime assets at `src/Ajudante.App/bin/pub
 Release validation snapshot `2026-04-30`:
 
 - `dotnet build Ajudante.sln`: passed, 0 errors/0 warnings
-- `dotnet test Ajudante.sln --no-build`: passed, 247 tests
-- `npm run test`: passed, 36 tests
-- `npm run build`: passed, generated `index-D1Xl9ODN.js` and `index-xxIiRT3a.css`
+- `dotnet test Ajudante.sln --no-build`: passed, 250 tests
+- `npm run test`: passed, 37 tests
+- `npm run build`: passed, generated `index-C3Fnfy_n.js` and `index-xxIiRT3a.css`
 - `dotnet publish .\src\Ajudante.App\Ajudante.App.csproj -c Release -o .\src\Ajudante.App\bin\publish`: passed, generated `Sidekick.exe`
 
 Known release caveats:

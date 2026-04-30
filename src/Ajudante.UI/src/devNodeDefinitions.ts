@@ -394,6 +394,50 @@ export function getDevNodeDefinitions(): NodeDefinition[] {
       { id: 'stderr', name: 'Stderr', dataType: 'String' },
       { id: 'workingDirectory', name: 'Working Directory', dataType: 'String' },
     ]),
+    define('action.systemAudio', 'System Audio', 'Action', 'Controls speaker volume and microphone mute state', [
+      { id: 'operation', name: 'Operation', type: 'Dropdown', defaultValue: 'increaseOutputVolume', options: ['getState', 'setOutputVolume', 'increaseOutputVolume', 'decreaseOutputVolume', 'muteOutput', 'unmuteOutput', 'toggleOutputMute', 'setMicrophoneVolume', 'muteMicrophone', 'unmuteMicrophone', 'toggleMicrophoneMute'] },
+      { id: 'percent', name: 'Percent', type: 'Integer', defaultValue: 50 },
+      { id: 'stepPercent', name: 'Step Percent', type: 'Integer', defaultValue: 5 },
+      { id: 'storeSummaryInVariable', name: 'Store Summary In Variable', type: 'String', defaultValue: '' },
+    ], [
+      flowOut,
+      { id: 'error', name: 'Error', dataType: 'Flow' },
+      { id: 'summary', name: 'Summary', dataType: 'String' },
+    ]),
+    define('action.hardwareDevice', 'Hardware Device', 'Action', 'Enables, disables, or lists camera, microphone, and Wi-Fi devices', [
+      { id: 'operation', name: 'Operation', type: 'Dropdown', defaultValue: 'listDevices', options: ['listDevices', 'enableCamera', 'disableCamera', 'enableMicrophoneDevice', 'disableMicrophoneDevice', 'enableWifi', 'disableWifi'] },
+      { id: 'nameFilter', name: 'Name Filter', type: 'String', defaultValue: '' },
+      { id: 'allowSystemChanges', name: 'Allow System Changes', type: 'Boolean', defaultValue: false },
+    ], [
+      flowOut,
+      { id: 'error', name: 'Error', dataType: 'Flow' },
+      { id: 'summary', name: 'Summary', dataType: 'String' },
+    ]),
+    define('action.systemPower', 'System Power', 'Action', 'Locks, sleeps, hibernates, restarts, or shuts down the computer with safety guards', [
+      { id: 'operation', name: 'Operation', type: 'Dropdown', defaultValue: 'lock', options: ['lock', 'sleep', 'hibernate', 'shutdown', 'restart', 'logoff', 'cancelShutdown'] },
+      { id: 'delaySeconds', name: 'Delay Seconds', type: 'Integer', defaultValue: 30 },
+      { id: 'forceApps', name: 'Force Apps', type: 'Boolean', defaultValue: false },
+      { id: 'safetyPhrase', name: 'Safety Phrase', type: 'String', defaultValue: '' },
+    ], [
+      flowOut,
+      { id: 'error', name: 'Error', dataType: 'Flow' },
+      { id: 'summary', name: 'Summary', dataType: 'String' },
+    ]),
+    define('action.displaySettings', 'Display Settings', 'Action', 'Describes monitors or changes resolution, rotation, and screen layout', [
+      { id: 'operation', name: 'Operation', type: 'Dropdown', defaultValue: 'describe', options: ['describe', 'setResolution', 'setOrientation', 'setPosition', 'setResolutionAndLayout'] },
+      { id: 'deviceName', name: 'Device Name', type: 'String', defaultValue: '' },
+      { id: 'width', name: 'Width', type: 'Integer', defaultValue: 1920 },
+      { id: 'height', name: 'Height', type: 'Integer', defaultValue: 1080 },
+      { id: 'refreshRate', name: 'Refresh Rate', type: 'Integer', defaultValue: 0 },
+      { id: 'orientation', name: 'Orientation', type: 'Dropdown', defaultValue: 'landscape', options: ['landscape', 'portrait', 'landscapeFlipped', 'portraitFlipped'] },
+      { id: 'positionX', name: 'Position X', type: 'Integer', defaultValue: 0 },
+      { id: 'positionY', name: 'Position Y', type: 'Integer', defaultValue: 0 },
+      { id: 'allowSystemChanges', name: 'Allow System Changes', type: 'Boolean', defaultValue: false },
+    ], [
+      flowOut,
+      { id: 'error', name: 'Error', dataType: 'Flow' },
+      { id: 'summary', name: 'Summary', dataType: 'String' },
+    ]),
     define('action.windowControl', 'Window Control', 'Action', 'Focuses, brings forward, minimizes, maximizes, or restores a desktop window', [
       ...selectorProps(),
       { id: 'operation', name: 'Operation', type: 'Dropdown', defaultValue: 'focus', options: ['focus', 'bringToFront', 'minimize', 'maximize', 'restore'] },
