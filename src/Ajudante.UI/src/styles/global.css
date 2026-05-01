@@ -1320,6 +1320,17 @@ body,
   border-color: #58a6ff;
 }
 
+.property-field__select--invalid {
+  border-color: #f85149;
+}
+
+.property-field__warning {
+  margin-top: 4px;
+  font-size: 11px;
+  color: #f85149;
+  line-height: 1.4;
+}
+
 .property-field__checkbox {
   width: 16px;
   height: 16px;

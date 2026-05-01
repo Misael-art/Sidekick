@@ -10,6 +10,7 @@ import type {
 } from '../../bridge/types';
 import { useAppStore } from '../../store/appStore';
 import { useFlowStore } from '../../store/flowStore';
+import { describeInvalidDropdown, isValidDropdownValue } from '../../utils/propertyValidation';
 
 export default function PropertyPanel() {
   const selectedNodeId = useFlowStore((s) => s.selectedNodeId);
@@ -572,24 +573,41 @@ function PropertyField({ definition, value, onChange }: PropertyFieldProps) {
         </div>
       );
 
-    case 'Dropdown':
+    case 'Dropdown': {
+      const dropdownOptions = options ?? [];
+      const isInvalid = !isValidDropdownValue(value, dropdownOptions);
+      const warningMessage = isInvalid ? describeInvalidDropdown(value, dropdownOptions) : null;
+      const showOrphan = isInvalid && value !== null && value !== undefined && value !== '';
       return (
         <div className="property-field">
           {label}
           <select
             value={value ?? ''}
             onChange={(e) => onChange(e.target.value)}
-            className="property-field__select"
+            className={`property-field__select${isInvalid ? ' property-field__select--invalid' : ''}`}
+            aria-invalid={isInvalid}
+            data-property-id={definition.id}
           >
             <option value="">-- Select --</option>
-            {(options ?? []).map((opt) => (
+            {dropdownOptions.map((opt) => (
               <option key={opt} value={opt}>
                 {opt}
               </option>
             ))}
+            {showOrphan && (
+              <option key="__legacy" value={String(value)} disabled>
+                {String(value)} (invalid)
+              </option>
+            )}
           </select>
+          {warningMessage && (
+            <div className="property-field__warning" role="alert">
+              {warningMessage}
+            </div>
+          )}
         </div>
       );
+    }
 
     case 'FilePath':
     case 'FolderPath':

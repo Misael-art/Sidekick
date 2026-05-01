@@ -142,3 +142,136 @@ describe('PropertyPanel Mira selector binding', () => {
     });
   }, 15_000);
 });
+
+describe('PropertyPanel dropdown rendering', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    sendCommandMock.mockReset();
+    document.body.innerHTML = '';
+    (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+  });
+
+  it('renders all options for a Dropdown property', async () => {
+    const React = await import('react');
+    const { default: PropertyPanel } = await import('./PropertyPanel');
+    const { useFlowStore } = await import('../../store/flowStore');
+
+    useFlowStore.setState({
+      flowId: 'flow-dd',
+      flowName: 'DD Flow',
+      isDirty: false,
+      nodes: [
+        {
+          id: 'n1',
+          type: 'actionNode',
+          position: { x: 0, y: 0 },
+          data: {
+            typeId: 'action.mouseClick',
+            displayName: 'Mouse Click',
+            category: 'Action',
+            color: '#22C55E',
+            inputPorts: [],
+            outputPorts: [],
+            properties: [
+              {
+                id: 'button',
+                name: 'Button',
+                type: 'Dropdown',
+                defaultValue: 'Left',
+                options: ['Left', 'Right', 'Middle'],
+              },
+            ],
+            propertyValues: { button: 'Right' },
+          },
+        },
+      ],
+      edges: [],
+      selectedNodeId: 'n1',
+      nodeDefinitions: [],
+    });
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(React.createElement(PropertyPanel));
+    });
+
+    const select = container.querySelector('select[data-property-id="button"]') as HTMLSelectElement;
+    expect(select).toBeTruthy();
+    const optionTexts = Array.from(select.options).map((o) => o.value);
+    expect(optionTexts).toContain('Left');
+    expect(optionTexts).toContain('Right');
+    expect(optionTexts).toContain('Middle');
+    expect(select.value).toBe('Right');
+    expect(select.getAttribute('aria-invalid')).toBe('false');
+
+    await act(async () => {
+      root.unmount();
+    });
+  }, 15_000);
+
+  it('warns and preserves legacy invalid dropdown value', async () => {
+    const React = await import('react');
+    const { default: PropertyPanel } = await import('./PropertyPanel');
+    const { useFlowStore } = await import('../../store/flowStore');
+
+    useFlowStore.setState({
+      flowId: 'flow-dd2',
+      flowName: 'Legacy Flow',
+      isDirty: false,
+      nodes: [
+        {
+          id: 'n2',
+          type: 'actionNode',
+          position: { x: 0, y: 0 },
+          data: {
+            typeId: 'action.mouseClick',
+            displayName: 'Mouse Click',
+            category: 'Action',
+            color: '#22C55E',
+            inputPorts: [],
+            outputPorts: [],
+            properties: [
+              {
+                id: 'button',
+                name: 'Button',
+                type: 'Dropdown',
+                defaultValue: 'Left',
+                options: ['Left', 'Right', 'Middle'],
+              },
+            ],
+            propertyValues: { button: 'lef' },
+          },
+        },
+      ],
+      edges: [],
+      selectedNodeId: 'n2',
+      nodeDefinitions: [],
+    });
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(React.createElement(PropertyPanel));
+    });
+
+    const select = container.querySelector('select[data-property-id="button"]') as HTMLSelectElement;
+    expect(select).toBeTruthy();
+    expect(select.getAttribute('aria-invalid')).toBe('true');
+    expect(select.value).toBe('lef');
+    const orphanOption = Array.from(select.options).find((o) => o.value === 'lef');
+    expect(orphanOption).toBeTruthy();
+    expect(orphanOption!.disabled).toBe(true);
+    const warning = container.querySelector('.property-field__warning');
+    expect(warning).toBeTruthy();
+    expect(warning!.textContent).toContain('lef');
+
+    await act(async () => {
+      root.unmount();
+    });
+  }, 15_000);
+});

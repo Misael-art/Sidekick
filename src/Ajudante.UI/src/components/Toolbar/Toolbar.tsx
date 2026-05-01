@@ -12,6 +12,7 @@ import type {
 } from '../../bridge/types';
 import { useAppStore } from '../../store/appStore';
 import { useFlowStore } from '../../store/flowStore';
+import { useLocaleStore, useTranslation } from '../../i18n';
 
 interface FlowSummary {
   id: string;
@@ -156,6 +157,8 @@ function buildValidationWarningMessage(validation: FlowValidationResult, success
 }
 
 export default function Toolbar() {
+  const { t, locale } = useTranslation();
+  const toggleLocale = useLocaleStore((s) => s.toggleLocale);
   const flowName = useFlowStore((s) => s.flowName);
   const flowId = useFlowStore((s) => s.flowId);
   const isDirty = useFlowStore((s) => s.isDirty);
@@ -900,6 +903,20 @@ export default function Toolbar() {
           >
             <span className="toolbar__btn-icon">&#x2702;</span>
             <span className="toolbar__btn-label">Snip</span>
+          </button>
+        </div>
+
+        <div className="toolbar__divider" />
+
+        <div className="toolbar__group">
+          <button
+            className="toolbar__btn"
+            onClick={toggleLocale}
+            title={t('toolbar.languageSwitch')}
+            aria-label={t('toolbar.languageSwitch')}
+          >
+            <span className="toolbar__btn-icon">&#x1F310;</span>
+            <span className="toolbar__btn-label">{locale === 'pt-BR' ? 'PT' : 'EN'}</span>
           </button>
         </div>
       </div>

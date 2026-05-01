@@ -1,6 +1,7 @@
 import { useState, useMemo, type DragEvent } from 'react';
 import { useFlowStore } from '../../store/flowStore';
 import { useAppStore } from '../../store/appStore';
+import { useTranslation } from '../../i18n';
 import {
   getNodeProductCategory,
   getProductCategoryColor,
@@ -14,6 +15,7 @@ export default function NodePalette() {
   const isPaletteOpen = useAppStore((s) => s.isPaletteOpen);
   const togglePalette = useAppStore((s) => s.togglePalette);
   const [filter, setFilter] = useState('');
+  const { t } = useTranslation();
 
   const grouped = useMemo(() => {
     const lowerFilter = filter.toLowerCase();
@@ -63,7 +65,7 @@ export default function NodePalette() {
   return (
     <div className="node-palette">
       <div className="node-palette__header">
-        <span className="node-palette__title">Nodes</span>
+        <span className="node-palette__title">{t('palette.title')}</span>
         <button
           className="node-palette__toggle"
           onClick={togglePalette}
@@ -76,7 +78,7 @@ export default function NodePalette() {
       <div className="node-palette__search">
         <input
           type="text"
-          placeholder="Search nodes..."
+          placeholder={t('palette.search')}
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
           className="node-palette__input"
@@ -122,7 +124,7 @@ export default function NodePalette() {
 
         {nodeDefinitions.length === 0 && (
           <div className="node-palette__empty">
-            No nodes registered. Connect to the host to load the node registry.
+            {t('palette.empty')}
           </div>
         )}
       </div>

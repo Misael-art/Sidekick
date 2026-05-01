@@ -405,3 +405,77 @@ Nenhum agente deve:
 - usar apenas `README.md` para entender o projeto
 - redesenhar grandes contratos sem registrar antes escopo e criterios de aceite
 - introduzir automacao "magica" sem fallback, telemetria local ou mensagem clara ao usuario
+
+## 2026-04-30 — Onda P0/P1/P2: utility pack + i18n + dropdown hardening
+
+### Entregue
+
+**P0 — Validacao de dropdowns (frontend):**
+- `src/Ajudante.UI/src/utils/propertyValidation.ts` (+ teste): `isValidDropdownValue`, `describeInvalidDropdown`.
+- `PropertyPanel.tsx` agora preserva valores legacy invalidos como opcao orfa desabilitada com aviso visivel (`property-field__warning`) e atributo `aria-invalid`.
+- Estilos: `.property-field__select--invalid` e `.property-field__warning` em `global.css`.
+
+**P1 — i18n PT-BR / EN (parcial):**
+- Infra zero-deps: `src/Ajudante.UI/src/i18n/{types,en,pt-BR,index}.ts` com store Zustand persistido em `localStorage.sidekick.locale`, hook `useTranslation`, fallback chain (locale ativo → outro locale → chave).
+- Switcher de idioma na Toolbar (botao globo, alterna PT/EN sem reload).
+- Aplicado em `NodePalette.tsx` (titulo, busca, vazio).
+- Toolbar/PropertyPanel/StatusBar/App ainda hardcoded — proxima iteracao migra strings restantes.
+- Testes: `i18n/index.test.ts` (7 testes — fallback, persistencia, toggle, params).
+
+**P2 — Pacote de nodes utilitarios (backend):**
+
+Helpers compartilhados em `src/Ajudante.Nodes/Common/`:
+- `ToolDetector` — descobre `ffmpeg`/`ffprobe`/`7z`/`soffice` via PATH + paths comuns, com cache.
+- `ProcessRunner` — executa exe externo com redirect stdout/stderr e cancellation.
+- `TempFileHelper` — paths temp, garante pasta de saida, template de output (`{{name}}` `{{ext}}` `{{timestamp}}`).
+- `MissingToolException` — erro tipado com hint de instalacao.
+
+Novos nodes (todos com `[NodeInfo]`, dropdowns para closed sets, dryRun nos destrutivos):
+
+| TypeId | Familia | Dependencia externa |
+|--------|---------|---------------------|
+| `action.imageConvert` | Imagem | Nativo (System.Drawing). WebP roteia via FFmpeg. |
+| `action.imageResize` | Imagem | Nativo. |
+| `action.imageCompress` | Imagem | Nativo. |
+| `action.videoConvert` | Video | Requer `ffmpeg.exe`. |
+| `action.videoExtractAudio` | Video | Requer `ffmpeg.exe`. |
+| `action.audioConvert` | Audio | Requer `ffmpeg.exe`. |
+| `action.audioNormalize` | Audio | Requer `ffmpeg.exe` (filtro `loudnorm`). |
+| `action.pdfMerge` | PDF | PdfSharpCore. |
+| `action.pdfSplit` | PDF | PdfSharpCore (modos `byPage`, `range`). |
+| `action.imagesToPdf` | PDF | PdfSharpCore. |
+| `action.textToPdf` | PDF | PdfSharpCore. |
+| `action.documentConvert` | Documento | Nativo p/ txt/md/html; Office formats requerem `soffice.exe`. |
+| `action.archiveCreate` | Arquivo | ZIP nativo; 7z/tar.gz requerem `7z.exe`. |
+| `action.archiveExtract` | Arquivo | Mesma logica. |
+| `action.fileHash` | Arquivo | Nativo (MD5/SHA1/SHA256). |
+| `action.findDuplicateFiles` | Arquivo | Nativo, agrupamento por tamanho + hash. NUNCA deleta. |
+| `action.cleanFolder` | Arquivo | dryRun=true por padrao + `confirmApply` gate. |
+| `action.organizeFolder` | Arquivo | dryRun=true por padrao + `confirmApply` gate. |
+| `action.batchRename` | Arquivo | dryRun=true; tokens `{{name}} {{ext}} {{index}} {{date}}`. |
+| `action.createShortcut` | Arquivo | PowerShell WScript.Shell COM. |
+| `action.clipboardTransform` | Dados | Nativo. |
+| `action.extractMetadata` | Dados | Nativo p/ imagem; midia via FFprobe; PDF via PdfSharpCore. |
+| `trigger.folderSizeChanged` | Gatilho | Nativo. |
+| `trigger.diskSpaceLow` | Gatilho | Nativo (DriveInfo). |
+
+Dependencia NuGet adicionada: `PdfSharpCore` 1.3.65 em `Ajudante.Nodes.csproj`.
+
+### Testes adicionados
+
+- `tests/Ajudante.Nodes.Tests/UtilityNodesTests.cs` — 70+ testes cobrindo definitions, conversao PNG→JPG, resize com aspect-ratio (200×100→100×50 fit), compressao, ZIP round-trip, refusa overwrite, SHA256 conhecido (`abc`), duplicatas, batch rename dry-run + confirmApply, clean/organize dry-run, clipboard transforms, PDF round-trip (TextToPdf → Merge → Split).
+
+Resultado: 287 testes verdes (`105 Core + 182 Nodes`).
+
+### Limites honestos
+
+- `documentConvert` para .docx/.odt sem LibreOffice retorna erro claro; texto/HTML/MD funciona inline.
+- `videoConvert`/`audioConvert`/`audioNormalize`/`videoExtractAudio` sem FFmpeg retornam erro com link de download.
+- `archiveCreate`/`extract` para 7z/tar.gz sem 7z.exe retorna erro claro; ZIP sempre funciona.
+- `imageConvert` para WebP requer FFmpeg (System.Drawing GDI+ nao tem encoder WebP).
+- i18n cobre infra e switcher, falta migrar strings de Toolbar/StatusBar/PropertyPanel/App.
+
+### Pendente
+
+- Migrar strings restantes para `t()` (Toolbar tem ~80 strings, varias dialogs).
+- Validacao manual em Windows: rodar Sidekick.exe e exercitar pelo menos um node de cada familia tool-dependent.
