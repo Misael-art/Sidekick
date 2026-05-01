@@ -17,6 +17,7 @@ import type { FlowNodeData } from '../../bridge/types';
 import TriggerNode from '../Nodes/TriggerNode';
 import LogicNode from '../Nodes/LogicNode';
 import ActionNode from '../Nodes/ActionNode';
+import StickyNote from '../Nodes/StickyNote';
 import { useFlowStore } from '../../store/flowStore';
 import { useAppStore } from '../../store/appStore';
 import { createMiraSelectorOverrides, createSnipTemplateOverrides } from '../../utils/captureNodePrefill';
@@ -26,6 +27,7 @@ const nodeTypes = {
   triggerNode: TriggerNode,
   logicNode: LogicNode,
   actionNode: ActionNode,
+  stickyNote: StickyNote,
 };
 
 type CanvasPointerEvent = ReactMouseEvent<Element> | globalThis.MouseEvent;
@@ -64,8 +66,10 @@ export default function FlowCanvas() {
 
   const nodes = useFlowStore((s) => s.nodes);
   const edges = useFlowStore((s) => s.edges);
+  const stickyNotes = useFlowStore((s) => s.stickyNotes);
+  const applyStickyNoteChange = useFlowStore((s) => s.applyStickyNoteChange);
   const nodeDefinitions = useFlowStore((s) => s.nodeDefinitions);
-  const onNodesChange = useFlowStore((s) => s.onNodesChange);
+  const onNodesChangeRaw = useFlowStore((s) => s.onNodesChange);
   const onEdgesChange = useFlowStore((s) => s.onEdgesChange);
   const addNode = useFlowStore((s) => s.addNode);
   const autoLayout = useFlowStore((s) => s.autoLayout);
@@ -85,6 +89,49 @@ export default function FlowCanvas() {
   const capturedRegion = useAppStore((s) => s.capturedRegion);
   const [pendingConnection, setPendingConnection] = useState<PendingConnection | null>(null);
   const selectedNode = nodes.find((node) => node.id === selectedNodeId) ?? null;
+
+  const renderedNodes = useMemo(
+    () => [...nodes, ...stickyNotes] as Node<FlowNodeData>[],
+    [nodes, stickyNotes],
+  );
+
+  const stickyIdSet = useMemo(() => new Set(stickyNotes.map((s) => s.id)), [stickyNotes]);
+
+  const onNodesChange = useCallback(
+    (changes: Parameters<typeof onNodesChangeRaw>[0]) => {
+      const stickyChanges: Parameters<typeof onNodesChangeRaw>[0] = [];
+      const flowChanges: Parameters<typeof onNodesChangeRaw>[0] = [];
+      for (const change of changes) {
+        const nodeId = (change as { id?: string }).id;
+        if (nodeId && stickyIdSet.has(nodeId)) {
+          stickyChanges.push(change);
+        } else {
+          flowChanges.push(change);
+        }
+      }
+      if (flowChanges.length > 0) onNodesChangeRaw(flowChanges);
+      if (stickyChanges.length > 0) {
+        const mapped: { id: string; position?: { x: number; y: number }; selected?: boolean }[] = [];
+        for (const c of stickyChanges) {
+          const ch = c as { type: string; id: string; position?: { x: number; y: number }; selected?: boolean; dimensions?: { width: number; height: number } };
+          if (ch.type === 'position' && ch.position) {
+            mapped.push({ id: ch.id, position: ch.position });
+          } else if (ch.type === 'select') {
+            mapped.push({ id: ch.id, selected: ch.selected });
+          } else if (ch.type === 'remove') {
+            useFlowStore.getState().removeStickyNote(ch.id);
+          } else if (ch.type === 'dimensions' && ch.dimensions) {
+            useFlowStore.getState().updateStickyNote(ch.id, {
+              width: ch.dimensions.width,
+              height: ch.dimensions.height,
+            });
+          }
+        }
+        if (mapped.length > 0) applyStickyNoteChange(mapped);
+      }
+    },
+    [stickyIdSet, onNodesChangeRaw, applyStickyNoteChange],
+  );
 
   // Deselect when clicking canvas background
   const onPaneClick = useCallback(() => {
@@ -478,9 +525,9 @@ export default function FlowCanvas() {
   return (
     <div ref={reactFlowWrapper} className="flow-canvas">
       <ReactFlow
-        nodes={nodes}
+        nodes={renderedNodes}
         edges={edges}
-        onNodesChange={onNodesChange}
+        onNodesChange={onNodesChange as typeof onNodesChangeRaw}
         onEdgesChange={onEdgesChange}
         onConnect={handleConnect}
         onReconnect={handleReconnect}

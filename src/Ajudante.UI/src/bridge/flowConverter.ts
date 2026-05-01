@@ -22,8 +22,28 @@ export interface BackendFlow {
   variables: BackendVariable[];
   nodes: BackendNodeInstance[];
   connections: BackendConnection[];
+  annotations?: BackendStickyNote[];
   createdAt?: string;
   modifiedAt?: string;
+}
+
+export interface BackendStickyNote {
+  id: string;
+  title: string;
+  body: string;
+  color: string;
+  position: { x: number; y: number };
+  width: number;
+  height: number;
+}
+
+export interface StickyNoteData extends Record<string, unknown> {
+  kind: 'sticky';
+  title: string;
+  body: string;
+  color: string;
+  width: number;
+  height: number;
 }
 
 export interface BackendNodeInstance {
@@ -52,14 +72,18 @@ export interface BackendVariable {
 export function toBackendFlow(
   flowId: string,
   flowName: string,
-  nodes: Node<FlowNodeData>[],
+  nodes: Node<FlowNodeData | StickyNoteData>[],
   edges: Edge[],
   options?: { persistUiMetadata?: boolean; runtimeView?: boolean },
 ): BackendFlow {
   const persistUiMetadata = options?.persistUiMetadata ?? false;
   const runtimeView = options?.runtimeView ?? false;
-  const convertedNodes = runtimeView ? createRuntimeNodes(nodes) : nodes;
-  const convertedEdges = runtimeView ? createRuntimeEdges(nodes, edges) : edges;
+
+  const stickyNodes = nodes.filter((n) => n.type === 'stickyNote') as Node<StickyNoteData>[];
+  const flowNodes = nodes.filter((n) => n.type !== 'stickyNote') as Node<FlowNodeData>[];
+
+  const convertedNodes = runtimeView ? createRuntimeNodes(flowNodes) : flowNodes;
+  const convertedEdges = runtimeView ? createRuntimeEdges(flowNodes, edges) : edges;
 
   return {
     id: flowId || crypto.randomUUID(),
@@ -79,6 +103,15 @@ export function toBackendFlow(
       targetNodeId: e.target,
       targetPort: e.targetHandle ?? 'in',
     })),
+    annotations: stickyNodes.map((n) => ({
+      id: n.id,
+      title: n.data.title ?? '',
+      body: n.data.body ?? '',
+      color: n.data.color ?? 'yellow',
+      position: { x: n.position.x, y: n.position.y },
+      width: n.data.width ?? 240,
+      height: n.data.height ?? 160,
+    })),
   };
 }
 
@@ -87,7 +120,7 @@ export function toBackendFlow(
 export function fromBackendFlow(
   backend: BackendFlow,
   definitions: NodeDefinition[],
-): { nodes: Node<FlowNodeData>[]; edges: Edge[] } {
+): { nodes: Node<FlowNodeData | StickyNoteData>[]; edges: Edge[] } {
   const defMap = new Map(definitions.map((d) => [d.typeId, d]));
 
   const categoryToType: Record<string, string> = {
@@ -96,7 +129,7 @@ export function fromBackendFlow(
     Action: 'actionNode',
   };
 
-  const nodes: Node<FlowNodeData>[] = [];
+  const nodes: Node<FlowNodeData | StickyNoteData>[] = [];
   for (const inst of backend.nodes) {
     const def = defMap.get(inst.typeId);
     if (!def) {
@@ -121,6 +154,24 @@ export function fromBackendFlow(
         properties: def.properties,
         propertyValues: { ...buildDefaults(def), ...uiMetadata.nodeProperties },
       },
+    });
+  }
+
+  for (const sticky of backend.annotations ?? []) {
+    nodes.push({
+      id: sticky.id,
+      type: 'stickyNote',
+      position: { x: sticky.position.x, y: sticky.position.y },
+      data: {
+        kind: 'sticky',
+        title: sticky.title ?? '',
+        body: sticky.body ?? '',
+        color: sticky.color || 'yellow',
+        width: sticky.width || 240,
+        height: sticky.height || 160,
+      },
+      draggable: true,
+      selectable: true,
     });
   }
 

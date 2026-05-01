@@ -44,6 +44,9 @@ Arm trigger-based flows, keep watchers active in the background, and let Sidekic
 ### 🖱️ Mouse & Keyboard Automation
 Simulate clicks, drags, key presses, and typed text at pixel-perfect coordinates.
 
+### 🌐 Safer Forms & Language
+Closed-choice properties render as dropdowns, and the toolbar exposes an explicit `PT-BR` / `English` language selector.
+
 </td>
 <td width="50%">
 

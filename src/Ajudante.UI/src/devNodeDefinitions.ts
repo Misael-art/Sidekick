@@ -66,6 +66,13 @@ export function getDevNodeDefinitions(): NodeDefinition[] {
     { id: 'overlayKind', name: 'Overlay Kind', dataType: 'String' as const },
     { id: 'durationMs', name: 'Duration (ms)', dataType: 'Number' as const },
   ];
+  const keyboardKeys = [
+    'Return', 'Tab', 'Escape', 'Space', 'Backspace', 'Delete',
+    'Up', 'Down', 'Left', 'Right',
+    'F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12',
+    'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M',
+    'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
+  ];
 
   return [
     define('trigger.manualStart', 'Start Manual', 'Trigger', 'Explicit flow entry point for manually started automations', [], [triggeredOut], []),
@@ -283,7 +290,7 @@ export function getDevNodeDefinitions(): NodeDefinition[] {
       { id: 'x', name: 'X', type: 'Integer', defaultValue: 0 },
       { id: 'y', name: 'Y', type: 'Integer', defaultValue: 0 },
       { id: 'button', name: 'Button', type: 'Dropdown', defaultValue: 'Left', options: ['Left', 'Right', 'Middle'] },
-      { id: 'clicks', name: 'Clicks', type: 'Integer', defaultValue: 1 },
+      { id: 'clickType', name: 'Click Type', type: 'Dropdown', defaultValue: 'Single', options: ['Single', 'Double'] },
     ]),
     define('action.mouseMove', 'Mouse Move', 'Action', 'Move the mouse to a position', [
       { id: 'x', name: 'X', type: 'Integer', defaultValue: 0 },
@@ -302,7 +309,8 @@ export function getDevNodeDefinitions(): NodeDefinition[] {
       { id: 'delayPerChar', name: 'Delay per Char (ms)', type: 'Integer', defaultValue: 50 },
     ]),
     define('action.keyboardPress', 'Keyboard Press', 'Action', 'Send a keyboard shortcut or key press', [
-      { id: 'hotkey', name: 'Hotkey', type: 'Hotkey', defaultValue: '' },
+      { id: 'key', name: 'Key', type: 'Dropdown', defaultValue: 'Return', options: keyboardKeys },
+      { id: 'modifiers', name: 'Modifiers', type: 'Dropdown', defaultValue: 'None', options: ['None', 'Ctrl', 'Shift', 'Alt'] },
     ]),
     define('action.openProgram', 'Open Program', 'Action', 'Launch an external program', [
       { id: 'path', name: 'Program Path', type: 'FilePath', defaultValue: '' },

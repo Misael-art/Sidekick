@@ -10,8 +10,20 @@ public class Flow
     public List<FlowVariable> Variables { get; set; } = new();
     public List<NodeInstance> Nodes { get; set; } = new();
     public List<Connection> Connections { get; set; } = new();
+    public List<StickyNote> Annotations { get; set; } = new();
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime ModifiedAt { get; set; } = DateTime.UtcNow;
+}
+
+public class StickyNote
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString();
+    public string Title { get; set; } = "";
+    public string Body { get; set; } = "";
+    public string Color { get; set; } = "yellow";
+    public NodePosition Position { get; set; } = new();
+    public double Width { get; set; } = 240;
+    public double Height { get; set; } = 160;
 }
 
 public class FlowVariable

@@ -17,10 +17,10 @@
 3. O icone do Sidekick aparecera na bandeja do sistema.
 
 ### 1.3 Estrutura da interface
-- **Toolbar:** novo flow, salvar, carregar, Run Now, Arm/Disarm, Stop, Mira, Snip e nome do flow.
+- **Toolbar:** novo flow, salvar, carregar, Run Now, Arm/Disarm, Stop, Mira, Snip, nome do flow e seletor de idioma `PT-BR`/`English`.
 - **Palette:** coluna retratil com nodes agrupados por categoria.
 - **Canvas:** area onde o flow e montado. Clique com o botao direito para abrir o menu rapido, ou arraste um fio de saida e solte em area vazia para escolher o proximo node ja conectado.
-- **Property Panel:** configuracoes do node selecionado.
+- **Property Panel:** configuracoes do node selecionado. Campos de escolha fechada, como `Button`, `Click Type`, `Format`, `Mode` e `Operation`, aparecem como listas para evitar erro de digitacao.
 - **Status Bar:** estado do runtime, fila, flows armados e logs.
 
 ---

@@ -479,3 +479,25 @@ Resultado: 287 testes verdes (`105 Core + 182 Nodes`).
 
 - Migrar strings restantes para `t()` (Toolbar tem ~80 strings, varias dialogs).
 - Validacao manual em Windows: rodar Sidekick.exe e exercitar pelo menos um node de cada familia tool-dependent.
+
+## 2026-05-01 — Revisao de dropdown/i18n/build
+
+### Corrigido
+
+- Normalizacao de `NodeDefinition` vindo do host WPF:
+  - `action` -> `Action`
+  - `flow` -> `Flow`
+  - `integer` -> `Integer`
+  - `dropdown` -> `Dropdown`
+  - `imageTemplate` -> `ImageTemplate`
+- Isso corrige o caso em que campos fechados como `Button` e `Click Type` apareciam como input de texto quando o registry real serializava enums em camelCase.
+- Catalogo local `devNodeDefinitions` alinhado ao backend para:
+  - `action.mouseClick`: `button` e `clickType` como dropdown; removido `clicks` inexistente no node real.
+  - `action.keyboardPress`: `key` e `modifiers` como dropdowns fechados.
+- Seletor de idioma na toolbar trocado de botao alternador para lista explicita com `PT-BR` e `English`.
+- Corrigida falha de build frontend causada por variavel `addStickyNote` declarada e nao usada no `FlowCanvas`.
+
+### Testes
+
+- Adicionados testes em `nodeDefinitionFallback.test.ts` cobrindo enums camelCase do host e alinhamento dos dropdowns locais.
+- Adicionado teste em `Toolbar.test.tsx` cobrindo escolha explicita de idioma.

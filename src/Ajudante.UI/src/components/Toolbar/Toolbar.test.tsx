@@ -241,4 +241,44 @@ describe('Toolbar runtime controls', () => {
       root.unmount();
     });
   });
+
+  it('lets the user choose PT-BR or English explicitly', async () => {
+    const React = await import('react');
+    const { default: Toolbar } = await import('./Toolbar');
+    const { useFlowStore } = await import('../../store/flowStore');
+    const { useLocaleStore } = await import('../../i18n');
+
+    useFlowStore.setState({
+      flowId: 'flow-1',
+      flowName: 'Toolbar Flow',
+      isDirty: false,
+      nodes: [],
+      edges: [],
+      selectedNodeId: null,
+    });
+    useLocaleStore.getState().setLocale('pt-BR');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(React.createElement(Toolbar));
+    });
+
+    const localeSelect = container.querySelector<HTMLSelectElement>('.toolbar__locale-select');
+    expect(localeSelect).toBeTruthy();
+    expect(Array.from(localeSelect!.options).map((option) => option.value)).toEqual(['pt-BR', 'en']);
+
+    await act(async () => {
+      localeSelect!.value = 'en';
+      localeSelect!.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+
+    expect(useLocaleStore.getState().locale).toBe('en');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
 });

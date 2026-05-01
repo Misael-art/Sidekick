@@ -158,7 +158,8 @@ function buildValidationWarningMessage(validation: FlowValidationResult, success
 
 export default function Toolbar() {
   const { t, locale } = useTranslation();
-  const toggleLocale = useLocaleStore((s) => s.toggleLocale);
+  const setLocale = useLocaleStore((s) => s.setLocale);
+  const addStickyNote = useFlowStore((s) => s.addStickyNote);
   const flowName = useFlowStore((s) => s.flowName);
   const flowId = useFlowStore((s) => s.flowId);
   const isDirty = useFlowStore((s) => s.isDirty);
@@ -775,6 +776,12 @@ export default function Toolbar() {
     }
   };
 
+  const handleAddSticky = () => {
+    const offsetX = 80 + Math.random() * 80;
+    const offsetY = 80 + Math.random() * 80;
+    addStickyNote({ x: offsetX, y: offsetY });
+  };
+
   return (
     <>
       <div className="toolbar">
@@ -904,20 +911,35 @@ export default function Toolbar() {
             <span className="toolbar__btn-icon">&#x2702;</span>
             <span className="toolbar__btn-label">Snip</span>
           </button>
+          <button
+            className="toolbar__btn"
+            onClick={handleAddSticky}
+            title="Add sticky note (teach the why and expected result)"
+            aria-label="Adicionar nota adesiva"
+          >
+            <span className="toolbar__btn-icon">&#x1F4DD;</span>
+            <span className="toolbar__btn-label">Sticky</span>
+          </button>
         </div>
 
         <div className="toolbar__divider" />
 
         <div className="toolbar__group">
-          <button
-            className="toolbar__btn"
-            onClick={toggleLocale}
+          <label
+            className="toolbar__btn toolbar__locale"
             title={t('toolbar.languageSwitch')}
             aria-label={t('toolbar.languageSwitch')}
           >
             <span className="toolbar__btn-icon">&#x1F310;</span>
-            <span className="toolbar__btn-label">{locale === 'pt-BR' ? 'PT' : 'EN'}</span>
-          </button>
+            <select
+              className="toolbar__locale-select"
+              value={locale}
+              onChange={(event) => setLocale(event.target.value === 'en' ? 'en' : 'pt-BR')}
+            >
+              <option value="pt-BR">PT-BR</option>
+              <option value="en">English</option>
+            </select>
+          </label>
         </div>
       </div>
 
