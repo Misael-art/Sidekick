@@ -5,8 +5,8 @@
 
 ## Status
 
-- Estado: `executado parcialmente para release candidate tecnico; editor visual P0 reforcado`
-- Data de consolidacao: `2026-04-30`
+- Estado: `executado parcialmente para release candidate tecnico; editor visual P0 reforcado e cobertura Windows ampliada`
+- Data de consolidacao: `2026-05-02`
 - Escopo: `fechar a cobertura Windows do Sidekick com criterio de produto, nao apenas de arquitetura`
 
 Resultado da rodada `2026-04-29`:
@@ -40,6 +40,18 @@ Atualizacao da rodada `2026-04-30` (criacao de fluxo):
 - Nodes desabilitados sao preservados no arquivo quando metadata de UI e salva e sao desviados em `runtimeView` quando ha exatamente uma entrada e uma saida.
 - Auto layout basico e atalhos de produtividade foram adicionados (`Ctrl+D`, `Ctrl+0`, `Ctrl+K`/`/`, `C`, `L`).
 - Validado por testes de store/conversao/canvas e pelos gates completos: `dotnet build`, `dotnet test`, `npm run test`, `npm run build`, `dotnet publish`.
+
+Atualizacao da rodada `2026-05-02`:
+
+- Sticky corrigido como feature de produto: notes persistidas em `Flow.Annotations`, duplicacao via canvas/context menu, resize/posicao/titulo/cor/corpo preservados no save/load.
+- Mira rico agora inclui texto detectado, texto atual, placeholder/hint, origem e qualidade da captura no overlay e no manifesto da Mira Lib.
+- Mira Lib salva thumbnail por captura, schemaVersion, nome/notas/tags editaveis, busca por texto/processo/janela/tag, duplicar, excluir e testar seletor.
+- Cobertura Windows adicionada com dry-run/guardas: taskbar, tema, wallpaper, desktop, Explorer, restore point, admin/elevacao e instalacao por winget/msi/exe/url/checksum.
+- `action.windowControl` ganhou `close`; `action.playSound` ganhou fallback por sons do Windows.
+- Nodes `action.persistState`, `action.readState`, `logic.untilDateTime` e `logic.dailyReset` entregam base para bloqueios/cooldowns persistidos.
+- Recipe `Tempo de Jogo - ROBLOX` adicionada com processo real, cooldown, timer, overlay, sons, fechamento gracioso, kill fallback e bloqueio ate meia-noite.
+- Export Runner inicial entregue como pacote semi-autonomo; single EXE embutido continua fora desta rodada.
+- Limitacao honesta: OCR local ainda nao esta empacotado; a tentativa e registrada e comunicada como fallback indisponivel.
 
 ## Objetivo
 

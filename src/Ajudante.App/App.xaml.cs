@@ -55,9 +55,13 @@ public partial class App : Application
     /// </summary>
     public static string AssetManifestsDirectory => AppPaths.Current.AssetManifestsDirectory;
 
+    public static string? StartupRunFlowPath { get; private set; }
+    public static bool ExitAfterStartupRun { get; private set; }
+
     protected override void OnStartup(StartupEventArgs e)
     {
         var paths = AppPaths.Initialize();
+        ParseStartupArguments(e.Args);
 
         // Single instance enforcement
         _singleInstanceMutex = new Mutex(true, ProductIdentity.MutexName, out bool createdNew);
@@ -85,6 +89,24 @@ public partial class App : Application
         TaskScheduler.UnobservedTaskException += OnUnobservedTaskException;
 
         base.OnStartup(e);
+    }
+
+    private static void ParseStartupArguments(IReadOnlyList<string> args)
+    {
+        for (var index = 0; index < args.Count; index++)
+        {
+            var arg = args[index];
+            if (string.Equals(arg, "--run-flow", StringComparison.OrdinalIgnoreCase) && index + 1 < args.Count)
+            {
+                StartupRunFlowPath = args[++index];
+                continue;
+            }
+
+            if (string.Equals(arg, "--exit-after-run", StringComparison.OrdinalIgnoreCase))
+            {
+                ExitAfterStartupRun = true;
+            }
+        }
     }
 
     protected override void OnExit(ExitEventArgs e)

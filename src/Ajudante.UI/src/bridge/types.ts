@@ -256,6 +256,22 @@ export interface InspectionAssetContent {
   className?: string | null;
   controlType?: string | null;
   cursorPixelColor?: string | null;
+  thumbnailPath?: string | null;
+  thumbnailBase64?: string | null;
+  detectedText?: string | null;
+  currentText?: string | null;
+  placeholderText?: string | null;
+  textSource?: string | null;
+  captureQuality?: string | null;
+  valueText?: string | null;
+  textPatternText?: string | null;
+  legacyName?: string | null;
+  legacyValue?: string | null;
+  helpText?: string | null;
+  ocrAttempted?: boolean;
+  ocrAvailable?: boolean;
+  ocrText?: string | null;
+  ocrWarning?: string | null;
   cursorX?: number;
   cursorY?: number;
   isFocused?: boolean;
@@ -279,6 +295,7 @@ export interface InspectionAssetContent {
 export interface InspectionAsset {
   id: string;
   kind: 'inspection';
+  schemaVersion?: number;
   version: number;
   createdAt: string;
   updatedAt: string;
@@ -293,6 +310,20 @@ export interface InspectionAsset {
 export interface CapturedElement {
   automationId: string;
   name: string;
+  valueText?: string;
+  textPatternText?: string;
+  legacyName?: string;
+  legacyValue?: string;
+  helpText?: string;
+  detectedText?: string;
+  currentText?: string;
+  placeholderText?: string;
+  textSource?: string;
+  captureQuality?: string;
+  ocrAttempted?: boolean;
+  ocrAvailable?: boolean;
+  ocrText?: string;
+  ocrWarning?: string;
   className: string;
   controlType: string;
   boundingRect: InspectionAssetBounds;

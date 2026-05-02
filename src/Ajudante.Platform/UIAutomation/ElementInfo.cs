@@ -13,6 +13,48 @@ public sealed class ElementInfo
     /// <summary>The name / text of the element.</summary>
     public string Name { get; init; } = "";
 
+    /// <summary>ValuePattern.Value when the control exposes an editable/current value.</summary>
+    public string ValueText { get; init; } = "";
+
+    /// <summary>TextPattern range text when the control exposes visible text content.</summary>
+    public string TextPatternText { get; init; } = "";
+
+    /// <summary>LegacyIAccessible.Name when available.</summary>
+    public string LegacyName { get; init; } = "";
+
+    /// <summary>LegacyIAccessible.Value when available.</summary>
+    public string LegacyValue { get; init; } = "";
+
+    /// <summary>HelpText from UIAutomation, commonly used as hint/placeholder text.</summary>
+    public string HelpText { get; init; } = "";
+
+    /// <summary>Best user-visible text selected from Name, ValuePattern, TextPattern, legacy, OCR, or fallback.</summary>
+    public string DetectedText { get; init; } = "";
+
+    /// <summary>Current entered value for inputs when available.</summary>
+    public string CurrentText { get; init; } = "";
+
+    /// <summary>Placeholder/hint text for inputs when Windows exposes it.</summary>
+    public string PlaceholderText { get; init; } = "";
+
+    /// <summary>Source used to resolve DetectedText.</summary>
+    public string TextSource { get; init; } = "fallback";
+
+    /// <summary>Capture quality: forte, media, or fraca.</summary>
+    public string CaptureQuality { get; init; } = "fraca";
+
+    /// <summary>Whether an OCR fallback was attempted.</summary>
+    public bool OcrAttempted { get; init; }
+
+    /// <summary>Whether a local OCR engine was available.</summary>
+    public bool OcrAvailable { get; init; }
+
+    /// <summary>Text returned by OCR fallback when available.</summary>
+    public string OcrText { get; init; } = "";
+
+    /// <summary>Warning shown when OCR/fallback quality is limited.</summary>
+    public string OcrWarning { get; init; } = "";
+
     /// <summary>The class name of the underlying control.</summary>
     public string ClassName { get; init; } = "";
 
@@ -108,6 +150,6 @@ public sealed class ElementInfo
     }
 
     public override string ToString() =>
-        $"[{ControlType}] Name=\"{Name}\" AutomationId=\"{AutomationId}\" Class=\"{ClassName}\" " +
+        $"[{ControlType}] Text=\"{DetectedText}\" Name=\"{Name}\" AutomationId=\"{AutomationId}\" Class=\"{ClassName}\" " +
         $"Bounds={BoundingRect} PID={ProcessId} Process=\"{ProcessName}\"";
 }

@@ -115,6 +115,10 @@ public static class ElementInspector
         string automationId = SafeGetProperty(element, AutomationElement.AutomationIdProperty) ?? "";
         string name = SafeGetProperty(element, AutomationElement.NameProperty) ?? "";
         string className = SafeGetProperty(element, AutomationElement.ClassNameProperty) ?? "";
+        string helpText = SafeGetProperty(element, AutomationElement.HelpTextProperty) ?? "";
+        string valueText = TryReadValuePattern(element);
+        string textPatternText = TryReadTextPattern(element);
+        var (legacyName, legacyValue) = TryReadLegacyPattern(element);
         int processId = SafeGetIntProperty(element, AutomationElement.ProcessIdProperty);
 
         string controlType = "";
@@ -167,11 +171,38 @@ public static class ElementInspector
         var normalizedScreenX = hostBounds.Width > 0 ? (double)(cursor.X - hostBounds.X) / hostBounds.Width : 0d;
         var normalizedScreenY = hostBounds.Height > 0 ? (double)(cursor.Y - hostBounds.Y) / hostBounds.Height : 0d;
         var windowState = ResolveWindowState(windowHandle);
+        var ocr = TryReadOcrFallback(boundingRect);
+        var text = ResolveTextFields(
+            controlType,
+            automationId,
+            name,
+            valueText,
+            textPatternText,
+            legacyName,
+            legacyValue,
+            helpText,
+            ocr.Text,
+            ocr.Attempted,
+            ocr.Available);
 
         return new ElementInfo
         {
             AutomationId = automationId,
             Name = name,
+            ValueText = valueText,
+            TextPatternText = textPatternText,
+            LegacyName = legacyName,
+            LegacyValue = legacyValue,
+            HelpText = helpText,
+            DetectedText = text.DetectedText,
+            CurrentText = text.CurrentText,
+            PlaceholderText = text.PlaceholderText,
+            TextSource = text.TextSource,
+            CaptureQuality = text.CaptureQuality,
+            OcrAttempted = ocr.Attempted,
+            OcrAvailable = ocr.Available,
+            OcrText = ocr.Text,
+            OcrWarning = ocr.Warning,
             ClassName = className,
             ControlType = controlType,
             BoundingRect = boundingRect,
@@ -199,6 +230,132 @@ public static class ElementInspector
             NormalizedScreenX = ClampNormalized(normalizedScreenX),
             NormalizedScreenY = ClampNormalized(normalizedScreenY)
         };
+    }
+
+    private static string TryReadValuePattern(AutomationElement element)
+    {
+        try
+        {
+            return element.TryGetCurrentPattern(ValuePattern.Pattern, out var pattern) && pattern is ValuePattern valuePattern
+                ? valuePattern.Current.Value ?? ""
+                : "";
+        }
+        catch
+        {
+            return "";
+        }
+    }
+
+    private static string TryReadTextPattern(AutomationElement element)
+    {
+        try
+        {
+            if (element.TryGetCurrentPattern(TextPattern.Pattern, out var pattern) && pattern is TextPattern textPattern)
+            {
+                return CleanText(textPattern.DocumentRange.GetText(4096));
+            }
+        }
+        catch
+        {
+            // TextPattern can throw when the element disappears while Mira is hovering.
+        }
+
+        return "";
+    }
+
+    private static (string name, string value) TryReadLegacyPattern(AutomationElement element)
+    {
+        try
+        {
+            var legacyPattern = AutomationPattern.LookupById(10018);
+            if (legacyPattern is not null && element.TryGetCurrentPattern(legacyPattern, out var pattern))
+            {
+                var current = pattern.GetType().GetProperty("Current")?.GetValue(pattern);
+                var name = current?.GetType().GetProperty("Name")?.GetValue(current)?.ToString() ?? "";
+                var value = current?.GetType().GetProperty("Value")?.GetValue(current)?.ToString() ?? "";
+                return (name, value);
+            }
+        }
+        catch
+        {
+            // LegacyIAccessible is best-effort across process boundaries.
+        }
+
+        return ("", "");
+    }
+
+    private static (string Text, bool Attempted, bool Available, string Warning) TryReadOcrFallback(Rectangle boundingRect)
+    {
+        if (boundingRect.Width <= 0 || boundingRect.Height <= 0)
+        {
+            return ("", false, false, "");
+        }
+
+        return (
+            "",
+            true,
+            false,
+            "OCR local ainda nao esta empacotado; a captura tentou fallback visual e preservou seletor/coordenadas.");
+    }
+
+    private static (string DetectedText, string CurrentText, string PlaceholderText, string TextSource, string CaptureQuality) ResolveTextFields(
+        string controlType,
+        string automationId,
+        string name,
+        string valueText,
+        string textPatternText,
+        string legacyName,
+        string legacyValue,
+        string helpText,
+        string ocrText,
+        bool ocrAttempted,
+        bool ocrAvailable)
+    {
+        var currentText = CleanText(valueText);
+        var placeholderText = CleanText(helpText);
+        var isTextInput = string.Equals(controlType, "Edit", StringComparison.OrdinalIgnoreCase)
+            || controlType.Contains("text", StringComparison.OrdinalIgnoreCase)
+            || controlType.Contains("search", StringComparison.OrdinalIgnoreCase);
+
+        if (isTextInput && string.IsNullOrWhiteSpace(currentText) && string.IsNullOrWhiteSpace(placeholderText))
+        {
+            placeholderText = CleanText(name);
+        }
+
+        var candidates = new (string Source, string Text)[]
+        {
+            ("ValuePattern", currentText),
+            ("TextPattern", CleanText(textPatternText)),
+            ("Legacy", CleanText(legacyValue)),
+            ("Legacy", CleanText(legacyName)),
+            ("UIAutomation", CleanText(name)),
+            ("HelpText", placeholderText),
+            ("OCR", CleanText(ocrText))
+        };
+
+        var selected = candidates.FirstOrDefault(candidate => !string.IsNullOrWhiteSpace(candidate.Text));
+        var detectedText = selected.Text ?? "";
+        var source = string.IsNullOrWhiteSpace(detectedText)
+            ? (ocrAttempted && !ocrAvailable ? "fallback" : "fallback")
+            : selected.Source;
+
+        var hasSelector = !string.IsNullOrWhiteSpace(automationId) || !string.IsNullOrWhiteSpace(name);
+        var quality = hasSelector && !string.IsNullOrWhiteSpace(detectedText)
+            ? "forte"
+            : !string.IsNullOrWhiteSpace(detectedText) ? "media" : "fraca";
+
+        return (detectedText, currentText, placeholderText, source, quality);
+    }
+
+    private static string CleanText(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return "";
+
+        return text
+            .Replace("\r", " ", StringComparison.Ordinal)
+            .Replace("\n", " ", StringComparison.Ordinal)
+            .Trim();
     }
 
     /// <summary>

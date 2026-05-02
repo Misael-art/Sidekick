@@ -14,6 +14,7 @@ namespace Ajudante.Nodes.Actions;
 public class PlaySoundNode : IActionNode
 {
     private string _soundFile = "";
+    private string _systemSound = "exclamation";
 
     public string Id { get; set; } = "";
 
@@ -40,7 +41,16 @@ public class PlaySoundNode : IActionNode
                 Name = "Sound File",
                 Type = PropertyType.FilePath,
                 DefaultValue = "",
-                Description = "Path to a .wav sound file to play"
+                Description = "Optional path to a .wav sound file to play"
+            },
+            new()
+            {
+                Id = "systemSound",
+                Name = "System Sound",
+                Type = PropertyType.Dropdown,
+                DefaultValue = "exclamation",
+                Description = "Fallback Windows sound when no file is provided",
+                Options = new[] { "exclamation", "asterisk", "beep", "hand", "question" }
             }
         }
     };
@@ -49,6 +59,8 @@ public class PlaySoundNode : IActionNode
     {
         if (properties.TryGetValue("soundFile", out var sf) && sf is string file)
             _soundFile = file;
+        if (properties.TryGetValue("systemSound", out var ss) && ss is string systemSound)
+            _systemSound = systemSound;
     }
 
     public Task<NodeResult> ExecuteAsync(FlowExecutionContext context, CancellationToken ct)
@@ -56,7 +68,21 @@ public class PlaySoundNode : IActionNode
         try
         {
             if (string.IsNullOrWhiteSpace(_soundFile))
-                return Task.FromResult(NodeResult.Fail("Sound file path is required"));
+            {
+                var sound = _systemSound.Trim().ToLowerInvariant() switch
+                {
+                    "asterisk" => SystemSounds.Asterisk,
+                    "beep" => SystemSounds.Beep,
+                    "hand" => SystemSounds.Hand,
+                    "question" => SystemSounds.Question,
+                    _ => SystemSounds.Exclamation
+                };
+                sound.Play();
+                return Task.FromResult(NodeResult.Ok("out", new Dictionary<string, object?>
+                {
+                    ["systemSound"] = _systemSound
+                }));
+            }
 
             var resolvedPath = context.ResolveTemplate(_soundFile);
 

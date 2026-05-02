@@ -17,7 +17,7 @@
 3. O icone do Sidekick aparecera na bandeja do sistema.
 
 ### 1.3 Estrutura da interface
-- **Toolbar:** novo flow, salvar, carregar, Run Now, Arm/Disarm, Stop, Mira, Snip, nome do flow e seletor de idioma `PT-BR`/`English`.
+- **Toolbar:** novo flow, salvar, carregar, Marketplace, Export Runner, Run Now, Arm/Disarm, Stop, Mira, Mira Lib, Snip, Sticky, nome do flow e seletor de idioma `PT-BR`/`English`.
 - **Palette:** coluna retratil com nodes agrupados por categoria.
 - **Canvas:** area onde o flow e montado. Clique com o botao direito para abrir o menu rapido, ou arraste um fio de saida e solte em area vazia para escolher o proximo node ja conectado.
 - **Property Panel:** configuracoes do node selecionado. Campos de escolha fechada, como `Button`, `Click Type`, `Format`, `Mode` e `Operation`, aparecem como listas para evitar erro de digitacao.
@@ -52,6 +52,7 @@ Voce nao precisa arrastar tudo da sidebar.
 - Arraste um fio de uma porta de saida e solte no vazio para abrir **Adicionar passo**; ao escolher um node compativel, o Sidekick conecta automaticamente.
 - Clique com botao direito em um fio para inserir um novo node no meio ou remover a conexao.
 - Clique com botao direito em um node para duplicar, desabilitar/habilitar ou remover.
+- Clique em **Sticky** para criar notas no canvas. A nota pode ter titulo, corpo, cor, tamanho e posicao; tambem pode ser duplicada/removida pelo menu de contexto. Stickies sao salvas no flow, mas nao executam no runtime.
 - Node desabilitado nao e apagado. Ao executar/validar, o Sidekick tenta fazer bypass quando o node tem uma entrada e uma saida de fluxo.
 - Use `Ctrl+D` para duplicar, `Ctrl+0` para ajustar a visao, `Ctrl+K` ou `/` para busca rapida, `C` para conectar um proximo passo a partir do node selecionado e `L` para auto layout.
 - Se uma conexao falhar, leia a mensagem: portas `Flow` so conectam com `Flow`; saidas de dados devem entrar em portas de dados compativeis.
@@ -136,6 +137,8 @@ Dica: para criar como n8n/Blender, arraste o ponto de saida de um node e solte e
 - **Compare Text:** compara strings.
 - **Cooldown:** evita repeticoes muito proximas na mesma execucao.
 - **Condition Group:** combina condicoes `ANY/ALL` com operadores `equals/contains/regex/greater/less/exists/changed`.
+- **Until Date/Time:** desvia antes/depois de um horario local, como `00:00`.
+- **Daily Reset:** ajuda a liberar bloqueios quando muda o dia.
 
 ### 4.3 Actions
 - **Mouse Click / Move / Drag**
@@ -160,6 +163,10 @@ Dica: para criar como n8n/Blender, arraste o ponto de saida de um node e solte e
 - **Hardware Device**
 - **System Power**
 - **Display Settings**
+- **Require Admin / Restart as Admin**
+- **Windows Theme / Accent / Wallpaper / Explorer / Taskbar**
+- **Install App / Download File / Verify Checksum**
+- **Persist State / Read State**
 - **Play Sound**
 - **Delete File**
 
@@ -178,6 +185,16 @@ Fluxo pratico atual:
 4. Escolha **Use Latest** para aplicar a captura mais recente, ou **Browse Mira** para selecionar um ativo salvo.
 5. O Sidekick preenche `windowTitle`, `windowTitleMatch`, `processName`, `processPath`, `automationId`, `elementName` e `controlType` quando o node suporta esses campos.
 
+O overlay do Mira tambem mostra:
+
+- Texto detectado
+- Texto atual
+- Placeholder/Hint
+- Origem do texto (`UIAutomation`, `ValuePattern`, `TextPattern`, `Legacy`, `OCR` ou fallback)
+- Qualidade da captura (`forte`, `media`, `fraca`)
+
+Quando OCR local nao estiver disponivel, o Sidekick avisa que a captura esta usando fallback visual/seletor em vez de prometer leitura OCR.
+
 O Mira mostra dados pensados para automacao:
 
 - nome do elemento, janela, processo e caminho do executavel
@@ -191,6 +208,7 @@ Dicas:
 - Use **Browse Mira** quando quiser reutilizar um seletor salvo em varios flows.
 - Use **Use Latest** quando estiver ajustando um flow rapidamente logo apos a inspecao.
 - Se necessario, clique em **Clear** para limpar o binding e editar os campos manualmente.
+- Na **Mira Lib**, cada captura salva aparece com thumbnail, nome, notas e tags. Voce pode buscar por nome, texto detectado, processo, janela, robustez ou tag; tambem pode duplicar, apagar, editar metadata e rodar **Test Selector**.
 
 ### 5.2 Snip
 Use **Snip** para capturar uma regiao da tela e reutilizar a imagem como template.
@@ -261,7 +279,29 @@ Use **Display Settings** para descrever monitores e, quando liberado, alterar re
 
 Regra pratica: teste primeiro com operacoes de leitura como `getState`, `listDevices` e `describe`. So libere mudancas de sistema depois de revisar o flow inteiro.
 
-### 5.7 Sample flows uteis
+### 5.7 Windows automation pack
+Use os nodes de Windows quando precisar controlar o ambiente do usuario:
+
+- **Taskbar:** mostrar/ocultar, alinhar, abrir app por caminho e registrar limites honestos de pin/unpin.
+- **Theme/Wallpaper:** trocar modo claro/escuro, cor de destaque, wallpaper por imagem/cor e restaurar caminho anterior.
+- **Desktop/Explorer:** refresh, abrir pasta, selecionar arquivo, criar atalho e reiniciar Explorer.
+- **Restore Point:** criar/listar/abrir restauracao com dry-run e aviso de admin.
+- **Admin:** `Require Admin` desvia para `admin`, `notAdmin`, `denied` ou `error`; `Restart as Admin` usa o prompt UAC normal quando confirmado.
+- **Install App:** instala por `winget`, MSI, EXE ou URL direta com `dryRun`, timeout, retry, checksum e verificacao final.
+
+Nunca desligue `dryRun` ou ligue `Allow System Changes` sem revisar origem, argumentos e impacto da acao.
+
+### 5.8 Export Runner
+O botao **Export Runner** gera um pacote semi-autonomo com:
+
+- `Sidekick.exe` e dependencias copiadas do app atual
+- `flow.json`
+- `run-sidekick-flow.cmd`
+- `README.txt`
+
+Execute o `.cmd` para rodar aquele flow fora do editor visual. Limite atual: se uma instancia do Sidekick ja estiver aberta, o bloqueio de instancia unica pode impedir o runner.
+
+### 5.9 Sample flows uteis
 Os exemplos abaixo mostram o uso de ativos reutilizaveis no editor:
 
 - `portfolio_snip_reuse_demo.json`: reaproveita um ativo de `Snip` em `Image Detected Trigger`.
@@ -281,6 +321,21 @@ Os exemplos abaixo mostram o uso de ativos reutilizaveis no editor:
 - `recipe_camera_recording.json`: gravacao de camera com timestamp.
 - `recipe_mira_resilient_click.json`: clique resiliente usando pipeline de fallback.
 - `recipe_whatsapp_status_assistant.json`: assistente WhatsApp em modo seguro.
+- `recipe_roblox_playtime_limit.json`: **Tempo de Jogo - ROBLOX**, controla 2 minutos de jogo com overlay, sons, fechamento e bloqueio ate 00:00.
+
+### 5.10 Case oficial: Tempo de Jogo - ROBLOX
+No Marketplace, abra **Tempo de Jogo - ROBLOX**.
+
+O flow monitora `RobloxPlayerBeta`, `RobloxPlayerLauncher` e opcionalmente `RobloxStudioBeta`; inicia timer de 2 minutos; mostra overlays; toca sons do Windows; tenta fechar a janela com `Window Control / close`; usa `Kill Process` como fallback; salva estado local para bloquear novas aberturas ate `00:00`.
+
+Antes de armar:
+
+1. Revise se `RobloxStudioBeta` tambem deve contar como jogo.
+2. Ajuste delays/textos se quiser outro limite.
+3. Teste com **Run Now** em ambiente controlado.
+4. Arme o flow somente quando os avisos e permissoes fizerem sentido para sua maquina.
+
+Validacao atual: estrutura, nodes e protecoes do flow sao testadas automaticamente. A validacao real com Roblox instalado deve ser feita no ambiente do usuario.
 
 ### 5.8 Marketplace
 Use o botao **Marketplace** na toolbar para abrir recipes oficiais locais e procurar por automacoes prontas incluidas no produto.

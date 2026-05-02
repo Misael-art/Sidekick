@@ -54,7 +54,7 @@ Closed-choice properties render as dropdowns, and the toolbar exposes an explici
 Detect pixel colors, find images on screen, and react to window events in real-time.
 
 ### 🧭 Mira & Snip Assets
-Capture UI selectors with Mira, capture image templates with Snip, test selectors, score selector robustness, and create pre-filled nodes from the latest capture.
+Capture UI selectors with Mira, capture image templates with Snip, test selectors, score selector robustness, save thumbnails/tags/notes in Mira Lib, and create pre-filled nodes from the latest capture.
 
 ### 📸 Screenshot & Recording
 Capture screenshots (desktop/monitor/region/window) and record desktop/camera video with explicit outputs for file path, dimensions, frame count, and runtime-safe cancellation.
@@ -71,8 +71,14 @@ Show foreground color, image, and text overlays with timers/motion, and run cont
 ### 🎚️ Hardware & System Controls
 Control audio volume, microphone mute, camera/microphone/Wi-Fi devices, power operations, and display resolution/rotation/layout with explicit safety gates for system-changing actions.
 
+### 🪟 Windows Automation Pack
+Automate taskbar visibility/alignment, light/dark mode, wallpaper, Explorer paths, desktop refresh/shortcuts, restore-point workflows, admin checks, and guarded app installation through `winget`, MSI, EXE, or direct URL with dry-run and checksum support.
+
 ### 🛒 Local Recipe Marketplace
-Open official built-in recipes from the toolbar Marketplace with search and safe local loading. Remote downloads are intentionally gated until package signing and capability warnings are implemented.
+Open official built-in recipes from the toolbar Marketplace with search and safe local loading, including **Tempo de Jogo - ROBLOX** for a parental playtime limit flow. Remote downloads are intentionally gated until package signing and capability warnings are implemented.
+
+### 📦 Export Runner
+Export a flow to a semi-autonomous runner package with `flow.json`, app files, local logs, and `run-sidekick-flow.cmd`. This is not a single embedded EXE yet, and the single-instance mutex still blocks running a package while the main Sidekick window is already open.
 
 </td>
 </tr>
@@ -178,6 +184,12 @@ Latest validated gate on `2026-04-30`:
 - `.NET`: `dotnet build Ajudante.sln` and `dotnet test Ajudante.sln` passed (`257` tests).
 - UI: `npm run test` passed (`49` tests) and `npm run build` generated current assets.
 - Publish: `dotnet publish ./src/Ajudante.App/Ajudante.App.csproj -c Release -o ./src/Ajudante.App/bin/publish` generated `Sidekick.exe`; built-in recipes are copied as `seed-flows/*.json`.
+
+Latest validated development gates on `2026-05-02`:
+
+- `.NET`: `dotnet build Ajudante.sln` passed with 0 warnings / 0 errors; `dotnet test Ajudante.sln` passed `293` tests.
+- UI: `npm run test` passed `70` tests; `npm run build` generated current hashed assets in `src/Ajudante.App/wwwroot`.
+- Publish gate must still be rerun for the final release artifact after documentation edits.
 
 ### Sample Flows
 

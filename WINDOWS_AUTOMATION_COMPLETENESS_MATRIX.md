@@ -5,8 +5,8 @@
 
 ## Status
 
-- Estado: `release candidate tecnico parcial com editor visual P0 fortalecido`
-- Data de consolidacao: `2026-04-30`
+- Estado: `release candidate tecnico parcial com editor visual P0 e cobertura Windows ampliada`
+- Data de consolidacao: `2026-05-02`
 - Objetivo: mapear tudo o que o Sidekick precisa ter para ser uma plataforma Windows realmente completa nas mais diversas situacoes
 - Caso de prova principal: `automacoes desktop reais, multiplos eventos, multiplas janelas, fallback visual, publish validado`
 
@@ -46,11 +46,16 @@ O Sidekick hoje ja possui:
 - `logic.conditionGroup` para condicoes compostas `ANY/ALL` com grupos aninhados simples
 - handles visiveis de conexao no canvas, menu de contexto no canvas/node/edge, inserir node em edge, reconectar/remover edge, duplicar/desabilitar node, bypass em runtime view e auto layout basico
 - Marketplace local de recipes oficiais na toolbar
+- Sticky notes persistidas e duplicaveis como annotations nao executaveis
+- Mira Lib com thumbnails, nome/notas/tags editaveis, busca, duplicacao e teste de seletor
+- nodes de taskbar, tema, wallpaper, desktop, Explorer, restore point, admin e instalacao com dry-run/guardas
+- Export Runner semi-autonomo por pacote e `run-sidekick-flow.cmd`
+- recipe oficial `Tempo de Jogo - ROBLOX`
 
 O que ainda impede o produto de ser completo no Windows:
 
-1. OCR ainda nao esta funcional como produto
-2. automacao de Explorer/dialogs e menus ainda nao possui trilha dedicada
+1. OCR local ainda nao esta empacotado; o fallback e detectado e comunicado, mas nao extrai texto por OCR nesta build
+2. algumas APIs de taskbar/Explorer continuam limitadas por ausencia de API publica estavel no Windows
 3. recorder de macro e screenshot on failure ainda faltam
 4. wizard/onboarding completo ainda nao substitui a necessidade de entender nodes
 5. validacao manual ampla em apps reais, incluindo `Trae.exe`, ainda precisa ser concluida

@@ -344,6 +344,15 @@ body,
   transition: border-color 0.15s, background 0.15s, transform 0.15s;
 }
 
+.toolbar__asset-thumb {
+  width: 100%;
+  max-height: 88px;
+  object-fit: cover;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  background: #010409;
+}
+
 .toolbar__flow-option-row {
   display: flex;
   gap: 8px;
@@ -401,6 +410,26 @@ body,
   border-left: 1px solid #21262d;
   background: #11161d;
   overflow-y: auto;
+}
+
+.toolbar__asset-preview {
+  width: 100%;
+  max-height: 180px;
+  object-fit: contain;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  background: #010409;
+}
+
+.toolbar__asset-notes {
+  min-height: 74px;
+  resize: vertical;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  background: #0d1117;
+  color: #f0f6fc;
+  padding: 9px 11px;
+  font: inherit;
 }
 
 .toolbar__asset-detail-section {

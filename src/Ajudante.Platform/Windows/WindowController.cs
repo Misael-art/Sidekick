@@ -9,6 +9,7 @@ public static class WindowController
     private const int SW_SHOWMINIMIZED = 2;
     private const int SW_SHOWMAXIMIZED = 3;
     private const int SW_RESTORE = 9;
+    private const int WM_CLOSE = 0x0010;
 
     [DllImport("user32.dll")]
     private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
@@ -18,6 +19,9 @@ public static class WindowController
 
     [DllImport("user32.dll")]
     private static extern bool BringWindowToTop(IntPtr hWnd);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
 
     public static bool Focus(IntPtr hwnd)
     {
@@ -47,4 +51,13 @@ public static class WindowController
     public static bool Hide(IntPtr hwnd) => hwnd != IntPtr.Zero && ShowWindow(hwnd, SW_HIDE);
 
     public static bool ShowNormal(IntPtr hwnd) => hwnd != IntPtr.Zero && ShowWindow(hwnd, SW_SHOWNORMAL);
+
+    public static bool Close(IntPtr hwnd)
+    {
+        if (hwnd == IntPtr.Zero)
+            return false;
+
+        _ = SendMessage(hwnd, WM_CLOSE, IntPtr.Zero, IntPtr.Zero);
+        return true;
+    }
 }

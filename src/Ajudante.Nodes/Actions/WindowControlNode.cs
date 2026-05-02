@@ -11,7 +11,7 @@ namespace Ajudante.Nodes.Actions;
     TypeId = "action.windowControl",
     DisplayName = "Window Control",
     Category = NodeCategory.Action,
-    Description = "Focuses, brings forward, minimizes, maximizes, or restores a target desktop window",
+    Description = "Focuses, brings forward, minimizes, maximizes, restores, or gracefully closes a target desktop window",
     Color = "#22C55E")]
 public class WindowControlNode : IActionNode
 {
@@ -24,7 +24,7 @@ public class WindowControlNode : IActionNode
         TypeId = "action.windowControl",
         DisplayName = "Window Control",
         Category = NodeCategory.Action,
-        Description = "Focuses, brings forward, minimizes, maximizes, or restores a target desktop window",
+        Description = "Focuses, brings forward, minimizes, maximizes, restores, or gracefully closes a target desktop window",
         Color = "#22C55E",
         InputPorts = new List<PortDefinition> { new() { Id = "in", Name = "In", DataType = PortDataType.Flow } },
         OutputPorts = new List<PortDefinition>
@@ -35,7 +35,7 @@ public class WindowControlNode : IActionNode
         Properties = BrowserSelectorHelper.SelectorPropertyDefinitions("window")
             .Concat(new[]
             {
-                new PropertyDefinition { Id = "operation", Name = "Operation", Type = PropertyType.Dropdown, DefaultValue = "focus", Description = "Window operation to perform", Options = new[] { "focus", "bringToFront", "minimize", "maximize", "restore" } }
+                new PropertyDefinition { Id = "operation", Name = "Operation", Type = PropertyType.Dropdown, DefaultValue = "focus", Description = "Window operation to perform", Options = new[] { "focus", "bringToFront", "minimize", "maximize", "restore", "close" } }
             })
             .ToList()
     };
@@ -81,6 +81,7 @@ public class WindowControlNode : IActionNode
             "minimize" => WindowController.Minimize(hwnd),
             "maximize" => WindowController.Maximize(hwnd),
             "restore" => WindowController.Restore(hwnd),
+            "close" => WindowController.Close(hwnd),
             _ => WindowController.Focus(hwnd)
         };
 

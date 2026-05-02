@@ -320,7 +320,8 @@ export function getDevNodeDefinitions(): NodeDefinition[] {
       { id: 'processName', name: 'Process Name', type: 'String', defaultValue: '' },
     ]),
     define('action.playSound', 'Play Sound', 'Action', 'Play an audio file', [
-      { id: 'filePath', name: 'Sound File', type: 'FilePath', defaultValue: '' },
+      { id: 'soundFile', name: 'Sound File', type: 'FilePath', defaultValue: '' },
+      { id: 'systemSound', name: 'System Sound', type: 'Dropdown', defaultValue: 'exclamation', options: ['exclamation', 'asterisk', 'beep', 'hand', 'question'] },
     ]),
     define('action.deleteFile', 'Delete File', 'Action', 'Delete a file from disk', [
       { id: 'filePath', name: 'File Path', type: 'FilePath', defaultValue: '' },
@@ -506,7 +507,7 @@ export function getDevNodeDefinitions(): NodeDefinition[] {
     ]),
     define('action.windowControl', 'Window Control', 'Action', 'Focuses, brings forward, minimizes, maximizes, or restores a desktop window', [
       ...selectorProps(),
-      { id: 'operation', name: 'Operation', type: 'Dropdown', defaultValue: 'focus', options: ['focus', 'bringToFront', 'minimize', 'maximize', 'restore'] },
+      { id: 'operation', name: 'Operation', type: 'Dropdown', defaultValue: 'focus', options: ['focus', 'bringToFront', 'minimize', 'maximize', 'restore', 'close'] },
     ], [
       flowOut,
       notFoundOut,
@@ -575,6 +576,144 @@ export function getDevNodeDefinitions(): NodeDefinition[] {
       { id: 'success', name: 'Success', dataType: 'Flow' },
       { id: 'error', name: 'Error', dataType: 'Flow' },
       { id: 'subject', name: 'Subject', dataType: 'String' },
+    ]),
+    define('action.requireAdmin', 'Require Admin', 'Action', 'Checks admin status and branches safely', [], [
+      { id: 'admin', name: 'Admin', dataType: 'Flow' },
+      { id: 'notAdmin', name: 'Not Admin', dataType: 'Flow' },
+      { id: 'denied', name: 'Denied', dataType: 'Flow' },
+      { id: 'error', name: 'Error', dataType: 'Flow' },
+    ]),
+    define('action.restartAsAdmin', 'Restart as Admin', 'Action', 'Restarts Sidekick through UAC when confirmed', [
+      { id: 'confirmRestart', name: 'Confirm Restart', type: 'Boolean', defaultValue: false },
+      { id: 'dryRun', name: 'Dry Run', type: 'Boolean', defaultValue: true },
+    ]),
+    define('action.taskbarShow', 'Taskbar Show', 'Action', 'Shows the Windows taskbar', [{ id: 'dryRun', name: 'Dry Run', type: 'Boolean', defaultValue: true }]),
+    define('action.taskbarHide', 'Taskbar Hide', 'Action', 'Hides the Windows taskbar', [{ id: 'dryRun', name: 'Dry Run', type: 'Boolean', defaultValue: true }]),
+    define('action.taskbarSetAlignment', 'Taskbar Set Alignment', 'Action', 'Sets taskbar alignment where supported', [
+      { id: 'alignment', name: 'Alignment', type: 'Dropdown', defaultValue: 'center', options: ['left', 'center'] },
+      { id: 'dryRun', name: 'Dry Run', type: 'Boolean', defaultValue: true },
+    ]),
+    define('action.taskbarPinApp', 'Taskbar Pin App', 'Action', 'Safe taskbar pin support with documented Windows limits', [
+      { id: 'appPath', name: 'App Path', type: 'FilePath', defaultValue: '' },
+      { id: 'dryRun', name: 'Dry Run', type: 'Boolean', defaultValue: true },
+    ]),
+    define('action.taskbarUnpinApp', 'Taskbar Unpin App', 'Action', 'Safe taskbar unpin support with documented Windows limits', [
+      { id: 'appPath', name: 'App Path', type: 'FilePath', defaultValue: '' },
+      { id: 'dryRun', name: 'Dry Run', type: 'Boolean', defaultValue: true },
+    ]),
+    define('action.taskbarOpenPinnedApp', 'Taskbar Open Pinned App', 'Action', 'Opens an app path or explains taskbar limitations', [
+      { id: 'appPath', name: 'App Path', type: 'FilePath', defaultValue: '' },
+      { id: 'dryRun', name: 'Dry Run', type: 'Boolean', defaultValue: true },
+    ]),
+    define('action.windowsThemeSetMode', 'Windows Theme Set Mode', 'Action', 'Sets light or dark mode with safety controls', [
+      { id: 'mode', name: 'Mode', type: 'Dropdown', defaultValue: 'dark', options: ['light', 'dark', 'system'] },
+      { id: 'dryRun', name: 'Dry Run', type: 'Boolean', defaultValue: true },
+    ]),
+    define('action.windowsAccentColor', 'Windows Accent Color', 'Action', 'Prepares accent color changes safely', [
+      { id: 'color', name: 'Color', type: 'Color', defaultValue: '#58A6FF' },
+      { id: 'dryRun', name: 'Dry Run', type: 'Boolean', defaultValue: true },
+    ]),
+    define('action.windowsHighContrast', 'Windows High Contrast', 'Action', 'Documents high-contrast automation limits safely', [
+      { id: 'enabled', name: 'Enabled', type: 'Boolean', defaultValue: false },
+      { id: 'dryRun', name: 'Dry Run', type: 'Boolean', defaultValue: true },
+    ]),
+    define('action.wallpaperSetImage', 'Wallpaper Set Image', 'Action', 'Sets wallpaper image with dry-run and backup output', [
+      { id: 'imagePath', name: 'Image Path', type: 'FilePath', defaultValue: '' },
+      { id: 'style', name: 'Style', type: 'Dropdown', defaultValue: 'fill', options: ['fill', 'fit', 'stretch', 'tile', 'center', 'span'] },
+      { id: 'dryRun', name: 'Dry Run', type: 'Boolean', defaultValue: true },
+    ]),
+    define('action.wallpaperSetColor', 'Wallpaper Set Color', 'Action', 'Sets wallpaper background color safely', [
+      { id: 'color', name: 'Color', type: 'Color', defaultValue: '#000000' },
+      { id: 'dryRun', name: 'Dry Run', type: 'Boolean', defaultValue: true },
+    ]),
+    define('action.wallpaperRestorePrevious', 'Wallpaper Restore Previous', 'Action', 'Restores a previous wallpaper path', [
+      { id: 'previousWallpaper', name: 'Previous Wallpaper', type: 'FilePath', defaultValue: '' },
+      { id: 'dryRun', name: 'Dry Run', type: 'Boolean', defaultValue: true },
+    ]),
+    define('action.desktopIconsShowHide', 'Desktop Icons Show/Hide', 'Action', 'Shows or hides desktop icons with safe defaults', [
+      { id: 'visible', name: 'Visible', type: 'Boolean', defaultValue: true },
+      { id: 'dryRun', name: 'Dry Run', type: 'Boolean', defaultValue: true },
+    ]),
+    define('action.desktopRefresh', 'Desktop Refresh', 'Action', 'Refreshes Explorer desktop icons', [{ id: 'dryRun', name: 'Dry Run', type: 'Boolean', defaultValue: true }]),
+    define('action.desktopOpenFolder', 'Desktop Open Folder', 'Action', 'Opens a folder in Explorer', [
+      { id: 'path', name: 'Path', type: 'FolderPath', defaultValue: '' },
+    ]),
+    define('action.desktopCreateShortcut', 'Desktop Create Shortcut', 'Action', 'Creates a desktop shortcut', [
+      { id: 'targetPath', name: 'Target Path', type: 'FilePath', defaultValue: '' },
+      { id: 'shortcutName', name: 'Shortcut Name', type: 'String', defaultValue: 'Sidekick Shortcut' },
+      { id: 'dryRun', name: 'Dry Run', type: 'Boolean', defaultValue: true },
+    ]),
+    define('action.explorerOpenPath', 'Explorer Open Path', 'Action', 'Opens a path in Explorer', [
+      { id: 'path', name: 'Path', type: 'String', defaultValue: '' },
+    ]),
+    define('action.explorerSelectFile', 'Explorer Select File', 'Action', 'Selects a file in Explorer', [
+      { id: 'filePath', name: 'File Path', type: 'FilePath', defaultValue: '' },
+    ]),
+    define('action.explorerRestart', 'Explorer Restart', 'Action', 'Restarts explorer.exe with dry-run by default', [{ id: 'dryRun', name: 'Dry Run', type: 'Boolean', defaultValue: true }]),
+    define('action.explorerSetView', 'Explorer Set View', 'Action', 'Documents Explorer view automation limits', [
+      { id: 'view', name: 'View', type: 'Dropdown', defaultValue: 'details', options: ['details', 'icons', 'list'] },
+      { id: 'dryRun', name: 'Dry Run', type: 'Boolean', defaultValue: true },
+    ]),
+    define('action.restorePointCreate', 'Restore Point Create', 'Action', 'Creates or dry-runs a restore point request', [
+      { id: 'description', name: 'Description', type: 'String', defaultValue: 'Sidekick restore point' },
+      { id: 'dryRun', name: 'Dry Run', type: 'Boolean', defaultValue: true },
+    ]),
+    define('action.restorePointList', 'Restore Point List', 'Action', 'Lists restore point support status', [{ id: 'dryRun', name: 'Dry Run', type: 'Boolean', defaultValue: true }]),
+    define('action.restorePointOpenSystemRestore', 'Open System Restore', 'Action', 'Opens System Restore UI', [{ id: 'dryRun', name: 'Dry Run', type: 'Boolean', defaultValue: true }]),
+    define('action.installApp', 'Install App', 'Action', 'Installs apps through winget, MSI, EXE or URL with dry-run', [
+      { id: 'sourceType', name: 'Source Type', type: 'Dropdown', defaultValue: 'winget', options: ['winget', 'msi', 'exe', 'url', 'msix', 'store'] },
+      { id: 'packageId', name: 'Package Id', type: 'String', defaultValue: '' },
+      { id: 'url', name: 'URL / Installer Path', type: 'String', defaultValue: '' },
+      { id: 'checksum', name: 'SHA256 Checksum', type: 'String', defaultValue: '' },
+      { id: 'dryRun', name: 'Dry Run', type: 'Boolean', defaultValue: true },
+    ]),
+    define('action.downloadFile', 'Download File', 'Action', 'Downloads a file with checksum support', [
+      { id: 'url', name: 'URL', type: 'String', defaultValue: '' },
+      { id: 'outputPath', name: 'Output Path', type: 'FilePath', defaultValue: '' },
+      { id: 'checksum', name: 'SHA256 Checksum', type: 'String', defaultValue: '' },
+      { id: 'dryRun', name: 'Dry Run', type: 'Boolean', defaultValue: true },
+    ]),
+    define('action.verifyChecksum', 'Verify Checksum', 'Action', 'Verifies SHA256 checksum', [
+      { id: 'filePath', name: 'File Path', type: 'FilePath', defaultValue: '' },
+      { id: 'checksum', name: 'SHA256 Checksum', type: 'String', defaultValue: '' },
+    ]),
+    define('action.installWinget', 'Install Winget', 'Action', 'Installs a winget package', [
+      { id: 'packageId', name: 'Package Id', type: 'String', defaultValue: '' },
+      { id: 'dryRun', name: 'Dry Run', type: 'Boolean', defaultValue: true },
+    ]),
+    define('action.installMsix', 'Install MSIX', 'Action', 'Prepares MSIX install', [{ id: 'dryRun', name: 'Dry Run', type: 'Boolean', defaultValue: true }]),
+    define('action.installMsi', 'Install MSI', 'Action', 'Installs an MSI package', [{ id: 'url', name: 'MSI Path', type: 'String', defaultValue: '' }, { id: 'dryRun', name: 'Dry Run', type: 'Boolean', defaultValue: true }]),
+    define('action.installExe', 'Install EXE', 'Action', 'Installs an EXE package', [{ id: 'url', name: 'EXE Path', type: 'String', defaultValue: '' }, { id: 'dryRun', name: 'Dry Run', type: 'Boolean', defaultValue: true }]),
+    define('action.checkAppInstalled', 'Check App Installed', 'Action', 'Checks expected process/path', [
+      { id: 'expectedProcessName', name: 'Expected Process', type: 'String', defaultValue: '' },
+      { id: 'expectedPath', name: 'Expected Path', type: 'String', defaultValue: '' },
+    ], [
+      { id: 'installed', name: 'Installed', dataType: 'Flow' },
+      { id: 'notInstalled', name: 'Not Installed', dataType: 'Flow' },
+    ]),
+    define('action.persistState', 'Persist State', 'Action', 'Persists small flow state', [
+      { id: 'key', name: 'Key', type: 'String', defaultValue: '' },
+      { id: 'value', name: 'Value', type: 'String', defaultValue: '' },
+      { id: 'expiresAtLocal', name: 'Expires At Local', type: 'String', defaultValue: '' },
+    ]),
+    define('action.readState', 'Read State', 'Action', 'Reads persisted flow state', [
+      { id: 'key', name: 'Key', type: 'String', defaultValue: '' },
+      { id: 'storeInVariable', name: 'Store In Variable', type: 'String', defaultValue: '' },
+    ], [
+      { id: 'found', name: 'Found', dataType: 'Flow' },
+      { id: 'missing', name: 'Missing', dataType: 'Flow' },
+    ]),
+    define('logic.untilDateTime', 'Until Date/Time', 'Logic', 'Routes before/after local time', [
+      { id: 'untilLocalTime', name: 'Until Local Time', type: 'String', defaultValue: '00:00' },
+    ], [
+      { id: 'before', name: 'Before', dataType: 'Flow' },
+      { id: 'after', name: 'After', dataType: 'Flow' },
+    ]),
+    define('logic.dailyReset', 'Daily Reset', 'Logic', 'Routes reset/notReset by local date', [
+      { id: 'lastDate', name: 'Last Date', type: 'String', defaultValue: '' },
+    ], [
+      { id: 'reset', name: 'Reset', dataType: 'Flow' },
+      { id: 'notReset', name: 'Not Reset', dataType: 'Flow' },
     ]),
     define('action.showNotification', 'Show Notification', 'Action', 'Shows a desktop notification on Windows', [
       { id: 'title', name: 'Title', type: 'String', defaultValue: '' },

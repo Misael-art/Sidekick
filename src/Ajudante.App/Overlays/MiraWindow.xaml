@@ -59,6 +59,58 @@
                                TextTrimming="CharacterEllipsis" />
                 </StackPanel>
 
+                <StackPanel Orientation="Horizontal" Margin="0,1">
+                    <TextBlock Text="Texto detectado: "
+                               FontSize="11"
+                               Foreground="#FF6C7086" />
+                    <TextBlock x:Name="DetectedTextText"
+                               FontSize="11"
+                               Foreground="#FFCDD6F4"
+                               MaxWidth="320"
+                               TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" Margin="0,1">
+                    <TextBlock Text="Texto atual: "
+                               FontSize="11"
+                               Foreground="#FF6C7086" />
+                    <TextBlock x:Name="CurrentTextText"
+                               FontSize="11"
+                               Foreground="#FFA6ADC8"
+                               MaxWidth="320"
+                               TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" Margin="0,1">
+                    <TextBlock Text="Placeholder/Hint: "
+                               FontSize="11"
+                               Foreground="#FF6C7086" />
+                    <TextBlock x:Name="PlaceholderText"
+                               FontSize="11"
+                               Foreground="#FFA6ADC8"
+                               MaxWidth="320"
+                               TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" Margin="0,1">
+                    <TextBlock Text="Origem/qualidade: "
+                               FontSize="11"
+                               Foreground="#FF6C7086" />
+                    <TextBlock x:Name="TextSourceText"
+                               FontSize="11"
+                               Foreground="#FF94E2D5"
+                               MaxWidth="320"
+                               TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+
+                <TextBlock x:Name="OcrWarningText"
+                           FontSize="10"
+                           Foreground="#FFF9E2AF"
+                           MaxWidth="360"
+                           TextWrapping="Wrap"
+                           Visibility="Collapsed"
+                           Margin="0,2,0,2" />
+
                 <!-- ClassName -->
                 <StackPanel Orientation="Horizontal" Margin="0,1">
                     <TextBlock Text="Class: "

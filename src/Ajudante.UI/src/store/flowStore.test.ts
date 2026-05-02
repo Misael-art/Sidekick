@@ -337,6 +337,94 @@ describe('flowStore', () => {
     expect(state.isDirty).toBe(true);
   });
 
+  it('creates edits duplicates saves and reloads sticky notes', async () => {
+    const { useFlowStore } = await import('./flowStore');
+
+    useFlowStore.setState({
+      flowId: 'flow-sticky',
+      flowName: 'Sticky Flow',
+      isDirty: false,
+      lastPersistedSnapshot: '',
+      nodes: [],
+      edges: [],
+      stickyNotes: [],
+      selectedNodeId: null,
+      nodeDefinitions: [],
+    });
+
+    const stickyId = useFlowStore.getState().addStickyNote(
+      { x: 40, y: 60 },
+      {
+        title: 'Checklist',
+        body: 'Capturar -> Aplicar',
+        color: 'blue',
+        width: 300,
+        height: 180,
+      },
+    );
+    useFlowStore.getState().updateStickyNote(stickyId, { body: 'Capturar -> Aplicar -> Testar' });
+    useFlowStore.getState().applyStickyNoteChange([{ id: stickyId, position: { x: 96, y: 144 } }]);
+
+    const duplicateId = useFlowStore.getState().duplicateStickyNote(stickyId);
+    expect(duplicateId).toBeTruthy();
+    expect(useFlowStore.getState().stickyNotes).toHaveLength(2);
+    expect(useFlowStore.getState().stickyNotes[1].position).toEqual({ x: 128, y: 176 });
+
+    sendCommandMock.mockResolvedValueOnce({ flowId: 'flow-sticky' });
+    await useFlowStore.getState().saveFlow();
+
+    const saveCall = sendCommandMock.mock.calls.find((call) => call[1] === 'saveFlow');
+    expect(saveCall).toBeTruthy();
+    expect(saveCall![2].annotations).toEqual([
+      expect.objectContaining({
+        id: stickyId,
+        title: 'Checklist',
+        body: 'Capturar -> Aplicar -> Testar',
+        color: 'blue',
+        position: { x: 96, y: 144 },
+        width: 300,
+        height: 180,
+      }),
+      expect.objectContaining({
+        id: duplicateId,
+        color: 'blue',
+        position: { x: 128, y: 176 },
+      }),
+    ]);
+
+    sendCommandMock.mockResolvedValueOnce({
+      id: 'flow-sticky',
+      name: 'Sticky Flow',
+      nodes: [],
+      connections: [],
+      annotations: [
+        {
+          id: stickyId,
+          title: 'Checklist',
+          body: 'Capturar -> Aplicar -> Testar',
+          color: 'blue',
+          position: { x: 96, y: 144 },
+          width: 300,
+          height: 180,
+        },
+      ],
+    });
+
+    await useFlowStore.getState().loadFlow('flow-sticky');
+
+    const [loadedSticky] = useFlowStore.getState().stickyNotes;
+    expect(loadedSticky.id).toBe(stickyId);
+    expect(loadedSticky.position).toEqual({ x: 96, y: 144 });
+    expect(loadedSticky.data).toMatchObject({
+      title: 'Checklist',
+      body: 'Capturar -> Aplicar -> Testar',
+      color: 'blue',
+      width: 300,
+      height: 180,
+    });
+    expect(useFlowStore.getState().isDirty).toBe(false);
+  });
+
   it('toggles a node disabled flag without deleting the node', async () => {
     const { useFlowStore } = await import('./flowStore');
     const { getDevNodeDefinitions } = await import('../devNodeDefinitions');

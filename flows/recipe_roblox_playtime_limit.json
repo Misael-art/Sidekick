@@ -1,0 +1,286 @@
+{
+  "id": "recipe-roblox-playtime-limit",
+  "name": "Tempo de Jogo - ROBLOX",
+  "version": 1,
+  "variables": [
+    {
+      "name": "tempoPermitidoMs",
+      "type": "Integer",
+      "default": 120000
+    },
+    {
+      "name": "bloqueioAte",
+      "type": "String",
+      "default": "00:00"
+    },
+    {
+      "name": "robloxBlockKey",
+      "type": "String",
+      "default": "roblox-playtime-block"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "watch-player",
+      "typeId": "trigger.processEvent",
+      "position": { "x": 80, "y": 60 },
+      "properties": {
+        "eventType": "started",
+        "processName": "RobloxPlayerBeta",
+        "intervalMs": 1000,
+        "cooldownMs": 10000,
+        "__ui.alias": "Quando Roblox Player abrir",
+        "__ui.comment": "Monitora o processo principal do Roblox. Duplique este gatilho para outros perfis se necessario."
+      }
+    },
+    {
+      "id": "watch-launcher",
+      "typeId": "trigger.processEvent",
+      "position": { "x": 80, "y": 220 },
+      "properties": {
+        "eventType": "started",
+        "processName": "RobloxPlayerLauncher",
+        "intervalMs": 1000,
+        "cooldownMs": 10000,
+        "__ui.alias": "Quando Roblox Launcher abrir",
+        "__ui.comment": "Cobre o launcher antes do player aparecer."
+      }
+    },
+    {
+      "id": "watch-studio",
+      "typeId": "trigger.processEvent",
+      "position": { "x": 80, "y": 380 },
+      "properties": {
+        "eventType": "started",
+        "processName": "RobloxStudioBeta",
+        "intervalMs": 1000,
+        "cooldownMs": 10000,
+        "__ui.alias": "Opcional: Roblox Studio",
+        "__ui.comment": "Mantenha ativo apenas se Studio tambem deve contar como jogo."
+      }
+    },
+    {
+      "id": "cooldown-start",
+      "typeId": "logic.cooldown",
+      "position": { "x": 380, "y": 220 },
+      "properties": {
+        "key": "roblox-start-cooldown",
+        "cooldownMs": 10000,
+        "__ui.alias": "Evitar repeticao rapida",
+        "__ui.comment": "Impede loop destrutivo caso varios processos do Roblox subam juntos."
+      }
+    },
+    {
+      "id": "read-block",
+      "typeId": "action.readState",
+      "position": { "x": 680, "y": 220 },
+      "properties": {
+        "key": "{{robloxBlockKey}}",
+        "storeInVariable": "blockValue",
+        "__ui.alias": "Verificar bloqueio do dia",
+        "__ui.comment": "Resiste a reinicio do Sidekick lendo estado salvo em AppData/Sidekick/state."
+      }
+    },
+    {
+      "id": "until-midnight",
+      "typeId": "logic.untilDateTime",
+      "position": { "x": 980, "y": 90 },
+      "properties": {
+        "untilLocalTime": "{{bloqueioAte}}",
+        "__ui.alias": "Ainda antes da meia-noite?",
+        "__ui.comment": "Se o bloqueio ainda vale, fecha de novo e mostra explicacao."
+      }
+    },
+    {
+      "id": "overlay-blocked",
+      "typeId": "action.overlayText",
+      "position": { "x": 1280, "y": 60 },
+      "properties": {
+        "text": "Roblox esta bloqueado ate 00:00. Amanhã libera de novo.",
+        "fontSize": 46,
+        "textColor": "#FFFFFF",
+        "backgroundColor": "#5B2333",
+        "durationMs": 4500,
+        "fullScreen": true,
+        "plane": "foreground",
+        "motion": "slideRight",
+        "__ui.alias": "Mensagem de bloqueio",
+        "__ui.comment": "Feedback claro quando a crianca tenta abrir novamente no mesmo dia."
+      }
+    },
+    {
+      "id": "play-blocked",
+      "typeId": "action.playSound",
+      "position": { "x": 1580, "y": 60 },
+      "properties": {
+        "systemSound": "hand",
+        "__ui.alias": "Som de bloqueio",
+        "__ui.comment": "Usa som do Windows por padrao, sem depender de arquivo externo."
+      }
+    },
+    {
+      "id": "kill-blocked-player",
+      "typeId": "action.killProcess",
+      "position": { "x": 1880, "y": 60 },
+      "properties": {
+        "processName": "RobloxPlayerBeta",
+        "__ui.alias": "Fechar Roblox bloqueado",
+        "__ui.comment": "Fecha o processo principal quando o bloqueio do dia ainda esta ativo."
+      }
+    },
+    {
+      "id": "overlay-start",
+      "typeId": "action.overlayText",
+      "position": { "x": 980, "y": 320 },
+      "properties": {
+        "text": "Tempo de jogo iniciado: 2 minutos",
+        "fontSize": 54,
+        "textColor": "#FFFFFF",
+        "backgroundColor": "#163B45",
+        "durationMs": 4000,
+        "fullScreen": true,
+        "plane": "foreground",
+        "motion": "slideUp",
+        "__ui.alias": "Aviso inicial amigavel",
+        "__ui.comment": "Personalize texto, cores e tempo permitido antes de armar."
+      }
+    },
+    {
+      "id": "timer-main",
+      "typeId": "logic.delay",
+      "position": { "x": 1280, "y": 320 },
+      "properties": {
+        "milliseconds": 115000,
+        "__ui.alias": "Timer principal",
+        "__ui.comment": "Aguarda 1m55s. Os ultimos 5 segundos aparecem como alerta intenso."
+      }
+    },
+    {
+      "id": "overlay-warning",
+      "typeId": "action.overlayText",
+      "position": { "x": 1580, "y": 320 },
+      "properties": {
+        "text": "Ultimos 5 segundos!",
+        "fontSize": 72,
+        "textColor": "#FFFFFF",
+        "backgroundColor": "#7C2D12",
+        "durationMs": 5000,
+        "fullScreen": true,
+        "plane": "foreground",
+        "motion": "slideRight",
+        "effect": "outline",
+        "__ui.alias": "Alerta final piscante",
+        "__ui.comment": "Visualmente intenso no final. Para piscar em ciclos, duplique overlay+delay."
+      }
+    },
+    {
+      "id": "play-warning",
+      "typeId": "action.playSound",
+      "position": { "x": 1880, "y": 320 },
+      "properties": {
+        "systemSound": "exclamation",
+        "__ui.alias": "Som dos ultimos segundos",
+        "__ui.comment": "Toca alerta nos ultimos 5 segundos usando som do Windows."
+      }
+    },
+    {
+      "id": "close-window",
+      "typeId": "action.windowControl",
+      "position": { "x": 2180, "y": 320 },
+      "properties": {
+        "windowTitle": "Roblox",
+        "windowTitleMatch": "contains",
+        "processName": "RobloxPlayerBeta",
+        "controlType": "Window",
+        "timeoutMs": 1500,
+        "operation": "close",
+        "__ui.alias": "Tentar fechar com seguranca",
+        "__ui.comment": "Primeiro tenta WM_CLOSE na janela antes de matar processo."
+      }
+    },
+    {
+      "id": "kill-player",
+      "typeId": "action.killProcess",
+      "position": { "x": 2480, "y": 320 },
+      "properties": {
+        "processName": "RobloxPlayerBeta",
+        "__ui.alias": "Forcar fechamento se preciso",
+        "__ui.comment": "Fallback quando o fechamento gracioso nao encerra o player."
+      }
+    },
+    {
+      "id": "persist-block",
+      "typeId": "action.persistState",
+      "position": { "x": 2780, "y": 320 },
+      "properties": {
+        "key": "{{robloxBlockKey}}",
+        "value": "blocked",
+        "expiresAtLocal": "{{bloqueioAte}}",
+        "__ui.alias": "Bloquear ate 00:00",
+        "__ui.comment": "Persistencia local protege contra reinicio do Sidekick."
+      }
+    },
+    {
+      "id": "overlay-ended",
+      "typeId": "action.overlayText",
+      "position": { "x": 3080, "y": 320 },
+      "properties": {
+        "text": "Seu tempo acabou!",
+        "fontSize": 92,
+        "textColor": "#FFFFFF",
+        "backgroundColor": "#111827",
+        "durationMs": 7000,
+        "fullScreen": true,
+        "plane": "foreground",
+        "motion": "slideRight",
+        "effect": "outline",
+        "__ui.alias": "Mensagem final grande",
+        "__ui.comment": "Atravessa a tela da esquerda para a direita."
+      }
+    },
+    {
+      "id": "play-ended",
+      "typeId": "action.playSound",
+      "position": { "x": 3380, "y": 320 },
+      "properties": {
+        "systemSound": "asterisk",
+        "__ui.alias": "Som final",
+        "__ui.comment": "Som diferente para marcar o encerramento."
+      }
+    }
+  ],
+  "connections": [
+    { "id": "c-watch-player-cooldown", "sourceNodeId": "watch-player", "sourcePort": "triggered", "targetNodeId": "cooldown-start", "targetPort": "in" },
+    { "id": "c-watch-launcher-cooldown", "sourceNodeId": "watch-launcher", "sourcePort": "triggered", "targetNodeId": "cooldown-start", "targetPort": "in" },
+    { "id": "c-watch-studio-cooldown", "sourceNodeId": "watch-studio", "sourcePort": "triggered", "targetNodeId": "cooldown-start", "targetPort": "in" },
+    { "id": "c-cooldown-read", "sourceNodeId": "cooldown-start", "sourcePort": "passthrough", "targetNodeId": "read-block", "targetPort": "in" },
+    { "id": "c-read-found-until", "sourceNodeId": "read-block", "sourcePort": "found", "targetNodeId": "until-midnight", "targetPort": "in" },
+    { "id": "c-until-before-overlay", "sourceNodeId": "until-midnight", "sourcePort": "before", "targetNodeId": "overlay-blocked", "targetPort": "in" },
+    { "id": "c-overlay-blocked-sound", "sourceNodeId": "overlay-blocked", "sourcePort": "out", "targetNodeId": "play-blocked", "targetPort": "in" },
+    { "id": "c-sound-blocked-kill", "sourceNodeId": "play-blocked", "sourcePort": "out", "targetNodeId": "kill-blocked-player", "targetPort": "in" },
+    { "id": "c-read-missing-start", "sourceNodeId": "read-block", "sourcePort": "missing", "targetNodeId": "overlay-start", "targetPort": "in" },
+    { "id": "c-until-after-start", "sourceNodeId": "until-midnight", "sourcePort": "after", "targetNodeId": "overlay-start", "targetPort": "in" },
+    { "id": "c-start-timer", "sourceNodeId": "overlay-start", "sourcePort": "out", "targetNodeId": "timer-main", "targetPort": "in" },
+    { "id": "c-timer-warning", "sourceNodeId": "timer-main", "sourcePort": "out", "targetNodeId": "overlay-warning", "targetPort": "in" },
+    { "id": "c-warning-sound", "sourceNodeId": "overlay-warning", "sourcePort": "out", "targetNodeId": "play-warning", "targetPort": "in" },
+    { "id": "c-warning-close", "sourceNodeId": "play-warning", "sourcePort": "out", "targetNodeId": "close-window", "targetPort": "in" },
+    { "id": "c-close-kill", "sourceNodeId": "close-window", "sourcePort": "out", "targetNodeId": "kill-player", "targetPort": "in" },
+    { "id": "c-close-notfound-kill", "sourceNodeId": "close-window", "sourcePort": "notFound", "targetNodeId": "kill-player", "targetPort": "in" },
+    { "id": "c-kill-persist", "sourceNodeId": "kill-player", "sourcePort": "out", "targetNodeId": "persist-block", "targetPort": "in" },
+    { "id": "c-persist-ended", "sourceNodeId": "persist-block", "sourcePort": "out", "targetNodeId": "overlay-ended", "targetPort": "in" },
+    { "id": "c-ended-sound", "sourceNodeId": "overlay-ended", "sourcePort": "out", "targetNodeId": "play-ended", "targetPort": "in" }
+  ],
+  "annotations": [
+    {
+      "id": "sticky-overview",
+      "title": "Como usar",
+      "body": "Ajuste tempoPermitidoMs/delays, personalize textos e sons, depois arme o flow. Validacao tecnica do fluxo; teste real depende do Roblox instalado.",
+      "color": "yellow",
+      "position": { "x": 660, "y": -140 },
+      "width": 420,
+      "height": 180
+    }
+  ],
+  "createdAt": "2026-05-02T00:00:00Z",
+  "modifiedAt": "2026-05-02T00:00:00Z"
+}

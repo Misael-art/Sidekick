@@ -106,11 +106,12 @@ function createFlowSnapshot(
 }
 
 function createDirtyPatch(
-  state: FlowMutationState,
+  state: FlowMutationState & { stickyNotes?: Node<StickyNoteData>[] },
   nodes: Node<FlowNodeData>[],
   edges: Edge[],
+  stickyNotes: Node<StickyNoteData>[] = state.stickyNotes ?? [],
 ): { nodes: Node<FlowNodeData>[]; edges: Edge[]; isDirty: boolean; validationResult: null } {
-  const nextSnapshot = createFlowSnapshot(state.flowId, state.flowName, nodes, edges);
+  const nextSnapshot = createFlowSnapshot(state.flowId, state.flowName, nodes, edges, stickyNotes);
   return {
     nodes,
     edges,
@@ -297,6 +298,7 @@ export interface FlowState {
   // Sticky notes
   stickyNotes: Node<StickyNoteData>[];
   addStickyNote: (position: { x: number; y: number }, init?: Partial<StickyNoteData>) => string;
+  duplicateStickyNote: (id: string) => string | null;
   updateStickyNote: (id: string, patch: Partial<StickyNoteData>) => void;
   removeStickyNote: (id: string) => void;
   applyStickyNoteChange: (changes: { id: string; position?: { x: number; y: number }; selected?: boolean }[]) => void;
@@ -311,7 +313,7 @@ export const useFlowStore = create<FlowState>((set, get) => ({
   lastPersistedSnapshot: createFlowSnapshot('', 'Untitled Flow', [], [], []),
   setFlowName: (name) =>
     set((state) => {
-      const nextSnapshot = createFlowSnapshot(state.flowId, name, state.nodes, state.edges);
+      const nextSnapshot = createFlowSnapshot(state.flowId, name, state.nodes, state.edges, state.stickyNotes);
       return {
         flowName: name,
         isDirty: nextSnapshot !== state.lastPersistedSnapshot,
@@ -326,7 +328,7 @@ export const useFlowStore = create<FlowState>((set, get) => ({
   onNodesChange: (changes) => {
     set((state) => {
       const nextNodes = applyNodeChanges(changes, state.nodes) as Node<FlowNodeData>[];
-      const nextSnapshot = createFlowSnapshot(state.flowId, state.flowName, nextNodes, state.edges);
+      const nextSnapshot = createFlowSnapshot(state.flowId, state.flowName, nextNodes, state.edges, state.stickyNotes);
       return {
         nodes: nextNodes,
         isDirty: nextSnapshot !== state.lastPersistedSnapshot,
@@ -345,7 +347,7 @@ export const useFlowStore = create<FlowState>((set, get) => ({
   onEdgesChange: (changes) => {
     set((state) => {
       const nextEdges = applyEdgeChanges(changes, state.edges);
-      const nextSnapshot = createFlowSnapshot(state.flowId, state.flowName, state.nodes, nextEdges);
+      const nextSnapshot = createFlowSnapshot(state.flowId, state.flowName, state.nodes, nextEdges, state.stickyNotes);
       return {
         edges: nextEdges,
         isDirty: nextSnapshot !== state.lastPersistedSnapshot,
@@ -375,7 +377,7 @@ export const useFlowStore = create<FlowState>((set, get) => ({
 
     set((state) => {
       const nextNodes = [...state.nodes, newNode];
-      const nextSnapshot = createFlowSnapshot(state.flowId, state.flowName, nextNodes, state.edges);
+      const nextSnapshot = createFlowSnapshot(state.flowId, state.flowName, nextNodes, state.edges, state.stickyNotes);
       return {
         nodes: nextNodes,
         selectedNodeId: newNode.id,
@@ -391,7 +393,7 @@ export const useFlowStore = create<FlowState>((set, get) => ({
     set((state) => {
       const nextNodes = state.nodes.filter((n) => n.id !== id);
       const nextEdges = state.edges.filter((e) => e.source !== id && e.target !== id);
-      const nextSnapshot = createFlowSnapshot(state.flowId, state.flowName, nextNodes, nextEdges);
+      const nextSnapshot = createFlowSnapshot(state.flowId, state.flowName, nextNodes, nextEdges, state.stickyNotes);
       return {
         nodes: nextNodes,
         edges: nextEdges,
@@ -468,7 +470,7 @@ export const useFlowStore = create<FlowState>((set, get) => ({
           },
         };
       });
-      const nextSnapshot = createFlowSnapshot(state.flowId, state.flowName, nextNodes, state.edges);
+      const nextSnapshot = createFlowSnapshot(state.flowId, state.flowName, nextNodes, state.edges, state.stickyNotes);
       return {
         nodes: nextNodes,
         isDirty: nextSnapshot !== state.lastPersistedSnapshot,
@@ -492,7 +494,7 @@ export const useFlowStore = create<FlowState>((set, get) => ({
           },
         };
       });
-      const nextSnapshot = createFlowSnapshot(state.flowId, state.flowName, nextNodes, state.edges);
+      const nextSnapshot = createFlowSnapshot(state.flowId, state.flowName, nextNodes, state.edges, state.stickyNotes);
       return {
         nodes: nextNodes,
         isDirty: nextSnapshot !== state.lastPersistedSnapshot,
@@ -514,7 +516,7 @@ export const useFlowStore = create<FlowState>((set, get) => ({
           },
         };
       });
-      const nextSnapshot = createFlowSnapshot(state.flowId, state.flowName, nextNodes, state.edges);
+      const nextSnapshot = createFlowSnapshot(state.flowId, state.flowName, nextNodes, state.edges, state.stickyNotes);
       return {
         nodes: nextNodes,
         isDirty: nextSnapshot !== state.lastPersistedSnapshot,
@@ -785,6 +787,41 @@ export const useFlowStore = create<FlowState>((set, get) => ({
       };
     });
     return id;
+  },
+
+  duplicateStickyNote: (id) => {
+    const source = get().stickyNotes.find((sticky) => sticky.id === id);
+    if (!source) {
+      return null;
+    }
+
+    const newId = `sticky_${Date.now()}_${++nodeCounter}`;
+    set((state) => {
+      const next: Node<StickyNoteData>[] = [
+        ...state.stickyNotes.map((sticky) => ({ ...sticky, selected: false })),
+        {
+          ...source,
+          id: newId,
+          selected: true,
+          position: {
+            x: source.position.x + 32,
+            y: source.position.y + 32,
+          },
+          data: {
+            ...source.data,
+            title: source.data.title ? `${source.data.title} (copia)` : source.data.title,
+          },
+        } as Node<StickyNoteData>,
+      ];
+      const snap = createFlowSnapshot(state.flowId, state.flowName, state.nodes, state.edges, next);
+      return {
+        stickyNotes: next,
+        selectedNodeId: null,
+        isDirty: snap !== state.lastPersistedSnapshot,
+      };
+    });
+
+    return newId;
   },
 
   updateStickyNote: (id, patch) =>

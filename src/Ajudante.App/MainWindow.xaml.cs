@@ -114,6 +114,32 @@ public partial class MainWindow : Window
 
         // 6. Initialize system tray
         InitializeSystemTray();
+
+        await RunStartupFlowIfRequestedAsync();
+    }
+
+    private async Task RunStartupFlowIfRequestedAsync()
+    {
+        if (_runtimeManager is null || string.IsNullOrWhiteSpace(App.StartupRunFlowPath))
+        {
+            return;
+        }
+
+        var flowPath = Path.GetFullPath(Environment.ExpandEnvironmentVariables(App.StartupRunFlowPath));
+        var flow = await Ajudante.Core.Serialization.FlowSerializer.LoadAsync(flowPath);
+        if (flow is null)
+        {
+            throw new InvalidOperationException($"Startup flow not found or invalid: {flowPath}");
+        }
+
+        if (App.ExitAfterStartupRun)
+        {
+            _runtimeManager.FlowCompleted += _ => Dispatcher.Invoke(Application.Current.Shutdown);
+            _runtimeManager.FlowError += (_, _) => Dispatcher.Invoke(Application.Current.Shutdown);
+        }
+
+        _runtimeManager.QueueManualRun(flow);
+        Hide();
     }
 
     private void InitializeSystemTray()

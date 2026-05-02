@@ -98,6 +98,10 @@ function buildInspectionSearchText(asset: InspectionAsset): string {
   return normalizeSearchText([
     asset.displayName,
     asset.content.name,
+    asset.content.detectedText,
+    asset.content.currentText,
+    asset.content.placeholderText,
+    asset.content.textSource,
     asset.content.automationId,
     asset.content.className,
     asset.content.controlType,
@@ -114,6 +118,7 @@ function buildInspectionSummary(asset: InspectionAsset): string {
   const summaryParts = [
     asset.content.controlType,
     asset.content.name,
+    asset.content.detectedText,
     asset.content.automationId,
     asset.locator.strength,
     asset.locator.strategy,
@@ -165,6 +170,7 @@ export default function Toolbar() {
   const isDirty = useFlowStore((s) => s.isDirty);
   const nodes = useFlowStore((s) => s.nodes);
   const edges = useFlowStore((s) => s.edges);
+  const stickyNotes = useFlowStore((s) => s.stickyNotes);
   const setFlowName = useFlowStore((s) => s.setFlowName);
   const saveFlow = useFlowStore((s) => s.saveFlow);
   const newFlow = useFlowStore((s) => s.newFlow);
@@ -197,11 +203,15 @@ export default function Toolbar() {
   const [deletingFlowId, setDeletingFlowId] = useState<string | null>(null);
   const [isStopDialogOpen, setIsStopDialogOpen] = useState(false);
   const [isStoppingFlow, setIsStoppingFlow] = useState(false);
+  const [isExportingRunner, setIsExportingRunner] = useState(false);
   const [isInspectionLibraryOpen, setIsInspectionLibraryOpen] = useState(false);
   const [inspectionFilter, setInspectionFilter] = useState('');
   const [selectedInspectionAssetId, setSelectedInspectionAssetId] = useState<string | null>(null);
   const [inspectionAssetBusyId, setInspectionAssetBusyId] = useState<string | null>(null);
   const [inspectionAssetTestResult, setInspectionAssetTestResult] = useState<string>('');
+  const [inspectionAssetNameDraft, setInspectionAssetNameDraft] = useState('');
+  const [inspectionAssetNotesDraft, setInspectionAssetNotesDraft] = useState('');
+  const [inspectionAssetTagsDraft, setInspectionAssetTagsDraft] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const loadSearchInputRef = useRef<HTMLInputElement>(null);
   const marketplaceSearchInputRef = useRef<HTMLInputElement>(null);
@@ -390,6 +400,12 @@ export default function Toolbar() {
       setSelectedInspectionAssetId(filteredInspectionAssets[0].id);
     }
   }, [filteredInspectionAssets, isInspectionLibraryOpen, selectedInspectionAssetId]);
+
+  useEffect(() => {
+    setInspectionAssetNameDraft(selectedInspectionAsset?.displayName ?? '');
+    setInspectionAssetNotesDraft(selectedInspectionAsset?.notes ?? '');
+    setInspectionAssetTagsDraft((selectedInspectionAsset?.tags ?? []).join(', '));
+  }, [selectedInspectionAsset?.id]);
 
   const commitName = () => {
     const trimmed = editName.trim();
@@ -726,6 +742,27 @@ export default function Toolbar() {
     startMiraCapture();
   };
 
+  const exportRunnerPackage = async () => {
+    setIsExportingRunner(true);
+    try {
+      const backendFlow = toBackendFlow(flowId, flowName, [...nodes, ...stickyNotes], edges, {
+        persistUiMetadata: true,
+      });
+      const result = await sendCommand<{ packageDirectory?: string }>('flow', 'exportRunnerPackage', backendFlow);
+      const message = result?.packageDirectory
+        ? `Pacote runner exportado em ${result.packageDirectory}`
+        : 'Pacote runner exportado.';
+      setUserMessage({ type: 'success', text: message });
+      addLog({ timestamp: new Date().toISOString(), level: 'info', message });
+    } catch (error) {
+      const message = getErrorMessage(error, 'Falha ao exportar runner.');
+      setUserMessage({ type: 'error', text: message });
+      addLog({ timestamp: new Date().toISOString(), level: 'error', message });
+    } finally {
+      setIsExportingRunner(false);
+    }
+  };
+
   const latestCapturedInspection: CapturedElement | null = capturedElement;
 
   const refreshInspectionAssets = async () => {
@@ -776,6 +813,56 @@ export default function Toolbar() {
     }
   };
 
+  const saveSelectedInspectionAssetMetadata = async () => {
+    if (!selectedInspectionAsset) {
+      return;
+    }
+
+    setInspectionAssetBusyId(selectedInspectionAsset.id);
+    try {
+      const asset = await sendCommand<InspectionAsset>('assets', 'updateInspectionAsset', {
+        assetId: selectedInspectionAsset.id,
+        displayName: inspectionAssetNameDraft,
+        notes: inspectionAssetNotesDraft,
+        tags: inspectionAssetTagsDraft
+          .split(',')
+          .map((tag) => tag.trim())
+          .filter(Boolean),
+      });
+      if (asset) {
+        useAppStore.getState().upsertInspectionAsset(asset);
+      }
+      setInspectionAssetTestResult('Ativo Mira atualizado.');
+    } catch (error) {
+      setInspectionAssetTestResult(getErrorMessage(error, 'Falha ao salvar ativo Mira.'));
+    } finally {
+      setInspectionAssetBusyId(null);
+    }
+  };
+
+  const duplicateSelectedInspectionAsset = async () => {
+    if (!selectedInspectionAsset) {
+      return;
+    }
+
+    setInspectionAssetBusyId(selectedInspectionAsset.id);
+    try {
+      const asset = await sendCommand<InspectionAsset>('assets', 'duplicateInspectionAsset', {
+        assetId: selectedInspectionAsset.id,
+        displayName: `${selectedInspectionAsset.displayName || 'Elemento salvo'} copia`,
+      });
+      if (asset) {
+        useAppStore.getState().upsertInspectionAsset(asset);
+        setSelectedInspectionAssetId(asset.id);
+      }
+      setInspectionAssetTestResult('Ativo Mira duplicado.');
+    } catch (error) {
+      setInspectionAssetTestResult(getErrorMessage(error, 'Falha ao duplicar ativo Mira.'));
+    } finally {
+      setInspectionAssetBusyId(null);
+    }
+  };
+
   const handleAddSticky = () => {
     const offsetX = 80 + Math.random() * 80;
     const offsetY = 80 + Math.random() * 80;
@@ -812,6 +899,16 @@ export default function Toolbar() {
           >
             <span className="toolbar__btn-icon">&#x1F6D2;</span>
             <span className="toolbar__btn-label">Marketplace</span>
+          </button>
+          <button
+            className={`toolbar__btn ${isExportingRunner ? 'toolbar__btn--disabled' : ''}`}
+            onClick={() => { void exportRunnerPackage(); }}
+            title="Exportar pacote runner executavel"
+            disabled={isExportingRunner}
+            type="button"
+          >
+            <span className="toolbar__btn-icon">&#x1F4E6;</span>
+            <span className="toolbar__btn-label">{isExportingRunner ? 'Export...' : 'Export Runner'}</span>
           </button>
         </div>
 
@@ -1325,6 +1422,13 @@ export default function Toolbar() {
                       onClick={() => setSelectedInspectionAssetId(asset.id)}
                       type="button"
                     >
+                      {asset.content.thumbnailBase64 && (
+                        <img
+                          className="toolbar__asset-thumb"
+                          src={`data:image/png;base64,${asset.content.thumbnailBase64}`}
+                          alt=""
+                        />
+                      )}
                       <span className="toolbar__flow-option-header">
                         <span className="toolbar__flow-option-title">{asset.displayName?.trim() || 'Elemento salvo'}</span>
                         <span className="toolbar__flow-option-badge">Mira</span>
@@ -1342,9 +1446,41 @@ export default function Toolbar() {
 
                 {selectedInspectionAsset && (
                   <div className="toolbar__asset-detail">
+                    {selectedInspectionAsset.content.thumbnailBase64 && (
+                      <img
+                        className="toolbar__asset-preview"
+                        src={`data:image/png;base64,${selectedInspectionAsset.content.thumbnailBase64}`}
+                        alt=""
+                      />
+                    )}
                     <div className="toolbar__asset-detail-section">
                       <strong className="toolbar__asset-detail-title">{selectedInspectionAsset.displayName}</strong>
                       <p className="toolbar__asset-detail-copy">{buildInspectionSummary(selectedInspectionAsset)}</p>
+                    </div>
+
+                    <div className="toolbar__asset-detail-section">
+                      <label className="toolbar__asset-detail-label" htmlFor="mira-asset-name">Nome</label>
+                      <input
+                        id="mira-asset-name"
+                        className="toolbar__dialog-search"
+                        value={inspectionAssetNameDraft}
+                        onChange={(event) => setInspectionAssetNameDraft(event.target.value)}
+                      />
+                      <label className="toolbar__asset-detail-label" htmlFor="mira-asset-notes">Notas</label>
+                      <textarea
+                        id="mira-asset-notes"
+                        className="toolbar__asset-notes"
+                        value={inspectionAssetNotesDraft}
+                        onChange={(event) => setInspectionAssetNotesDraft(event.target.value)}
+                      />
+                      <label className="toolbar__asset-detail-label" htmlFor="mira-asset-tags">Tags</label>
+                      <input
+                        id="mira-asset-tags"
+                        className="toolbar__dialog-search"
+                        value={inspectionAssetTagsDraft}
+                        onChange={(event) => setInspectionAssetTagsDraft(event.target.value)}
+                        placeholder="busca, campo-texto, revisar"
+                      />
                     </div>
 
                     <div className="toolbar__asset-detail-section">
@@ -1360,6 +1496,24 @@ export default function Toolbar() {
                     </div>
 
                     <div className="toolbar__asset-detail-grid">
+                      <div className="toolbar__asset-detail-card">
+                        <strong className="toolbar__asset-detail-label">Texto</strong>
+                        <p className="toolbar__asset-detail-copy">
+                          {selectedInspectionAsset.content.detectedText || 'Nao detectado'}
+                        </p>
+                        <p className="toolbar__asset-detail-copy">
+                          atual: {selectedInspectionAsset.content.currentText || '(vazio)'}
+                        </p>
+                        <p className="toolbar__asset-detail-copy">
+                          hint: {selectedInspectionAsset.content.placeholderText || '(nenhum)'}
+                        </p>
+                        <p className="toolbar__asset-detail-copy">
+                          origem {selectedInspectionAsset.content.textSource || 'fallback'} / {selectedInspectionAsset.content.captureQuality || selectedInspectionAsset.locator.strength || 'fraca'}
+                        </p>
+                        {selectedInspectionAsset.content.ocrWarning && (
+                          <p className="toolbar__asset-detail-copy">{selectedInspectionAsset.content.ocrWarning}</p>
+                        )}
+                      </div>
                       <div className="toolbar__asset-detail-card">
                         <strong className="toolbar__asset-detail-label">Janela</strong>
                         <p className="toolbar__asset-detail-copy">{selectedInspectionAsset.source.windowTitle || 'Indisponivel'}</p>
@@ -1422,6 +1576,22 @@ export default function Toolbar() {
                 type="button"
               >
                 Fechar
+              </button>
+              <button
+                className="toolbar__dialog-btn toolbar__dialog-btn--secondary"
+                onClick={() => { void saveSelectedInspectionAssetMetadata(); }}
+                disabled={!selectedInspectionAsset || inspectionAssetBusyId === selectedInspectionAsset?.id}
+                type="button"
+              >
+                Salvar ativo
+              </button>
+              <button
+                className="toolbar__dialog-btn toolbar__dialog-btn--secondary"
+                onClick={() => { void duplicateSelectedInspectionAsset(); }}
+                disabled={!selectedInspectionAsset || inspectionAssetBusyId === selectedInspectionAsset?.id}
+                type="button"
+              >
+                Duplicar
               </button>
               <button
                 className="toolbar__dialog-btn toolbar__dialog-btn--secondary"

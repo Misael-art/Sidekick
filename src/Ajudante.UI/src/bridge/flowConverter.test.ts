@@ -36,10 +36,11 @@ describe('flowConverter sample flows', () => {
   it('converts every demo flow to frontend nodes and edges without dropping known nodes', () => {
     for (const sample of getSampleFlows()) {
       const converted = fromBackendFlow(sample.flow, testDefinitions);
+      const executableNodes = converted.nodes.filter((node) => node.type !== 'stickyNote');
 
-      expect(converted.nodes, sample.fileName).toHaveLength(sample.flow.nodes.length);
+      expect(converted.nodes, sample.fileName).toHaveLength(sample.flow.nodes.length + (sample.flow.annotations?.length ?? 0));
       expect(converted.edges, sample.fileName).toHaveLength(sample.flow.connections.length);
-      expect(converted.nodes.map((node) => node.data.typeId), sample.fileName).toEqual(
+      expect(executableNodes.map((node) => node.data.typeId), sample.fileName).toEqual(
         sample.flow.nodes.map((node) => node.typeId),
       );
     }
@@ -96,6 +97,57 @@ describe('flowConverter sample flows', () => {
 
     expect(runtimeFlow.nodes[0].properties['__ui.disabled']).toBeUndefined();
     expect(persistedFlow.nodes[0].properties['__ui.disabled']).toBe(true);
+  });
+
+  it('round-trips sticky annotations without converting them into executable nodes', () => {
+    const backend: BackendFlow = {
+      id: 'sticky-flow',
+      name: 'Sticky Flow',
+      version: 1,
+      variables: [],
+      nodes: [
+        { id: 'start', typeId: 'trigger.manualStart', position: { x: 0, y: 0 }, properties: {} },
+      ],
+      connections: [],
+      annotations: [
+        {
+          id: 'sticky-1',
+          title: 'Atenção',
+          body: 'Capturar -> Aplicar -> Testar',
+          color: 'blue',
+          position: { x: 200, y: 120 },
+          width: 320,
+          height: 180,
+        },
+      ],
+    };
+
+    const converted = fromBackendFlow(backend, testDefinitions);
+    expect(converted.nodes).toHaveLength(2);
+    expect(converted.nodes.find((node) => node.type === 'stickyNote')?.data).toMatchObject({
+      title: 'Atenção',
+      body: 'Capturar -> Aplicar -> Testar',
+      color: 'blue',
+      width: 320,
+      height: 180,
+    });
+
+    const roundTrip = toBackendFlow(backend.id, backend.name, converted.nodes, converted.edges, {
+      persistUiMetadata: true,
+    });
+
+    expect(roundTrip.nodes.map((node) => node.id)).toEqual(['start']);
+    expect(roundTrip.annotations).toEqual([
+      expect.objectContaining({
+        id: 'sticky-1',
+        title: 'Atenção',
+        body: 'Capturar -> Aplicar -> Testar',
+        color: 'blue',
+        position: { x: 200, y: 120 },
+        width: 320,
+        height: 180,
+      }),
+    ]);
   });
 
   it('bypasses a disabled node in runtime view when it has one input and one output edge', () => {

@@ -188,6 +188,14 @@ public partial class MiraWindow : Window
             ? "(Unknown)"
             : element.ControlType;
         NameText.Text = string.IsNullOrEmpty(element.Name) ? "(none)" : element.Name;
+        DetectedTextText.Text = string.IsNullOrEmpty(element.DetectedText) ? "(none)" : element.DetectedText;
+        CurrentTextText.Text = string.IsNullOrEmpty(element.CurrentText) ? "(none)" : element.CurrentText;
+        PlaceholderText.Text = string.IsNullOrEmpty(element.PlaceholderText) ? "(none)" : element.PlaceholderText;
+        TextSourceText.Text = $"{element.TextSource} / {element.CaptureQuality}";
+        OcrWarningText.Text = element.OcrWarning;
+        OcrWarningText.Visibility = string.IsNullOrWhiteSpace(element.OcrWarning)
+            ? Visibility.Collapsed
+            : Visibility.Visible;
         ClassNameText.Text = string.IsNullOrEmpty(element.ClassName) ? "(none)" : element.ClassName;
         AutomationIdText.Text = string.IsNullOrEmpty(element.AutomationId) ? "(none)" : element.AutomationId;
         BoundsText.Text = $"{element.BoundingRect.X}, {element.BoundingRect.Y} " +

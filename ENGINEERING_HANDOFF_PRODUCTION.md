@@ -54,6 +54,16 @@ Atualizacao `2026-04-30` (editor visual P0 e publish):
 - `Sidekick.exe` publicado existe; `wwwroot` publicado contem assets atuais; recipes oficiais foram publicados em `seed-flows/`.
 - Validacao manual interativa do exe publicado ainda esta pendente; nao declarar RC final de distribuicao sem abrir o app e validar fluxo de canvas/Mira/Snip/Marketplace no WebView2.
 
+Atualizacao `2026-05-02`:
+
+- Sticky corrigido no produto: annotations persistem no serializer, converter, store e canvas; menu de contexto agora entende sticky separadamente de node executavel.
+- Mira captura campos de texto reais quando Windows expoe dados por UIAutomation/ValuePattern/TextPattern/Legacy/HelpText e mostra origem/qualidade no overlay; OCR local ainda e fallback nao empacotado e aparece como aviso.
+- Mira Lib agora salva thumbnails em `assets/inspections`, inclui `schemaVersion`, permite editar nome/notas/tags, duplicar, excluir e testar seletor via bridge.
+- Foram adicionados nodes Windows/admin/install com dry-run por padrao para operacoes sensiveis e mensagens de limitacao quando Windows nao oferece API publica estavel.
+- Export Runner inicial usa `--run-flow` no app desktop e um pacote com script `.cmd`; nao e single EXE, e pode ser bloqueado por instancia ja aberta por causa do mutex.
+- Recipe `Tempo de Jogo - ROBLOX` adicionada em `flows/recipe_roblox_playtime_limit.json` e publicada como flow nativo/Marketplace local.
+- Gates executados nesta rodada ate aqui: `npm run test`, `npm run build`, `dotnet test Ajudante.sln`, `dotnet build Ajudante.sln` com 0 erros.
+
 ## Resumo Executivo
 
 O projeto ja possui base tecnica forte:

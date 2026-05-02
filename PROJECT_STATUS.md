@@ -19,7 +19,7 @@ Nenhum agente deve iniciar mudancas relevantes sem ler:
 
 ## Data De Referencia
 
-- Ultima consolidacao manual: `2026-04-30`
+- Ultima consolidacao manual: `2026-05-02`
 
 ## Estagio Atual Do Produto
 
@@ -36,6 +36,23 @@ Traduzindo isso para o estado real:
 - a jornada de criacao de fluxos recebeu recipes oficiais para desktop automation, wait text then click, popup auto-confirm, Trae auto-continue, fallback visual e scheduler
 - o editor visual foi reforcado no recorte P0: criar proximo passo soltando fio no vazio, inserir node no meio de edge, reconectar edge, remover edge por menu, duplicar node, habilitar/desabilitar node, bypass de node desabilitado em runtime view, auto layout, atalhos e categorias de produto no palette
 - Marketplace local de recipes oficiais existe na toolbar; marketplace remoto foi avaliado em `MARKETPLACE_EVALUATION.md` e segue bloqueado para execucao irrestrita ate existir manifesto seguro, hash/assinatura, aviso de nodes sensiveis e importacao desarmada
+
+Atualizacao de produto em `2026-05-02` (fortalecimento comercial Windows):
+
+- Sticky notes foram estabilizadas como annotations do flow: criar, editar titulo/cor/corpo/tamanho/posicao, mover, duplicar, remover, salvar e recarregar preservam estado; stickies continuam fora do runtime executavel.
+- Mira agora captura texto visivel por camadas (`Name`, `ValuePattern`, `TextPattern`, Legacy via pattern refletido, `HelpText` e fallback visual) e expõe `Texto detectado`, `Texto atual`, `Placeholder/Hint`, origem e qualidade no overlay.
+- OCR permanece honesto: a tentativa de fallback e registrada, mas o engine OCR local ainda nao e empacotado; quando indisponivel, a UI mostra aviso e preserva seletor/fallback visual.
+- Mira Lib foi promovida para biblioteca de ativos: cada captura gera thumbnail real quando o desktop permite captura da regiao, possui `schemaVersion`, nome/notas/tags editaveis, busca por texto/processo/janela/tag, duplicacao, exclusao e teste de seletor.
+- Novos nodes de Windows com dry-run/consentimento:
+  - taskbar: `taskbarShow`, `taskbarHide`, `taskbarSetAlignment`, `taskbarPinApp`, `taskbarUnpinApp`, `taskbarOpenPinnedApp`
+  - tema/wallpaper/desktop/explorer: `windowsThemeSetMode`, `windowsAccentColor`, `windowsHighContrast`, `wallpaperSetImage`, `wallpaperSetColor`, `wallpaperRestorePrevious`, `desktopIconsShowHide`, `desktopRefresh`, `desktopOpenFolder`, `desktopCreateShortcut`, `explorerOpenPath`, `explorerSelectFile`, `explorerRestart`, `explorerSetView`
+  - restore/admin/install: `restorePointCreate`, `restorePointList`, `restorePointOpenSystemRestore`, `requireAdmin`, `restartAsAdmin`, `installApp`, `downloadFile`, `verifyChecksum`, `installWinget`, `installMsix`, `installMsi`, `installExe`, `checkAppInstalled`
+  - estado/tempo: `persistState`, `readState`, `untilDateTime`, `dailyReset`
+- `action.windowControl` agora inclui operacao `close` para tentar fechamento gracioso antes de fallback por processo.
+- `action.playSound` aceita sons do Windows como fallback quando nao ha arquivo WAV configurado.
+- Foi adicionada a recipe oficial `flows/recipe_roblox_playtime_limit.json` / `Tempo de Jogo - ROBLOX`, com triggers de processo, cooldown, overlay, sons, fechamento gracioso, kill fallback e bloqueio persistido ate 00:00.
+- Export Runner inicial entregue como pacote semi-autonomo: a UI chama `flow/exportRunnerPackage`, grava `flow.json`, copia os arquivos do app atual e gera `run-sidekick-flow.cmd` usando `Sidekick.exe --run-flow ... --exit-after-run`.
+- Limitacao honesta do runner: o mutex de instancia unica ainda bloqueia execucao se o Sidekick principal ja estiver aberto.
 
 Resumo de release em `2026-04-29`:
 

@@ -211,6 +211,7 @@ describe('Toolbar runtime controls', () => {
       if (action === 'listFlows') {
         return [
           { id: 'recipe-overlay-visual-message', name: 'Recipe - Overlay Visual Message', isNative: true, nodeCount: 3 },
+          { id: 'recipe-roblox-playtime-limit', name: 'Tempo de Jogo - ROBLOX', isNative: true, nodeCount: 18 },
           { id: 'custom-flow', name: 'Meu Fluxo', isNative: false, nodeCount: 2 },
         ];
       }
@@ -235,6 +236,7 @@ describe('Toolbar runtime controls', () => {
 
     expect(container.textContent).toContain('Receitas prontas');
     expect(container.textContent).toContain('Recipe - Overlay Visual Message');
+    expect(container.textContent).toContain('Tempo de Jogo - ROBLOX');
     expect(container.textContent).not.toContain('Meu Fluxo');
 
     await act(async () => {

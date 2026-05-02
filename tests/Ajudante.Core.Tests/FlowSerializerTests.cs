@@ -68,6 +68,16 @@ public class FlowSerializerTests : IDisposable
     public void Serialize_Deserialize_RoundTrip_PreservesAllFields()
     {
         var original = CreateTestFlow();
+        original.Annotations.Add(new StickyNote
+        {
+            Id = "sticky-1",
+            Title = "Checklist",
+            Body = "Capturar -> Aplicar -> Testar",
+            Color = "blue",
+            Position = new NodePosition { X = 96, Y = 144 },
+            Width = 300,
+            Height = 180
+        });
 
         var json = FlowSerializer.Serialize(original);
         var deserialized = FlowSerializer.Deserialize(json);
@@ -90,6 +100,15 @@ public class FlowSerializerTests : IDisposable
         Assert.Equal("triggered", deserialized.Connections[0].SourcePort);
         Assert.Equal("node-2", deserialized.Connections[0].TargetNodeId);
         Assert.Equal("in", deserialized.Connections[0].TargetPort);
+        Assert.Single(deserialized.Annotations);
+        Assert.Equal("sticky-1", deserialized.Annotations[0].Id);
+        Assert.Equal("Checklist", deserialized.Annotations[0].Title);
+        Assert.Equal("Capturar -> Aplicar -> Testar", deserialized.Annotations[0].Body);
+        Assert.Equal("blue", deserialized.Annotations[0].Color);
+        Assert.Equal(96, deserialized.Annotations[0].Position.X);
+        Assert.Equal(144, deserialized.Annotations[0].Position.Y);
+        Assert.Equal(300, deserialized.Annotations[0].Width);
+        Assert.Equal(180, deserialized.Annotations[0].Height);
         Assert.Equal(original.CreatedAt, deserialized.CreatedAt);
     }
 

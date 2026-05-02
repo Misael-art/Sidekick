@@ -129,6 +129,10 @@ public class BridgeRouter
                 await HandleDeleteFlowAsync(message);
                 break;
 
+            case "exportRunnerPackage":
+                await HandleExportRunnerPackageAsync(message);
+                break;
+
             default:
                 await SendErrorIfRequested(message, $"Unknown flow action: {message.Action}");
                 break;
@@ -274,6 +278,79 @@ public class BridgeRouter
         if (message.RequestId != null)
         {
             await _bridge.SendResponseAsync(message.RequestId, new { success = true });
+        }
+    }
+
+    private async Task HandleExportRunnerPackageAsync(BridgeMessage message)
+    {
+        if (message.Payload == null)
+        {
+            await SendErrorIfRequested(message, "No flow data in payload");
+            return;
+        }
+
+        var flow = JsonSerializer.Deserialize<Flow>(message.Payload.Value.GetRawText(), JsonOptions);
+        if (flow == null)
+        {
+            await SendErrorIfRequested(message, "Failed to deserialize flow");
+            return;
+        }
+
+        var safeName = string.Concat((flow.Name ?? "flow").Select(ch => char.IsLetterOrDigit(ch) ? ch : '-')).Trim('-');
+        if (string.IsNullOrWhiteSpace(safeName))
+        {
+            safeName = "flow";
+        }
+
+        var exportRoot = Path.Combine(Ajudante.App.App.DataDirectory, "exports");
+        var packageDirectory = Path.Combine(exportRoot, $"{safeName}-{DateTime.UtcNow:yyyyMMdd-HHmmss}");
+        Directory.CreateDirectory(packageDirectory);
+
+        var flowPath = Path.Combine(packageDirectory, "flow.json");
+        await FlowSerializer.SaveAsync(flow, flowPath);
+
+        var baseDirectory = AppDomain.CurrentDomain.BaseDirectory;
+        var copiedFiles = 0;
+        foreach (var sourcePath in Directory.EnumerateFiles(baseDirectory, "*", SearchOption.TopDirectoryOnly))
+        {
+            var fileName = Path.GetFileName(sourcePath);
+            if (fileName.EndsWith(".pdb", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            File.Copy(sourcePath, Path.Combine(packageDirectory, fileName), overwrite: true);
+            copiedFiles++;
+        }
+
+        var wwwroot = Path.Combine(baseDirectory, "wwwroot");
+        if (Directory.Exists(wwwroot))
+        {
+            CopyDirectory(wwwroot, Path.Combine(packageDirectory, "wwwroot"));
+        }
+
+        var commandPath = Path.Combine(packageDirectory, "run-sidekick-flow.cmd");
+        await File.WriteAllTextAsync(commandPath,
+            "@echo off\r\n" +
+            "set DIR=%~dp0\r\n" +
+            "\"%DIR%Sidekick.exe\" --run-flow \"%DIR%flow.json\" --exit-after-run\r\n");
+
+        await File.WriteAllTextAsync(Path.Combine(packageDirectory, "README.txt"),
+            "Sidekick Export Runner\r\n\r\n" +
+            "Execute run-sidekick-flow.cmd para rodar este flow fora do editor visual.\r\n" +
+            "Limite honesto: se uma instancia do Sidekick ja estiver aberta, o mutex de instancia unica pode bloquear a execucao autonomoma.\r\n" +
+            "Logs ficam em %AppData%\\Sidekick\\logs.\r\n");
+
+        if (message.RequestId != null)
+        {
+            await _bridge.SendResponseAsync(message.RequestId, new
+            {
+                success = true,
+                packageDirectory,
+                flowPath,
+                commandPath,
+                copiedFiles
+            });
         }
     }
 
@@ -592,6 +669,14 @@ public class BridgeRouter
                 await HandleDeleteInspectionAssetAsync(message);
                 break;
 
+            case "updateInspectionAsset":
+                await HandleUpdateInspectionAssetAsync(message);
+                break;
+
+            case "duplicateInspectionAsset":
+                await HandleDuplicateInspectionAssetAsync(message);
+                break;
+
             case "testInspectionAsset":
                 await HandleTestInspectionAssetAsync(message);
                 break;
@@ -637,6 +722,20 @@ public class BridgeRouter
                     {
                         automationId = element.AutomationId,
                         name = element.Name,
+                        valueText = element.ValueText,
+                        textPatternText = element.TextPatternText,
+                        legacyName = element.LegacyName,
+                        legacyValue = element.LegacyValue,
+                        helpText = element.HelpText,
+                        detectedText = element.DetectedText,
+                        currentText = element.CurrentText,
+                        placeholderText = element.PlaceholderText,
+                        textSource = element.TextSource,
+                        captureQuality = element.CaptureQuality,
+                        ocrAttempted = element.OcrAttempted,
+                        ocrAvailable = element.OcrAvailable,
+                        ocrText = element.OcrText,
+                        ocrWarning = element.OcrWarning,
                         className = element.ClassName,
                         controlType = element.ControlType,
                         boundingRect = new
@@ -854,6 +953,54 @@ public class BridgeRouter
         }
     }
 
+    private async Task HandleUpdateInspectionAssetAsync(BridgeMessage message)
+    {
+        var assetId = GetPayloadString(message.Payload, "assetId") ?? GetPayloadString(message.Payload, "id");
+        if (string.IsNullOrWhiteSpace(assetId))
+        {
+            await SendErrorIfRequested(message, "No inspection asset id specified");
+            return;
+        }
+
+        var displayName = GetPayloadString(message.Payload, "displayName");
+        var notes = GetPayloadString(message.Payload, "notes");
+        var tags = GetPayloadStringArray(message.Payload, "tags");
+        var asset = await _miraInspectionCatalog.UpdateAsync(assetId, displayName, notes, tags);
+        if (asset is null)
+        {
+            await SendErrorIfRequested(message, $"Inspection asset not found: {assetId}");
+            return;
+        }
+
+        if (message.RequestId != null)
+        {
+            await _bridge.SendResponseAsync(message.RequestId, asset);
+        }
+    }
+
+    private async Task HandleDuplicateInspectionAssetAsync(BridgeMessage message)
+    {
+        var assetId = GetPayloadString(message.Payload, "assetId") ?? GetPayloadString(message.Payload, "id");
+        if (string.IsNullOrWhiteSpace(assetId))
+        {
+            await SendErrorIfRequested(message, "No inspection asset id specified");
+            return;
+        }
+
+        var displayName = GetPayloadString(message.Payload, "displayName");
+        var asset = await _miraInspectionCatalog.DuplicateAsync(assetId, displayName);
+        if (asset is null)
+        {
+            await SendErrorIfRequested(message, $"Inspection asset not found: {assetId}");
+            return;
+        }
+
+        if (message.RequestId != null)
+        {
+            await _bridge.SendResponseAsync(message.RequestId, asset);
+        }
+    }
+
     private async Task HandleTestInspectionAssetAsync(BridgeMessage message)
     {
         var assetId = GetPayloadString(message.Payload, "assetId") ?? GetPayloadString(message.Payload, "id");
@@ -954,6 +1101,20 @@ public class BridgeRouter
         // Sanitize the flow ID to prevent path traversal
         var safeId = Path.GetFileNameWithoutExtension(flowId);
         return Path.Combine(_flowsDirectory, $"{safeId}.json");
+    }
+
+    private static void CopyDirectory(string sourceDirectory, string destinationDirectory)
+    {
+        Directory.CreateDirectory(destinationDirectory);
+        foreach (var filePath in Directory.EnumerateFiles(sourceDirectory, "*", SearchOption.TopDirectoryOnly))
+        {
+            File.Copy(filePath, Path.Combine(destinationDirectory, Path.GetFileName(filePath)), overwrite: true);
+        }
+
+        foreach (var directoryPath in Directory.EnumerateDirectories(sourceDirectory, "*", SearchOption.TopDirectoryOnly))
+        {
+            CopyDirectory(directoryPath, Path.Combine(destinationDirectory, Path.GetFileName(directoryPath)));
+        }
     }
 
     private async Task<string> FindFlowFilePathAsync(string flowId)
@@ -1094,6 +1255,27 @@ public class BridgeRouter
         }
 
         return null;
+    }
+
+    private static string[]? GetPayloadStringArray(JsonElement? payload, string propertyName)
+    {
+        if (payload == null || payload.Value.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        if (!payload.Value.TryGetProperty(propertyName, out var prop) || prop.ValueKind != JsonValueKind.Array)
+        {
+            return null;
+        }
+
+        return prop
+            .EnumerateArray()
+            .Where(item => item.ValueKind == JsonValueKind.String)
+            .Select(item => item.GetString())
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(value => value!)
+            .ToArray();
     }
 
     private static TPayload? DeserializePayload<TPayload>(JsonElement? payload)

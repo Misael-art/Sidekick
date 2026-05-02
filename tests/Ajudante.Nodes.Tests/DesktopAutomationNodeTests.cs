@@ -1,7 +1,9 @@
 using Ajudante.Nodes.Actions;
+using Ajudante.Nodes.Logic;
 using Ajudante.Nodes.Triggers;
 using Ajudante.Core;
 using Ajudante.Core.Engine;
+using Ajudante.Core.Registry;
 using Ajudante.Platform.UIAutomation;
 
 namespace Ajudante.Nodes.Tests;
@@ -96,6 +98,75 @@ public class DesktopAutomationNodeTests
 
         Assert.False(result.Success);
         Assert.Contains("allowSystemChanges", result.Error, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void WindowsProductNodes_ArePublicAndSafetyFirst()
+    {
+        Assert.Equal("action.requireAdmin", new RequireAdminNode().Definition.TypeId);
+        Assert.Equal("action.restartAsAdmin", new RestartAsAdminNode().Definition.TypeId);
+        Assert.Equal("action.taskbarShow", new TaskbarShowNode().Definition.TypeId);
+        Assert.Equal("action.taskbarHide", new TaskbarHideNode().Definition.TypeId);
+        Assert.Equal("action.taskbarSetAlignment", new TaskbarSetAlignmentNode().Definition.TypeId);
+        Assert.Equal("action.windowsThemeSetMode", new WindowsThemeSetModeNode().Definition.TypeId);
+        Assert.Equal("action.wallpaperSetImage", new WallpaperSetImageNode().Definition.TypeId);
+        Assert.Equal("action.desktopRefresh", new DesktopRefreshNode().Definition.TypeId);
+        Assert.Equal("action.explorerOpenPath", new ExplorerOpenPathNode().Definition.TypeId);
+        Assert.Equal("action.restorePointCreate", new RestorePointCreateNode().Definition.TypeId);
+        Assert.Equal("action.installApp", new InstallAppNode().Definition.TypeId);
+        Assert.Equal("logic.untilDateTime", new UntilDateTimeNode().Definition.TypeId);
+        Assert.Equal("logic.dailyReset", new DailyResetNode().Definition.TypeId);
+
+        Assert.Contains(new InstallAppNode().Definition.Properties, p => p.Id == "dryRun");
+        Assert.Contains(new RestorePointCreateNode().Definition.Properties, p => p.Id == "allowSystemChanges");
+        Assert.Contains(new RequireAdminNode().Definition.OutputPorts, p => p.Id == "notAdmin");
+    }
+
+    [Fact]
+    public void NodeRegistry_DiscoversNewWindowsAndRobloxSupportNodes()
+    {
+        var registry = new NodeRegistry();
+        registry.ScanAssembly(typeof(RequireAdminNode).Assembly);
+        var typeIds = registry.GetAllDefinitions().Select(definition => definition.TypeId).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        Assert.Contains("action.requireAdmin", typeIds);
+        Assert.Contains("action.installApp", typeIds);
+        Assert.Contains("action.wallpaperSetImage", typeIds);
+        Assert.Contains("action.persistState", typeIds);
+        Assert.Contains("logic.untilDateTime", typeIds);
+    }
+
+    [Fact]
+    public async Task InstallAppNode_DryRunDoesNotExecuteInstaller()
+    {
+        var node = new InstallAppNode();
+        node.Configure(new Dictionary<string, object?>
+        {
+            ["sourceType"] = "winget",
+            ["packageId"] = "Microsoft.PowerToys",
+            ["dryRun"] = true
+        });
+
+        var context = new FlowExecutionContext(new Flow { Id = "flow-install", Name = "Install Flow" }, CancellationToken.None);
+        var result = await node.ExecuteAsync(context, CancellationToken.None);
+
+        Assert.True(result.Success);
+        Assert.Equal("out", result.OutputPort);
+        Assert.Contains("Dry-run", result.Outputs["message"]?.ToString(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task RequireAdminNode_BranchesWithoutThrowing()
+    {
+        var node = new RequireAdminNode();
+        node.Configure(new Dictionary<string, object?>());
+
+        var context = new FlowExecutionContext(new Flow { Id = "flow-admin", Name = "Admin Flow" }, CancellationToken.None);
+        var result = await node.ExecuteAsync(context, CancellationToken.None);
+
+        Assert.True(result.Success);
+        Assert.Contains(result.OutputPort, new[] { "admin", "notAdmin", "denied", "error" });
+        Assert.True(result.Outputs.ContainsKey("isAdministrator"));
     }
 
     [Fact]

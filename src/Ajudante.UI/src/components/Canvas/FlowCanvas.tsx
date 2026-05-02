@@ -10,10 +10,12 @@ import {
   type Edge,
   type Connection,
   type IsValidConnection,
+  type OnNodesChange,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
 import type { FlowNodeData } from '../../bridge/types';
+import type { StickyNoteData } from '../../bridge/flowConverter';
 import TriggerNode from '../Nodes/TriggerNode';
 import LogicNode from '../Nodes/LogicNode';
 import ActionNode from '../Nodes/ActionNode';
@@ -42,7 +44,7 @@ interface PendingConnection {
 
 export default function FlowCanvas() {
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
-  const reactFlowInstance = useRef<ReactFlowInstance<Node<FlowNodeData>, Edge> | null>(null);
+  const reactFlowInstance = useRef<ReactFlowInstance<Node<FlowNodeData | StickyNoteData>, Edge> | null>(null);
   const connectionCompletedRef = useRef(false);
   const [contextMenu, setContextMenu] = useState<{
     x: number;
@@ -76,10 +78,12 @@ export default function FlowCanvas() {
   const canConnect = useFlowStore((s) => s.canConnect);
   const connectNodes = useFlowStore((s) => s.connectNodes);
   const duplicateNode = useFlowStore((s) => s.duplicateNode);
+  const duplicateStickyNote = useFlowStore((s) => s.duplicateStickyNote);
   const insertNodeOnEdge = useFlowStore((s) => s.insertNodeOnEdge);
   const reconnectEdgeById = useFlowStore((s) => s.reconnectEdge);
   const removeEdge = useFlowStore((s) => s.removeEdge);
   const removeNode = useFlowStore((s) => s.removeNode);
+  const removeStickyNote = useFlowStore((s) => s.removeStickyNote);
   const selectedNodeId = useFlowStore((s) => s.selectedNodeId);
   const setSelectedNodeId = useFlowStore((s) => s.setSelectedNodeId);
   const toggleNodeDisabled = useFlowStore((s) => s.toggleNodeDisabled);
@@ -89,9 +93,10 @@ export default function FlowCanvas() {
   const capturedRegion = useAppStore((s) => s.capturedRegion);
   const [pendingConnection, setPendingConnection] = useState<PendingConnection | null>(null);
   const selectedNode = nodes.find((node) => node.id === selectedNodeId) ?? null;
+  const selectedStickyNote = stickyNotes.find((sticky) => sticky.id === selectedNodeId) ?? null;
 
   const renderedNodes = useMemo(
-    () => [...nodes, ...stickyNotes] as Node<FlowNodeData>[],
+    () => [...nodes, ...stickyNotes] as Node<FlowNodeData | StickyNoteData>[],
     [nodes, stickyNotes],
   );
 
@@ -167,7 +172,7 @@ export default function FlowCanvas() {
     [addNode],
   );
 
-  const onInit = useCallback((instance: ReactFlowInstance<Node<FlowNodeData>, Edge>) => {
+  const onInit = useCallback((instance: ReactFlowInstance<Node<FlowNodeData | StickyNoteData>, Edge>) => {
     reactFlowInstance.current = instance;
   }, []);
 
@@ -349,7 +354,7 @@ export default function FlowCanvas() {
     }
   }, [addLog, reconnectEdgeById, setUserMessage]);
 
-  const onNodeContextMenu = useCallback((event: CanvasPointerEvent, node: Node<FlowNodeData>) => {
+  const onNodeContextMenu = useCallback((event: CanvasPointerEvent, node: Node<FlowNodeData | StickyNoteData>) => {
     event.preventDefault();
     const menuPosition = clampContextMenuPosition(event.clientX, event.clientY);
     setSelectedNodeId(node.id);
@@ -481,7 +486,11 @@ export default function FlowCanvas() {
       const key = event.key.toLocaleLowerCase('en-US');
       if ((event.ctrlKey || event.metaKey) && key === 'd' && selectedNodeId) {
         event.preventDefault();
-        duplicateNode(selectedNodeId);
+        if (selectedStickyNote) {
+          duplicateStickyNote(selectedNodeId);
+        } else {
+          duplicateNode(selectedNodeId);
+        }
         return;
       }
 
@@ -520,14 +529,14 @@ export default function FlowCanvas() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [autoLayout, duplicateNode, getFlowPositionFromEvent, selectedNode, selectedNodeId]);
+  }, [autoLayout, duplicateNode, duplicateStickyNote, getFlowPositionFromEvent, selectedNode, selectedNodeId, selectedStickyNote]);
 
   return (
     <div ref={reactFlowWrapper} className="flow-canvas">
       <ReactFlow
         nodes={renderedNodes}
         edges={edges}
-        onNodesChange={onNodesChange as typeof onNodesChangeRaw}
+        onNodesChange={onNodesChange as unknown as OnNodesChange<Node<FlowNodeData | StickyNoteData>>}
         onEdgesChange={onEdgesChange}
         onConnect={handleConnect}
         onReconnect={handleReconnect}
@@ -577,37 +586,64 @@ export default function FlowCanvas() {
           aria-label="Node actions"
           onContextMenu={(event) => event.preventDefault()}
         >
-          <button
-            type="button"
-            className="flow-mini-menu__item"
-            onClick={() => {
-              duplicateNode(nodeContextMenu.nodeId);
-              setNodeContextMenu(null);
-            }}
-          >
-            Duplicar node
-          </button>
-          <button
-            type="button"
-            className="flow-mini-menu__item"
-            onClick={() => {
-              const node = nodes.find((candidate) => candidate.id === nodeContextMenu.nodeId);
-              toggleNodeDisabled(nodeContextMenu.nodeId, !node?.data.nodeDisabled);
-              setNodeContextMenu(null);
-            }}
-          >
-            {nodes.find((node) => node.id === nodeContextMenu.nodeId)?.data.nodeDisabled ? 'Habilitar node' : 'Desabilitar node'}
-          </button>
-          <button
-            type="button"
-            className="flow-mini-menu__item flow-mini-menu__item--danger"
-            onClick={() => {
-              removeNode(nodeContextMenu.nodeId);
-              setNodeContextMenu(null);
-            }}
-          >
-            Remover node
-          </button>
+          {stickyIdSet.has(nodeContextMenu.nodeId) ? (
+            <>
+              <button
+                type="button"
+                className="flow-mini-menu__item"
+                onClick={() => {
+                  duplicateStickyNote(nodeContextMenu.nodeId);
+                  setNodeContextMenu(null);
+                }}
+              >
+                Duplicar sticky
+              </button>
+              <button
+                type="button"
+                className="flow-mini-menu__item flow-mini-menu__item--danger"
+                onClick={() => {
+                  removeStickyNote(nodeContextMenu.nodeId);
+                  setNodeContextMenu(null);
+                }}
+              >
+                Remover sticky
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                className="flow-mini-menu__item"
+                onClick={() => {
+                  duplicateNode(nodeContextMenu.nodeId);
+                  setNodeContextMenu(null);
+                }}
+              >
+                Duplicar node
+              </button>
+              <button
+                type="button"
+                className="flow-mini-menu__item"
+                onClick={() => {
+                  const node = nodes.find((candidate) => candidate.id === nodeContextMenu.nodeId);
+                  toggleNodeDisabled(nodeContextMenu.nodeId, !node?.data.nodeDisabled);
+                  setNodeContextMenu(null);
+                }}
+              >
+                {nodes.find((node) => node.id === nodeContextMenu.nodeId)?.data.nodeDisabled ? 'Habilitar node' : 'Desabilitar node'}
+              </button>
+              <button
+                type="button"
+                className="flow-mini-menu__item flow-mini-menu__item--danger"
+                onClick={() => {
+                  removeNode(nodeContextMenu.nodeId);
+                  setNodeContextMenu(null);
+                }}
+              >
+                Remover node
+              </button>
+            </>
+          )}
         </div>
       )}
       {edgeContextMenu && (

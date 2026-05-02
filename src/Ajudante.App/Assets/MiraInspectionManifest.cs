@@ -4,6 +4,7 @@ public sealed class MiraInspectionManifest
 {
     public string Id { get; set; } = "";
     public string Kind { get; set; } = "inspection";
+    public int SchemaVersion { get; set; } = 1;
     public int Version { get; set; } = 2;
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
@@ -58,6 +59,22 @@ public sealed class MiraInspectionContent
     public string? ClassName { get; set; }
     public string? ControlType { get; set; }
     public string? CursorPixelColor { get; set; }
+    public string? ThumbnailPath { get; set; }
+    public string? ThumbnailBase64 { get; set; }
+    public string? DetectedText { get; set; }
+    public string? CurrentText { get; set; }
+    public string? PlaceholderText { get; set; }
+    public string? TextSource { get; set; }
+    public string? CaptureQuality { get; set; }
+    public string? ValueText { get; set; }
+    public string? TextPatternText { get; set; }
+    public string? LegacyName { get; set; }
+    public string? LegacyValue { get; set; }
+    public string? HelpText { get; set; }
+    public bool OcrAttempted { get; set; }
+    public bool OcrAvailable { get; set; }
+    public string? OcrText { get; set; }
+    public string? OcrWarning { get; set; }
     public int CursorX { get; set; }
     public int CursorY { get; set; }
     public bool IsFocused { get; set; }

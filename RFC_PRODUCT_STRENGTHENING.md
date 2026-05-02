@@ -43,6 +43,15 @@ Atualizacao `2026-04-30` (editor visual P0):
 - A conversao frontend/backend preserva metadata de UI somente quando solicitado e separa `runtimeView` para execucao/validacao.
 - Validado nesta rodada: `dotnet build`, `dotnet test`, `npm run test`, `npm run build` e `dotnet publish` oficial.
 
+Atualizacao `2026-05-02`:
+
+- Sticky notes deixaram de ser apenas annotation visual fragil e agora possuem caminho completo de produto: criar, editar, mover, redimensionar, duplicar, remover, salvar e recarregar.
+- Mira/Mira Lib avançaram para biblioteca reutilizavel com schema versionado, thumbnail, nome/notas/tags, busca por texto/processo/janela/tag, teste de seletor, duplicacao e exclusao.
+- Contrato de texto do Mira foi ampliado para `Name`, `ValuePattern`, `TextPattern`, Legacy, `HelpText`, placeholder/hint e origem/qualidade. OCR local ainda nao esta empacotado, entao o fallback e mostrado honestamente como indisponivel quando aplicavel.
+- Cobertura Windows foi expandida com nodes seguros de taskbar, tema, wallpaper, desktop, Explorer, restore point, admin, instalacao resiliente, persistencia de estado e guardas de tempo.
+- Foi criada a recipe Marketplace `Tempo de Jogo - ROBLOX`, com processo real, timer de 2 minutos, overlay, sons, fechamento gracioso, kill fallback, cooldown e bloqueio persistido ate meia-noite.
+- Export Runner inicial implementado como pacote semi-autonomo com `flow.json`, arquivos do app e `run-sidekick-flow.cmd`; single EXE embutido segue fora desta fase.
+
 ## Objetivo
 
 Fortalecer o produto alem da base tecnica atual, priorizando:
