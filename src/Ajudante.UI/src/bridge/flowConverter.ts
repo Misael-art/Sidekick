@@ -74,10 +74,11 @@ export function toBackendFlow(
   flowName: string,
   nodes: Node<FlowNodeData | StickyNoteData>[],
   edges: Edge[],
-  options?: { persistUiMetadata?: boolean; runtimeView?: boolean },
+  options?: { persistUiMetadata?: boolean; runtimeView?: boolean; variables?: BackendVariable[] },
 ): BackendFlow {
   const persistUiMetadata = options?.persistUiMetadata ?? false;
   const runtimeView = options?.runtimeView ?? false;
+  const variables = options?.variables ?? [];
 
   const stickyNodes = nodes.filter((n) => n.type === 'stickyNote') as Node<StickyNoteData>[];
   const flowNodes = nodes.filter((n) => n.type !== 'stickyNote') as Node<FlowNodeData>[];
@@ -89,7 +90,7 @@ export function toBackendFlow(
     id: flowId || crypto.randomUUID(),
     name: flowName,
     version: 1,
-    variables: [],
+    variables: variables.map((v) => ({ ...v })),
     nodes: convertedNodes.map((n) => ({
       id: n.id,
       typeId: n.data.typeId,
@@ -120,7 +121,11 @@ export function toBackendFlow(
 export function fromBackendFlow(
   backend: BackendFlow,
   definitions: NodeDefinition[],
-): { nodes: Node<FlowNodeData | StickyNoteData>[]; edges: Edge[] } {
+): {
+  nodes: Node<FlowNodeData | StickyNoteData>[];
+  edges: Edge[];
+  variables: BackendVariable[];
+} {
   const defMap = new Map(definitions.map((d) => [d.typeId, d]));
 
   const categoryToType: Record<string, string> = {
@@ -184,7 +189,13 @@ export function fromBackendFlow(
     type: 'smoothstep',
   }));
 
-  return { nodes, edges };
+  const variables: BackendVariable[] = (backend.variables ?? []).map((v) => ({
+    name: v.name,
+    type: v.type,
+    default: v.default,
+  }));
+
+  return { nodes, edges, variables };
 }
 
 // ── Helpers ──────────────────────────────────────────────────────

@@ -192,6 +192,8 @@ public class BridgeRouter
             return;
         }
 
+        TryEnrichVariablesFromBundledSeed(flow);
+
         Log($"Flow loaded: {flow.Name} ({flow.Id})");
 
         if (message.RequestId != null)
@@ -599,7 +601,13 @@ public class BridgeRouter
         if (payloadElement.ValueKind == JsonValueKind.Object &&
             payloadElement.TryGetProperty("nodes", out _))
         {
-            return JsonSerializer.Deserialize<Flow>(payloadElement.GetRawText(), JsonOptions);
+            var flow = JsonSerializer.Deserialize<Flow>(payloadElement.GetRawText(), JsonOptions);
+            if (flow != null)
+            {
+                TryEnrichVariablesFromBundledSeed(flow);
+            }
+
+            return flow;
         }
 
         var flowId = GetPayloadString(payload, "flowId");
@@ -608,7 +616,13 @@ public class BridgeRouter
             return null;
         }
 
-        return await FlowSerializer.LoadAsync(await FindFlowFilePathAsync(flowId));
+        var diskFlow = await FlowSerializer.LoadAsync(await FindFlowFilePathAsync(flowId));
+        if (diskFlow != null)
+        {
+            TryEnrichVariablesFromBundledSeed(diskFlow);
+        }
+
+        return diskFlow;
     }
 
     private static StopFlowMode GetStopFlowMode(JsonElement? payload)
@@ -1208,6 +1222,52 @@ public class BridgeRouter
         }
 
         return _nativeBundledFlowIds.Contains(flowId);
+    }
+
+    /// <summary>
+    /// Copies <see cref="Flow.Variables"/> from the bundled seed JSON when the user copy on disk
+    /// is stale (e.g. seeded before variables existed). Seeding uses overwrite:false, so AppData
+    /// files may lack <c>variables</c> while the editor still references <c>{{name}}</c> templates.
+    /// </summary>
+    private void TryEnrichVariablesFromBundledSeed(Flow flow)
+    {
+        if (flow.Variables.Count > 0 || string.IsNullOrWhiteSpace(flow.Id) || !IsNativeFlowId(flow.Id))
+        {
+            return;
+        }
+
+        var bundledFlowsDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "seed-flows");
+        if (!Directory.Exists(bundledFlowsDirectory))
+        {
+            return;
+        }
+
+        foreach (var sourcePath in Directory.EnumerateFiles(bundledFlowsDirectory, "*.json", SearchOption.TopDirectoryOnly))
+        {
+            try
+            {
+                var seed = FlowSerializer.Deserialize(File.ReadAllText(sourcePath));
+                if (seed == null || !string.Equals(seed.Id, flow.Id, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (seed.Variables.Count == 0)
+                {
+                    return;
+                }
+
+                flow.Variables = seed.Variables
+                    .Select(v => new FlowVariable { Name = v.Name, Type = v.Type, Default = v.Default })
+                    .ToList();
+                Log($"Enriched {flow.Variables.Count} flow variable(s) from bundled seed for native flow '{flow.Id}'.");
+                return;
+            }
+            catch (Exception ex)
+            {
+                Log($"Bundled seed parse skipped for '{Path.GetFileName(sourcePath)}': {ex.Message}");
+            }
+        }
     }
 
     private static HashSet<string> LoadNativeBundledFlowIds()

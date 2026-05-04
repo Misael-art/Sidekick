@@ -67,6 +67,10 @@ describe('flowStore', () => {
 
     expect(useFlowStore.getState().flowId).toBe('saved-flow-id');
     expect(useFlowStore.getState().isDirty).toBe(false);
+    const savePayload = sendCommandMock.mock.calls.find(
+      (call) => call[0] === 'flow' && call[1] === 'saveFlow',
+    )?.[2] as { variables?: unknown[] };
+    expect(savePayload?.variables).toEqual([]);
   });
 
   it('marks the flow as dirty after local edits', async () => {
@@ -107,6 +111,10 @@ describe('flowStore', () => {
     const result = await useFlowStore.getState().validateFlow();
 
     expect(sendCommandMock).toHaveBeenCalledWith('engine', 'validateFlow', expect.any(Object));
+    const validatePayload = sendCommandMock.mock.calls.find(
+      (call) => call[0] === 'engine' && call[1] === 'validateFlow',
+    )?.[2] as { variables?: unknown[] };
+    expect(validatePayload?.variables).toEqual([]);
     expect(result.isValid).toBe(false);
     expect(useFlowStore.getState().validationResult).toEqual(result);
   });
@@ -128,6 +136,7 @@ describe('flowStore', () => {
     sendCommandMock.mockResolvedValue({
       id: 'loaded-flow-id',
       name: 'Loaded Flow',
+      variables: [{ name: 'robloxBlockKey', type: 'string', default: '' }],
       nodes: [],
       connections: [],
     });
@@ -136,6 +145,9 @@ describe('flowStore', () => {
 
     expect(useFlowStore.getState().isDirty).toBe(false);
     expect(useFlowStore.getState().flowId).toBe('loaded-flow-id');
+    expect(useFlowStore.getState().flowVariables).toEqual([
+      { name: 'robloxBlockKey', type: 'string', default: '' },
+    ]);
   });
 
   it('updates multiple node properties in a single write', async () => {
@@ -375,6 +387,7 @@ describe('flowStore', () => {
 
     const saveCall = sendCommandMock.mock.calls.find((call) => call[1] === 'saveFlow');
     expect(saveCall).toBeTruthy();
+    expect(saveCall![2].variables).toEqual([]);
     expect(saveCall![2].annotations).toEqual([
       expect.objectContaining({
         id: stickyId,

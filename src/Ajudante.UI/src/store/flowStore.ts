@@ -12,7 +12,13 @@ import {
 } from '@xyflow/react';
 import type { FlowNodeData, FlowValidationResult, NodeDefinition } from '../bridge/types';
 import { sendCommand } from '../bridge/bridge';
-import { toBackendFlow, fromBackendFlow, type BackendFlow, type StickyNoteData } from '../bridge/flowConverter';
+import {
+  toBackendFlow,
+  fromBackendFlow,
+  type BackendFlow,
+  type BackendVariable,
+  type StickyNoteData,
+} from '../bridge/flowConverter';
 
 // ── Helpers ───────────────────────────────────────────────────────
 
@@ -29,6 +35,8 @@ interface FlowMutationState {
   flowId: string;
   flowName: string;
   lastPersistedSnapshot: string;
+  stickyNotes?: Node<StickyNoteData>[];
+  flowVariables?: BackendVariable[];
 }
 
 export interface ConnectionAttemptResult {
@@ -42,6 +50,7 @@ function createEmptyFlowState(flowId: string, flowName: string) {
     flowName,
     nodes: [],
     edges: [],
+    flowVariables: [] as BackendVariable[],
     selectedNodeId: null,
     validationResult: null,
   };
@@ -67,10 +76,13 @@ function createFlowSnapshot(
   nodes: Node<FlowNodeData>[],
   edges: Edge[],
   stickyNotes: Node<StickyNoteData>[] = [],
+  flowVariables: BackendVariable[] = [],
 ): string {
+  const variablesSorted = [...flowVariables].sort((a, b) => a.name.localeCompare(b.name));
   return JSON.stringify({
     flowId,
     flowName,
+    flowVariables: variablesSorted,
     nodes: nodes
       .map((node) => ({
         id: node.id,
@@ -106,12 +118,13 @@ function createFlowSnapshot(
 }
 
 function createDirtyPatch(
-  state: FlowMutationState & { stickyNotes?: Node<StickyNoteData>[] },
+  state: FlowMutationState,
   nodes: Node<FlowNodeData>[],
   edges: Edge[],
   stickyNotes: Node<StickyNoteData>[] = state.stickyNotes ?? [],
 ): { nodes: Node<FlowNodeData>[]; edges: Edge[]; isDirty: boolean; validationResult: null } {
-  const nextSnapshot = createFlowSnapshot(state.flowId, state.flowName, nodes, edges, stickyNotes);
+  const flowVariables = state.flowVariables ?? [];
+  const nextSnapshot = createFlowSnapshot(state.flowId, state.flowName, nodes, edges, stickyNotes, flowVariables);
   return {
     nodes,
     edges,
@@ -259,6 +272,9 @@ export interface FlowState {
   validationResult: FlowValidationResult | null;
   setFlowName: (name: string) => void;
 
+  /** Flow-level variables (defaults for {{name}} templates); round-tripped with save/load/validate. */
+  flowVariables: BackendVariable[];
+
   // React Flow elements
   nodes: Node<FlowNodeData>[];
   edges: Edge[];
@@ -310,10 +326,18 @@ export const useFlowStore = create<FlowState>((set, get) => ({
   flowName: 'Untitled Flow',
   isDirty: false,
   stickyNotes: [],
-  lastPersistedSnapshot: createFlowSnapshot('', 'Untitled Flow', [], [], []),
+  lastPersistedSnapshot: createFlowSnapshot('', 'Untitled Flow', [], [], [], []),
+  flowVariables: [],
   setFlowName: (name) =>
     set((state) => {
-      const nextSnapshot = createFlowSnapshot(state.flowId, name, state.nodes, state.edges, state.stickyNotes);
+      const nextSnapshot = createFlowSnapshot(
+        state.flowId,
+        name,
+        state.nodes,
+        state.edges,
+        state.stickyNotes,
+        state.flowVariables,
+      );
       return {
         flowName: name,
         isDirty: nextSnapshot !== state.lastPersistedSnapshot,
@@ -328,7 +352,14 @@ export const useFlowStore = create<FlowState>((set, get) => ({
   onNodesChange: (changes) => {
     set((state) => {
       const nextNodes = applyNodeChanges(changes, state.nodes) as Node<FlowNodeData>[];
-      const nextSnapshot = createFlowSnapshot(state.flowId, state.flowName, nextNodes, state.edges, state.stickyNotes);
+      const nextSnapshot = createFlowSnapshot(
+        state.flowId,
+        state.flowName,
+        nextNodes,
+        state.edges,
+        state.stickyNotes,
+        state.flowVariables,
+      );
       return {
         nodes: nextNodes,
         isDirty: nextSnapshot !== state.lastPersistedSnapshot,
@@ -347,7 +378,14 @@ export const useFlowStore = create<FlowState>((set, get) => ({
   onEdgesChange: (changes) => {
     set((state) => {
       const nextEdges = applyEdgeChanges(changes, state.edges);
-      const nextSnapshot = createFlowSnapshot(state.flowId, state.flowName, state.nodes, nextEdges, state.stickyNotes);
+      const nextSnapshot = createFlowSnapshot(
+        state.flowId,
+        state.flowName,
+        state.nodes,
+        nextEdges,
+        state.stickyNotes,
+        state.flowVariables,
+      );
       return {
         edges: nextEdges,
         isDirty: nextSnapshot !== state.lastPersistedSnapshot,
@@ -377,7 +415,14 @@ export const useFlowStore = create<FlowState>((set, get) => ({
 
     set((state) => {
       const nextNodes = [...state.nodes, newNode];
-      const nextSnapshot = createFlowSnapshot(state.flowId, state.flowName, nextNodes, state.edges, state.stickyNotes);
+      const nextSnapshot = createFlowSnapshot(
+        state.flowId,
+        state.flowName,
+        nextNodes,
+        state.edges,
+        state.stickyNotes,
+        state.flowVariables,
+      );
       return {
         nodes: nextNodes,
         selectedNodeId: newNode.id,
@@ -393,7 +438,14 @@ export const useFlowStore = create<FlowState>((set, get) => ({
     set((state) => {
       const nextNodes = state.nodes.filter((n) => n.id !== id);
       const nextEdges = state.edges.filter((e) => e.source !== id && e.target !== id);
-      const nextSnapshot = createFlowSnapshot(state.flowId, state.flowName, nextNodes, nextEdges, state.stickyNotes);
+      const nextSnapshot = createFlowSnapshot(
+        state.flowId,
+        state.flowName,
+        nextNodes,
+        nextEdges,
+        state.stickyNotes,
+        state.flowVariables,
+      );
       return {
         nodes: nextNodes,
         edges: nextEdges,
@@ -470,7 +522,14 @@ export const useFlowStore = create<FlowState>((set, get) => ({
           },
         };
       });
-      const nextSnapshot = createFlowSnapshot(state.flowId, state.flowName, nextNodes, state.edges, state.stickyNotes);
+      const nextSnapshot = createFlowSnapshot(
+        state.flowId,
+        state.flowName,
+        nextNodes,
+        state.edges,
+        state.stickyNotes,
+        state.flowVariables,
+      );
       return {
         nodes: nextNodes,
         isDirty: nextSnapshot !== state.lastPersistedSnapshot,
@@ -494,7 +553,14 @@ export const useFlowStore = create<FlowState>((set, get) => ({
           },
         };
       });
-      const nextSnapshot = createFlowSnapshot(state.flowId, state.flowName, nextNodes, state.edges, state.stickyNotes);
+      const nextSnapshot = createFlowSnapshot(
+        state.flowId,
+        state.flowName,
+        nextNodes,
+        state.edges,
+        state.stickyNotes,
+        state.flowVariables,
+      );
       return {
         nodes: nextNodes,
         isDirty: nextSnapshot !== state.lastPersistedSnapshot,
@@ -516,7 +582,14 @@ export const useFlowStore = create<FlowState>((set, get) => ({
           },
         };
       });
-      const nextSnapshot = createFlowSnapshot(state.flowId, state.flowName, nextNodes, state.edges, state.stickyNotes);
+      const nextSnapshot = createFlowSnapshot(
+        state.flowId,
+        state.flowName,
+        nextNodes,
+        state.edges,
+        state.stickyNotes,
+        state.flowVariables,
+      );
       return {
         nodes: nextNodes,
         isDirty: nextSnapshot !== state.lastPersistedSnapshot,
@@ -682,19 +755,26 @@ export const useFlowStore = create<FlowState>((set, get) => ({
 
   // ── Persistence ─────────────────────────────────────────────────
   saveFlow: async () => {
-    const { flowId, flowName, nodes, edges, stickyNotes } = get();
+    const { flowId, flowName, nodes, edges, stickyNotes, flowVariables } = get();
     const backendFlow = toBackendFlow(
       flowId,
       flowName,
       [...nodes, ...stickyNotes],
       edges,
-      { persistUiMetadata: true },
+      { persistUiMetadata: true, variables: flowVariables },
     );
     const result = await sendCommand('flow', 'saveFlow', backendFlow) as FlowResponse;
     const resolvedFlowId = result?.flowId ?? result?.id ?? backendFlow.id;
     set({
       flowId: resolvedFlowId,
-      lastPersistedSnapshot: createFlowSnapshot(resolvedFlowId, flowName, nodes, edges, stickyNotes),
+      lastPersistedSnapshot: createFlowSnapshot(
+        resolvedFlowId,
+        flowName,
+        nodes,
+        edges,
+        stickyNotes,
+        flowVariables,
+      ),
       isDirty: false,
     });
   },
@@ -706,12 +786,14 @@ export const useFlowStore = create<FlowState>((set, get) => ({
     const merged = fromBackendFlow(data, get().nodeDefinitions);
     const flowNodes = merged.nodes.filter((n) => n.type !== 'stickyNote') as Node<FlowNodeData>[];
     const stickyNotes = merged.nodes.filter((n) => n.type === 'stickyNote') as Node<StickyNoteData>[];
+    const flowVariables = merged.variables;
     set({
       flowId: data.id ?? id,
       flowName: data.name ?? 'Untitled Flow',
       nodes: flowNodes,
       edges: merged.edges,
       stickyNotes,
+      flowVariables,
       selectedNodeId: null,
       lastPersistedSnapshot: createFlowSnapshot(
         data.id ?? id,
@@ -719,6 +801,7 @@ export const useFlowStore = create<FlowState>((set, get) => ({
         flowNodes,
         merged.edges,
         stickyNotes,
+        flowVariables,
       ),
       isDirty: false,
       validationResult: null,
@@ -736,14 +819,17 @@ export const useFlowStore = create<FlowState>((set, get) => ({
     set({
       ...createEmptyFlowState(resolvedFlowId, resolvedFlowName),
       stickyNotes: [],
-      lastPersistedSnapshot: createFlowSnapshot(resolvedFlowId, resolvedFlowName, [], [], []),
+      lastPersistedSnapshot: createFlowSnapshot(resolvedFlowId, resolvedFlowName, [], [], [], []),
       isDirty: false,
     });
   },
 
   validateFlow: async () => {
-    const { flowId, flowName, nodes, edges } = get();
-    const backendFlow = toBackendFlow(flowId, flowName, nodes, edges, { runtimeView: true });
+    const { flowId, flowName, nodes, edges, flowVariables } = get();
+    const backendFlow = toBackendFlow(flowId, flowName, nodes, edges, {
+      runtimeView: true,
+      variables: flowVariables,
+    });
     const result = await sendCommand<FlowValidationResult>('engine', 'validateFlow', backendFlow);
     set({ validationResult: result });
     return result;
@@ -780,7 +866,14 @@ export const useFlowStore = create<FlowState>((set, get) => ({
         draggable: true,
         selectable: true,
       } as Node<StickyNoteData>];
-      const snap = createFlowSnapshot(state.flowId, state.flowName, state.nodes, state.edges, next);
+      const snap = createFlowSnapshot(
+        state.flowId,
+        state.flowName,
+        state.nodes,
+        state.edges,
+        next,
+        state.flowVariables,
+      );
       return {
         stickyNotes: next,
         isDirty: snap !== state.lastPersistedSnapshot,
@@ -813,7 +906,14 @@ export const useFlowStore = create<FlowState>((set, get) => ({
           },
         } as Node<StickyNoteData>,
       ];
-      const snap = createFlowSnapshot(state.flowId, state.flowName, state.nodes, state.edges, next);
+      const snap = createFlowSnapshot(
+        state.flowId,
+        state.flowName,
+        state.nodes,
+        state.edges,
+        next,
+        state.flowVariables,
+      );
       return {
         stickyNotes: next,
         selectedNodeId: null,
@@ -829,7 +929,14 @@ export const useFlowStore = create<FlowState>((set, get) => ({
       const next = state.stickyNotes.map((s) =>
         s.id === id ? { ...s, data: { ...s.data, ...patch } } : s,
       );
-      const snap = createFlowSnapshot(state.flowId, state.flowName, state.nodes, state.edges, next);
+      const snap = createFlowSnapshot(
+        state.flowId,
+        state.flowName,
+        state.nodes,
+        state.edges,
+        next,
+        state.flowVariables,
+      );
       return {
         stickyNotes: next,
         isDirty: snap !== state.lastPersistedSnapshot,
@@ -839,7 +946,14 @@ export const useFlowStore = create<FlowState>((set, get) => ({
   removeStickyNote: (id) =>
     set((state) => {
       const next = state.stickyNotes.filter((s) => s.id !== id);
-      const snap = createFlowSnapshot(state.flowId, state.flowName, state.nodes, state.edges, next);
+      const snap = createFlowSnapshot(
+        state.flowId,
+        state.flowName,
+        state.nodes,
+        state.edges,
+        next,
+        state.flowVariables,
+      );
       return {
         stickyNotes: next,
         isDirty: snap !== state.lastPersistedSnapshot,
@@ -865,7 +979,14 @@ export const useFlowStore = create<FlowState>((set, get) => ({
       if (!mutated && !changes.some((c) => c.selected !== undefined)) {
         return state;
       }
-      const snap = createFlowSnapshot(state.flowId, state.flowName, state.nodes, state.edges, next);
+      const snap = createFlowSnapshot(
+        state.flowId,
+        state.flowName,
+        state.nodes,
+        state.edges,
+        next,
+        state.flowVariables,
+      );
       return {
         stickyNotes: next,
         isDirty: snap !== state.lastPersistedSnapshot,

@@ -171,6 +171,7 @@ export default function Toolbar() {
   const nodes = useFlowStore((s) => s.nodes);
   const edges = useFlowStore((s) => s.edges);
   const stickyNotes = useFlowStore((s) => s.stickyNotes);
+  const flowVariables = useFlowStore((s) => s.flowVariables);
   const setFlowName = useFlowStore((s) => s.setFlowName);
   const saveFlow = useFlowStore((s) => s.saveFlow);
   const newFlow = useFlowStore((s) => s.newFlow);
@@ -439,7 +440,10 @@ export default function Toolbar() {
       }
 
       clearNodeStatuses();
-      const backendFlow = toBackendFlow(flowId, flowName, nodes, edges, { runtimeView: true });
+      const backendFlow = toBackendFlow(flowId, flowName, nodes, edges, {
+        runtimeView: true,
+        variables: flowVariables,
+      });
       const result = await sendCommand<RunFlowResponse>('engine', 'runFlow', backendFlow);
       const runtimeValidation = result?.validation ?? validation;
 
@@ -474,7 +478,10 @@ export default function Toolbar() {
         return;
       }
 
-      const backendFlow = toBackendFlow(flowId, flowName, nodes, edges, { runtimeView: true });
+      const backendFlow = toBackendFlow(flowId, flowName, nodes, edges, {
+        runtimeView: true,
+        variables: flowVariables,
+      });
       const result = await sendCommand<FlowActivationResponse>('engine', 'activateFlow', backendFlow);
       const runtimeValidation = result?.validation ?? validation;
       if (!result?.armed) {
@@ -747,6 +754,7 @@ export default function Toolbar() {
     try {
       const backendFlow = toBackendFlow(flowId, flowName, [...nodes, ...stickyNotes], edges, {
         persistUiMetadata: true,
+        variables: flowVariables,
       });
       const result = await sendCommand<{ packageDirectory?: string }>('flow', 'exportRunnerPackage', backendFlow);
       const message = result?.packageDirectory

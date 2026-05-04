@@ -49,10 +49,14 @@ describe('flowConverter sample flows', () => {
   it('round-trips every demo flow through the frontend converter', () => {
     for (const sample of getSampleFlows()) {
       const converted = fromBackendFlow(sample.flow, testDefinitions);
-      const roundTrip = toBackendFlow(sample.flow.id, sample.flow.name, converted.nodes, converted.edges);
+      const roundTrip = toBackendFlow(sample.flow.id, sample.flow.name, converted.nodes, converted.edges, {
+        variables: converted.variables,
+      });
 
       expect(roundTrip.id, sample.fileName).toBe(sample.flow.id);
       expect(roundTrip.name, sample.fileName).toBe(sample.flow.name);
+      const sortVars = (list: { name: string }[]) => [...list].sort((a, b) => a.name.localeCompare(b.name));
+      expect(sortVars(roundTrip.variables), sample.fileName).toEqual(sortVars(sample.flow.variables ?? []));
       expect(roundTrip.nodes.map((node) => node.typeId), sample.fileName).toEqual(
         sample.flow.nodes.map((node) => node.typeId),
       );
@@ -185,5 +189,28 @@ describe('flowConverter sample flows', () => {
     ]);
     expect(persistedFlow.nodes.map((node) => node.id)).toEqual(['trigger', 'delay', 'log']);
     expect(persistedFlow.connections).toHaveLength(2);
+  });
+
+  it('exposes backend variables from fromBackendFlow and preserves them in toBackendFlow when passed in options', () => {
+    const backend: BackendFlow = {
+      id: 'vars-flow',
+      name: 'Vars',
+      version: 1,
+      variables: [
+        { name: 'robloxBlockKey', type: 'string', default: 'X' },
+        { name: 'bloqueioAte', type: 'string', default: '' },
+      ],
+      nodes: [{ id: 't', typeId: 'trigger.manualStart', position: { x: 0, y: 0 }, properties: {} }],
+      connections: [],
+    };
+    const converted = fromBackendFlow(backend, testDefinitions);
+    expect(converted.variables).toHaveLength(2);
+    expect(converted.variables.map((v) => v.name).sort()).toEqual(['bloqueioAte', 'robloxBlockKey']);
+
+    const out = toBackendFlow(backend.id, backend.name, converted.nodes, converted.edges, {
+      variables: converted.variables,
+    });
+    const sortVars = (list: { name: string }[]) => [...list].sort((a, b) => a.name.localeCompare(b.name));
+    expect(sortVars(out.variables)).toEqual(sortVars(backend.variables));
   });
 });

@@ -518,3 +518,31 @@ Resultado: 287 testes verdes (`105 Core + 182 Nodes`).
 
 - Adicionados testes em `nodeDefinitionFallback.test.ts` cobrindo enums camelCase do host e alinhamento dos dropdowns locais.
 - Adicionado teste em `Toolbar.test.tsx` cobrindo escolha explicita de idioma.
+
+## 2026-05-04 — Correcao de variaveis declaradas em recipes nativas
+
+### Problema observado
+
+- O fluxo nativo `recipe_roblox_playtime_limit` podia falhar em validacao com `variable not declared` (`robloxBlockKey`, `bloqueioAte` e outras) mesmo com `variables` definidas no JSON original.
+- Causa composta:
+  - frontend descartava `variables` no round-trip (`toBackendFlow` enviava vazio e `fromBackendFlow` nao devolvia variaveis);
+  - copias antigas em `%AppData%/Sidekick/flows` podiam permanecer sem `variables` por causa do seed com `overwrite: false`.
+
+### Entregue
+
+- Frontend (`Ajudante.UI`):
+  - `flowConverter` agora aceita `options.variables` e preserva variaveis no retorno de `fromBackendFlow`.
+  - `flowStore` ganhou `flowVariables` no estado e passou a carregar/salvar/validar usando esse conjunto.
+  - snapshots de dirty-check (`createFlowSnapshot`) agora incluem `flowVariables` ordenadas por nome.
+  - `Toolbar` passou a enviar `flowVariables` em `runFlow`, `activateFlow` e `exportRunnerPackage`.
+- Host desktop (`Ajudante.App`):
+  - `BridgeRouter` agora executa `TryEnrichVariablesFromBundledSeed(flow)` em `loadFlow` e no `ResolveFlowAsync`.
+  - Para flow nativo com `Variables` vazio, o host tenta enriquecer a lista a partir de `seed-flows/*.json` com mesmo `flow.Id`.
+  - Isso cobre usuarios com copia legada em AppData sem exigir reinstalacao manual do recipe.
+
+### Validacao executada
+
+- `npx vitest run --reporter=verbose` em `src/Ajudante.UI` → `71/71` testes verdes.
+- `npm run build` em `src/Ajudante.UI` → build concluido com sucesso.
+- `dotnet build Ajudante.sln --no-restore` → `0` erros, `0` avisos.
+- `dotnet build src/Ajudante.App/Ajudante.App.csproj --no-restore` → `0` erros, `0` avisos.
