@@ -1,9 +1,11 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Reflection;
 using Ajudante.App.Runtime;
 using Ajudante.Core;
 using Ajudante.Core.Engine;
 using Ajudante.Core.Interfaces;
+using Ajudante.Nodes.Actions;
 
 namespace Ajudante.Nodes.Tests;
 
@@ -174,6 +176,94 @@ public class FlowRuntimeManagerTests
         });
 
         Assert.Equal(0, completedRuns);
+    }
+
+    [Fact]
+    public async Task ClearQueue_RemovesPendingRunsWithoutCancellingCurrentRun()
+    {
+        var registry = new TestNodeRegistry();
+        registry.Register("trigger.test", CreateTriggerDefinition(), () => new TestTriggerNode());
+        registry.Register("action.testDelay", CreateActionDefinition(), () => new TestActionNode());
+
+        using var runtime = new FlowRuntimeManager(registry);
+        var flow = CreateTriggerFlow("flow-clear-queue", "Clear Queue", delayMs: 500);
+
+        var completedRuns = 0;
+        runtime.FlowCompleted += _ => Interlocked.Increment(ref completedRuns);
+
+        runtime.QueueManualRun(flow);
+        await WaitUntilAsync(() => runtime.GetRuntimeStatus().IsRunning);
+        runtime.QueueManualRun(flow);
+
+        await WaitUntilAsync(() => runtime.GetRuntimeStatus().QueueLength == 1);
+
+        var result = runtime.ClearQueue();
+
+        Assert.Equal(1, result.ClearedQueuedRuns);
+        Assert.True(result.IsRunning);
+        Assert.Equal(0, result.RemainingQueueLength);
+
+        await WaitUntilAsync(() =>
+        {
+            var status = runtime.GetRuntimeStatus();
+            return !status.IsRunning && status.QueueLength == 0 && completedRuns == 1;
+        });
+    }
+
+    [Fact]
+    public async Task RestartManualRun_CancelsCurrentRunClearsSameFlowQueueAndQueuesFreshRun()
+    {
+        var registry = new TestNodeRegistry();
+        registry.Register("trigger.test", CreateTriggerDefinition(), () => new TestTriggerNode());
+        registry.Register("action.testDelay", CreateActionDefinition(), () => new TestActionNode());
+
+        using var runtime = new FlowRuntimeManager(registry);
+        var flow = CreateTriggerFlow("flow-restart", "Restart Flow", delayMs: 1000);
+
+        var completedRuns = 0;
+        runtime.FlowCompleted += _ => Interlocked.Increment(ref completedRuns);
+
+        runtime.QueueManualRun(flow);
+        await WaitUntilAsync(() => runtime.GetRuntimeStatus().IsRunning);
+        runtime.QueueManualRun(flow);
+
+        await WaitUntilAsync(() => runtime.GetRuntimeStatus().QueueLength == 1);
+
+        var result = runtime.RestartManualRun(flow);
+
+        Assert.True(result.CancelledCurrentRun);
+        Assert.Equal(1, result.ClearedQueuedRuns);
+        Assert.True(result.Queued);
+        Assert.Equal(1, result.RemainingQueueLength);
+
+        await WaitUntilAsync(() =>
+        {
+            var status = runtime.GetRuntimeStatus();
+            return !status.IsRunning && status.QueueLength == 0 && completedRuns == 1;
+        });
+    }
+
+    [Fact]
+    public async Task StopCancelAll_CancelsBrowserWaitWithoutWaitingForSelectorTimeout()
+    {
+        var registry = new TestNodeRegistry();
+        registry.Register("trigger.test", CreateTriggerDefinition(), () => new TestTriggerNode());
+        registry.Register("action.browserWaitElement", new BrowserWaitElementNode().Definition, () => new BrowserWaitElementNode());
+
+        using var runtime = new FlowRuntimeManager(registry);
+        var flow = CreateBrowserWaitFlow("flow-browser-stop", "Browser Stop", timeoutMs: 3000);
+
+        runtime.QueueManualRun(flow);
+        await WaitUntilAsync(() => runtime.GetRuntimeStatus().IsRunning);
+
+        var elapsed = Stopwatch.StartNew();
+        var stopResult = runtime.Stop(StopFlowMode.CancelAll);
+
+        Assert.True(stopResult.CancelledCurrentRun);
+        await WaitUntilAsync(() => !runtime.GetRuntimeStatus().IsRunning, timeoutMs: 1000);
+        elapsed.Stop();
+
+        Assert.True(elapsed.ElapsedMilliseconds < 1200, $"Stop took {elapsed.ElapsedMilliseconds}ms.");
     }
 
     [Fact]
@@ -349,6 +439,47 @@ public class FlowRuntimeManagerTests
                     SourceNodeId = "trigger",
                     SourcePort = "triggered",
                     TargetNodeId = "action",
+                    TargetPort = "in"
+                }
+            ]
+        };
+    }
+
+    private static Flow CreateBrowserWaitFlow(string flowId, string flowName, int timeoutMs)
+    {
+        return new Flow
+        {
+            Id = flowId,
+            Name = flowName,
+            Nodes =
+            [
+                new NodeInstance
+                {
+                    Id = "trigger",
+                    TypeId = "trigger.test"
+                },
+                new NodeInstance
+                {
+                    Id = "wait",
+                    TypeId = "action.browserWaitElement",
+                    Properties = new Dictionary<string, object?>
+                    {
+                        ["windowTitle"] = "__sidekick_missing_window_for_cancel_test__",
+                        ["automationId"] = "__sidekick_missing_automation_id__",
+                        ["elementName"] = "__sidekick_missing_element__",
+                        ["controlType"] = "button",
+                        ["timeoutMs"] = timeoutMs
+                    }
+                }
+            ],
+            Connections =
+            [
+                new Connection
+                {
+                    Id = "c1",
+                    SourceNodeId = "trigger",
+                    SourcePort = "triggered",
+                    TargetNodeId = "wait",
                     TargetPort = "in"
                 }
             ]

@@ -41,12 +41,15 @@ public static class AutomationElementLocator
         string? processName,
         string? processPath,
         TitleMatch titleMatch,
-        TitleMatch nameMatch = TitleMatch.Equals)
+        TitleMatch nameMatch = TitleMatch.Equals,
+        CancellationToken cancellationToken = default)
     {
         var startedAt = Environment.TickCount64;
 
         do
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             var element = FindElementOnce(
                 windowTitle,
                 automationId,
@@ -62,7 +65,14 @@ public static class AutomationElementLocator
             if (timeoutMs <= 0)
                 break;
 
-            Thread.Sleep(200);
+            var elapsed = Environment.TickCount64 - startedAt;
+            var remaining = Math.Max(0, timeoutMs - elapsed);
+            var sleepMs = (int)Math.Min(200, remaining);
+            if (sleepMs <= 0)
+                break;
+
+            if (cancellationToken.WaitHandle.WaitOne(sleepMs))
+                throw new OperationCanceledException(cancellationToken);
         }
         while (Environment.TickCount64 - startedAt < timeoutMs);
 

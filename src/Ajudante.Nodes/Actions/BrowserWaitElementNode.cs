@@ -49,7 +49,7 @@ public class BrowserWaitElementNode : IActionNode
     {
         var selector = BrowserSelectorHelper.ResolveSelector(context, _properties);
         var variableName = NodeValueHelper.GetString(_properties, "storeInVariable");
-        var element = BrowserSelectorHelper.FindElement(selector);
+        var element = BrowserSelectorHelper.FindElement(selector, ct);
         var found = element is not null;
 
         NodeValueHelper.SetVariableIfRequested(context, variableName, found);

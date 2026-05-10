@@ -63,7 +63,8 @@ public class WindowControlNode : IActionNode
             selector.timeoutMs,
             selector.processName,
             selector.processPath,
-            selector.windowTitleMatch);
+            selector.windowTitleMatch,
+            cancellationToken: ct);
         if (window is null)
         {
             return Task.FromResult(NodeResult.Ok("notFound", new Dictionary<string, object?>

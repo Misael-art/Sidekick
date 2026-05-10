@@ -156,3 +156,20 @@ public sealed class StopFlowResult
     public int RemainingQueueLength { get; init; }
     public bool IsRunning { get; init; }
 }
+
+public sealed class ClearQueueResult
+{
+    public int ClearedQueuedRuns { get; init; }
+    public int RemainingQueueLength { get; init; }
+    public bool IsRunning { get; init; }
+}
+
+public sealed class RestartFlowResult
+{
+    public bool Queued { get; init; }
+    public bool CancelledCurrentRun { get; init; }
+    public int ClearedQueuedRuns { get; init; }
+    public int RemainingQueueLength { get; init; }
+    public bool IsRunning { get; init; }
+    public FlowQueuedEvent QueueEvent { get; init; } = new();
+}

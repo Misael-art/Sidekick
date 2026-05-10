@@ -49,7 +49,7 @@ public class DesktopWaitElementNode : IActionNode
         var selector = BrowserSelectorHelper.ResolveSelector(context, _properties);
         var variableName = NodeValueHelper.GetString(_properties, "storeInVariable");
         context.EmitPhase(RuntimePhases.WaitingForElement, "Waiting for desktop element");
-        var element = BrowserSelectorHelper.FindElement(selector);
+        var element = BrowserSelectorHelper.FindElement(selector, ct);
         var found = element is not null;
         NodeValueHelper.SetVariableIfRequested(context, variableName, found);
         if (found)

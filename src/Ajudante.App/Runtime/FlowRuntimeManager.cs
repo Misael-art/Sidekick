@@ -195,8 +195,7 @@ public sealed class FlowRuntimeManager : IDisposable
         {
             if (mode == StopFlowMode.CancelAll)
             {
-                clearedQueuedRuns = _queue.Count;
-                ClearQueuedRuns_NoLock();
+                clearedQueuedRuns = ClearQueuedRuns_NoLock();
             }
 
             if (_currentRun != null)
@@ -224,6 +223,78 @@ public sealed class FlowRuntimeManager : IDisposable
             ClearedQueuedRuns = clearedQueuedRuns,
             RemainingQueueLength = snapshot.QueueLength,
             IsRunning = snapshot.IsRunning
+        };
+    }
+
+    public ClearQueueResult ClearQueue(string? flowId = null)
+    {
+        ThrowIfDisposed();
+
+        var clearedQueuedRuns = 0;
+        RuntimeStatusSnapshot snapshot;
+
+        lock (_sync)
+        {
+            clearedQueuedRuns = string.IsNullOrWhiteSpace(flowId)
+                ? ClearQueuedRuns_NoLock()
+                : RemoveQueuedRuns_NoLock(run => string.Equals(run.Flow.Id, flowId, StringComparison.OrdinalIgnoreCase));
+
+            snapshot = CreateRuntimeStatusSnapshot_NoLock();
+        }
+
+        if (clearedQueuedRuns > 0)
+        {
+            EmitRuntimeStatusChanged();
+        }
+
+        return new ClearQueueResult
+        {
+            ClearedQueuedRuns = clearedQueuedRuns,
+            RemainingQueueLength = snapshot.QueueLength,
+            IsRunning = snapshot.IsRunning
+        };
+    }
+
+    public RestartFlowResult RestartManualRun(Flow flow)
+    {
+        ThrowIfDisposed();
+        ArgumentNullException.ThrowIfNull(flow);
+
+        var normalizedFlow = CloneFlow(flow);
+        EnsureFlowIdentity(normalizedFlow);
+
+        var cancelledCurrent = false;
+        var clearedQueuedRuns = 0;
+
+        lock (_sync)
+        {
+            clearedQueuedRuns = RemoveQueuedRuns_NoLock(run =>
+                string.Equals(run.Flow.Id, normalizedFlow.Id, StringComparison.OrdinalIgnoreCase));
+
+            if (_currentRun != null &&
+                string.Equals(_currentRun.Flow.Id, normalizedFlow.Id, StringComparison.OrdinalIgnoreCase))
+            {
+                _currentRunStopRequested = true;
+                cancelledCurrent = true;
+            }
+        }
+
+        if (cancelledCurrent)
+        {
+            _executor.Cancel();
+        }
+
+        var queueEvent = EnqueueRun(normalizedFlow, FlowRunSource.Manual, null, null);
+        var snapshot = GetRuntimeStatus();
+
+        return new RestartFlowResult
+        {
+            Queued = true,
+            CancelledCurrentRun = cancelledCurrent,
+            ClearedQueuedRuns = clearedQueuedRuns,
+            RemainingQueueLength = snapshot.QueueLength,
+            IsRunning = snapshot.IsRunning,
+            QueueEvent = queueEvent
         };
     }
 
@@ -400,6 +471,11 @@ public sealed class FlowRuntimeManager : IDisposable
 
         try
         {
+            if (IsStopRequestedForRun(run))
+            {
+                return;
+            }
+
             if (run.Source == FlowRunSource.Trigger && run.TriggerNodeId != null)
             {
                 await _executor.ExecuteFromTriggerAsync(
@@ -489,6 +565,16 @@ public sealed class FlowRuntimeManager : IDisposable
             }
 
             EmitRuntimeStatusChanged();
+        }
+    }
+
+    private bool IsStopRequestedForRun(QueuedFlowRun run)
+    {
+        lock (_sync)
+        {
+            return _currentRunStopRequested &&
+                   _currentRun != null &&
+                   string.Equals(_currentRun.Flow.Id, run.Flow.Id, StringComparison.OrdinalIgnoreCase);
         }
     }
 
@@ -921,18 +1007,41 @@ public sealed class FlowRuntimeManager : IDisposable
         return _queue.Any(item => string.Equals(item.Flow.Id, flowId, StringComparison.OrdinalIgnoreCase));
     }
 
-    private void ClearQueuedRuns_NoLock()
+    private int ClearQueuedRuns_NoLock()
     {
+        return RemoveQueuedRuns_NoLock(_ => true);
+    }
+
+    private int RemoveQueuedRuns_NoLock(Func<QueuedFlowRun, bool> shouldRemove)
+    {
+        var removed = 0;
+        var remaining = new Queue<QueuedFlowRun>();
+
         while (_queue.Count > 0)
         {
-            _queue.Dequeue();
+            var run = _queue.Dequeue();
+            if (shouldRemove(run))
+            {
+                removed++;
+            }
+            else
+            {
+                remaining.Enqueue(run);
+            }
+        }
+
+        while (remaining.Count > 0)
+        {
+            _queue.Enqueue(remaining.Dequeue());
         }
 
         foreach (var (flowId, entry) in _flowStates.ToArray())
         {
-            entry.QueuePending = false;
+            entry.QueuePending = HasPendingRun_NoLock(flowId);
             RemoveEntryIfInactive_NoLock(flowId, entry);
         }
+
+        return removed;
     }
 
     private void RemoveEntryIfInactive_NoLock(string flowId, FlowRuntimeEntry entry)

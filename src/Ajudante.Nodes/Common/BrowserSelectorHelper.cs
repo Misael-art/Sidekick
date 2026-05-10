@@ -75,7 +75,7 @@ internal static class BrowserSelectorHelper
             : Environment.ExpandEnvironmentVariables(path);
     }
 
-    public static AutomationElement? FindElement(DesktopSelector selector)
+    public static AutomationElement? FindElement(DesktopSelector selector, CancellationToken ct = default)
     {
         return AutomationElementLocator.FindElement(
             selector.windowTitle,
@@ -86,7 +86,8 @@ internal static class BrowserSelectorHelper
             selector.processName,
             selector.processPath,
             selector.windowTitleMatch,
-            selector.elementNameMatch);
+            selector.elementNameMatch,
+            ct);
     }
 
     public static List<PropertyDefinition> SelectorPropertyDefinitions(string defaultControlType = "")

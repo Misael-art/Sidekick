@@ -3,6 +3,7 @@ import { sendCommand } from '../../bridge/bridge';
 import { toBackendFlow, type BackendFlow } from '../../bridge/flowConverter';
 import type {
   CapturedElement,
+  ClearQueueResult,
   FlowDryRunReport,
   FlowHealthReport,
   FlowValidationResult,
@@ -13,6 +14,7 @@ import type {
   InspectionAssetTestResult,
   MacroRecordingSession,
   SecurityReport,
+  StopFlowResult,
   StopFlowMode,
 } from '../../bridge/types';
 import { useAppStore } from '../../store/appStore';
@@ -49,9 +51,13 @@ interface FlowActivationResponse {
 
 interface RunFlowResponse {
   queued?: boolean;
+  restarted?: boolean;
   flowId?: string;
   queueLength?: number;
   queuePending?: boolean;
+  cancelledCurrentRun?: boolean;
+  clearedQueuedRuns?: number;
+  remainingQueueLength?: number;
   validation?: FlowValidationResult;
   security?: SecurityReport;
 }
@@ -150,10 +156,17 @@ function hasContinuousTriggers(nodes: Array<{ data: FlowNodeData }>): boolean {
   return nodes.some((node) => node.data.category === 'Trigger' && node.data.typeId !== 'trigger.manualStart');
 }
 
-function buildStopMessage(mode: StopFlowMode, queueLength: number): string {
-  return mode === 'cancelAll'
-    ? `Execucao atual interrompida e ${queueLength} item(ns) removido(s) da fila.`
-    : 'Execucao atual interrompida.';
+function buildStopResultMessage(mode: StopFlowMode, result: StopFlowResult | null | undefined): string {
+  const cleared = result?.clearedQueuedRuns ?? 0;
+  if (mode === 'cancelAll') {
+    return result?.cancelledCurrentRun
+      ? `Execucao atual interrompida e ${cleared} item(ns) removido(s) da fila.`
+      : `${cleared} item(ns) removido(s) da fila.`;
+  }
+
+  return result?.cancelledCurrentRun
+    ? 'Execucao atual interrompida. A fila pendente foi preservada.'
+    : 'Nenhuma execucao ativa para interromper.';
 }
 
 function summarizeIssues(messages: string[], maxItems = 2): string {
@@ -285,6 +298,8 @@ export default function Toolbar() {
   const [deletingFlowId, setDeletingFlowId] = useState<string | null>(null);
   const [isStopDialogOpen, setIsStopDialogOpen] = useState(false);
   const [isStoppingFlow, setIsStoppingFlow] = useState(false);
+  const [isClearingQueue, setIsClearingQueue] = useState(false);
+  const [isRestartingFlow, setIsRestartingFlow] = useState(false);
   const [isDryRunDialogOpen, setIsDryRunDialogOpen] = useState(false);
   const [isRunningDryRun, setIsRunningDryRun] = useState(false);
   const [isAnalyzingHealth, setIsAnalyzingHealth] = useState(false);
@@ -391,8 +406,12 @@ export default function Toolbar() {
 
   const currentFlowRuntime = flowRuntimes[flowId] ?? null;
   const isCurrentFlowArmed = Boolean(currentFlowRuntime?.isArmed);
+  const isCurrentFlowRunning = currentRun?.flowId === flowId || Boolean(currentFlowRuntime?.isRunning);
+  const isCurrentFlowQueued = Boolean(currentFlowRuntime?.queuePending);
   const canArmCurrentFlow = hasContinuousTriggers(nodes);
   const canStop = isRunning || queueLength > 0;
+  const canClearQueue = queueLength > 0;
+  const canRestartCurrentFlow = isCurrentFlowRunning || isCurrentFlowQueued;
   const canKillSwitch = canStop || Object.values(flowRuntimes).some((flow) => flow.isArmed || flow.queuePending);
 
   useEffect(() => {
@@ -625,6 +644,82 @@ export default function Toolbar() {
     }
   };
 
+  const handleRestart = async () => {
+    if (!canRestartCurrentFlow || isRestartingFlow) {
+      return;
+    }
+
+    try {
+      setIsRestartingFlow(true);
+      setUserMessage(null);
+
+      const securityFlow = toBackendFlow(flowId, flowName, nodes, edges, { runtimeView: true, variables: flowVariables });
+      const security = await sendCommand<SecurityReport>('engine', 'securityLint', securityFlow);
+      let securityAcknowledged = false;
+      if (!security.isSafeToRun) {
+        if (!allowHighRiskExecution) {
+          const message = buildSecurityBlockMessage(security);
+          addLog({ timestamp: new Date().toISOString(), level: 'error', message });
+          setUserMessage({ type: 'error', text: message });
+          return;
+        }
+
+        const confirmed = await waitForHighRiskConfirmation(security);
+        if (!confirmed) {
+          setUserMessage({ type: 'info', text: 'Reinicio cancelado pelo utilizador.' });
+          return;
+        }
+
+        securityAcknowledged = true;
+      }
+
+      const validation = await validateFlow();
+      if (!validation.isValid) {
+        const message = buildValidationErrorMessage(validation);
+        addLog({ timestamp: new Date().toISOString(), level: 'error', message });
+        setUserMessage({ type: 'error', text: message });
+        return;
+      }
+
+      clearNodeStatuses();
+      const backendFlow = toBackendFlow(flowId, flowName, nodes, edges, {
+        runtimeView: true,
+        variables: flowVariables,
+      });
+      const restartPayload = withSecurityAckIfNeeded(backendFlow, security, securityAcknowledged);
+      const result = await sendCommand<RunFlowResponse>('engine', 'restartFlow', restartPayload);
+      const runtimeValidation = result?.validation ?? validation;
+      const runtimeSecurity = result?.security ?? security;
+
+      if (!runtimeSecurity.isSafeToRun) {
+        const message = buildSecurityBlockMessage(runtimeSecurity);
+        addLog({ timestamp: new Date().toISOString(), level: 'error', message });
+        setUserMessage({ type: 'error', text: message });
+        return;
+      }
+
+      if (!result?.queued) {
+        const message = buildValidationErrorMessage(runtimeValidation);
+        addLog({ timestamp: new Date().toISOString(), level: 'error', message });
+        setUserMessage({ type: 'error', text: message });
+        return;
+      }
+
+      setUserMessage({
+        type: runtimeValidation.warnings.length > 0 ? 'info' : 'success',
+        text: runtimeValidation.warnings.length > 0
+          ? buildValidationWarningMessage(runtimeValidation, 'Flow reiniciado e enfileirado')
+          : `Flow reiniciado: ${result.clearedQueuedRuns ?? 0} pendencia(s) antiga(s) removida(s).`,
+      });
+    } catch (error) {
+      const message = getErrorMessage(error, 'Nao foi possivel reiniciar o fluxo.');
+      addLog({ timestamp: new Date().toISOString(), level: 'error', message });
+      setUserMessage({ type: 'error', text: message });
+    } finally {
+      setIsRestartingFlow(false);
+    }
+  };
+
   const handleArm = async () => {
     try {
       setUserMessage(null);
@@ -706,11 +801,11 @@ export default function Toolbar() {
     try {
       setIsStoppingFlow(true);
       setUserMessage(null);
-      await sendCommand('engine', 'stopFlow', { mode });
+      const result = await sendCommand<StopFlowResult>('engine', 'stopFlow', { mode });
       setIsStopDialogOpen(false);
       setUserMessage({
         type: 'info',
-        text: buildStopMessage(mode, queueLength),
+        text: buildStopResultMessage(mode, result),
       });
     } catch (error) {
       const message = getErrorMessage(error, 'Nao foi possivel interromper o runtime.');
@@ -718,6 +813,31 @@ export default function Toolbar() {
       setUserMessage({ type: 'error', text: message });
     } finally {
       setIsStoppingFlow(false);
+    }
+  };
+
+  const handleClearQueue = async () => {
+    if (!canClearQueue || isClearingQueue) {
+      return;
+    }
+
+    try {
+      setIsClearingQueue(true);
+      setUserMessage(null);
+      const result = await sendCommand<ClearQueueResult>('engine', 'clearQueue', {});
+      setUserMessage({
+        type: 'info',
+        text: `${result?.clearedQueuedRuns ?? 0} item(ns) removido(s) da fila. Execucao atual ${result?.isRunning ? 'continua em andamento' : 'nao esta ativa'}.`,
+      });
+      if ((result?.remainingQueueLength ?? 0) === 0) {
+        setIsStopDialogOpen(false);
+      }
+    } catch (error) {
+      const message = getErrorMessage(error, 'Nao foi possivel limpar a fila do runtime.');
+      addLog({ timestamp: new Date().toISOString(), level: 'error', message });
+      setUserMessage({ type: 'error', text: message });
+    } finally {
+      setIsClearingQueue(false);
     }
   };
 
@@ -1308,6 +1428,16 @@ export default function Toolbar() {
             <span className="toolbar__btn-label">Executar</span>
           </button>
           <button
+            className={`toolbar__btn ${!canRestartCurrentFlow || isRestartingFlow ? 'toolbar__btn--disabled' : ''}`}
+            onClick={() => { void handleRestart(); }}
+            disabled={!canRestartCurrentFlow || isRestartingFlow}
+            title="Cancela a execucao atual deste flow, remove pendencias dele e enfileira uma nova execucao"
+            type="button"
+          >
+            <span className="toolbar__btn-icon">&#8635;</span>
+            <span className="toolbar__btn-label">{isRestartingFlow ? 'Reiniciando...' : 'Reiniciar'}</span>
+          </button>
+          <button
             className={`toolbar__btn ${!canArmCurrentFlow || isCurrentFlowArmed ? 'toolbar__btn--disabled' : ''}`}
             onClick={handleArm}
             disabled={!canArmCurrentFlow || isCurrentFlowArmed}
@@ -1333,6 +1463,16 @@ export default function Toolbar() {
           >
             <span className="toolbar__btn-icon">&#9632;</span>
             <span className="toolbar__btn-label">Parar</span>
+          </button>
+          <button
+            className={`toolbar__btn toolbar__btn--stop ${!canClearQueue || isClearingQueue ? 'toolbar__btn--disabled' : ''}`}
+            onClick={() => { void handleClearQueue(); }}
+            disabled={!canClearQueue || isClearingQueue}
+            title="Remove apenas itens pendentes da fila, sem cancelar a execucao atual"
+            type="button"
+          >
+            <span className="toolbar__btn-icon">&#8999;</span>
+            <span className="toolbar__btn-label">{isClearingQueue ? 'Limpando...' : 'Limpar fila'}</span>
           </button>
           <button
             className={`toolbar__btn toolbar__btn--stop ${!canKillSwitch || isKillSwitching ? 'toolbar__btn--disabled' : ''}`}
@@ -1893,6 +2033,14 @@ export default function Toolbar() {
                 type="button"
               >
                 {isStoppingFlow ? 'Parando...' : 'Parar atual'}
+              </button>
+              <button
+                className="toolbar__dialog-btn toolbar__dialog-btn--secondary"
+                onClick={() => { void handleClearQueue(); }}
+                disabled={!canClearQueue || isClearingQueue || isStoppingFlow}
+                type="button"
+              >
+                {isClearingQueue ? 'Limpando...' : 'Limpar fila'}
               </button>
               <button
                 className="toolbar__dialog-btn toolbar__dialog-btn--danger"

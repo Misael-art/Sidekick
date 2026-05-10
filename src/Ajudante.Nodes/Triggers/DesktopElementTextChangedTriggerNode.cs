@@ -73,7 +73,7 @@ public class DesktopElementTextChangedTriggerNode : ITriggerNode, IDisposable
                 try
                 {
                     var selector = BuildSelectorForTrigger();
-                    var element = BrowserSelectorHelper.FindElement(selector);
+                    var element = BrowserSelectorHelper.FindElement(selector, token);
                     if (element is not null)
                     {
                         var newText = AutomationElementLocator.ExtractText(element);

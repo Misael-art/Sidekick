@@ -572,6 +572,14 @@ if (-not $consentAccepted) {
                 await HandleStopFlowAsync(message);
                 break;
 
+            case "clearQueue":
+                await HandleClearQueueAsync(message);
+                break;
+
+            case "restartFlow":
+                await HandleRestartFlowAsync(message);
+                break;
+
             case "activateFlow":
                 await HandleActivateFlowAsync(message);
                 break;
@@ -871,6 +879,91 @@ if (-not $consentAccepted) {
         if (message.RequestId != null)
         {
             await _bridge.SendResponseAsync(message.RequestId, result);
+        }
+    }
+
+    private async Task HandleClearQueueAsync(BridgeMessage message)
+    {
+        var flowId = GetPayloadString(message.Payload, "flowId");
+        var result = _runtimeManager.ClearQueue(flowId);
+        Log(string.IsNullOrWhiteSpace(flowId)
+            ? $"Runtime queue clear requested: {result.ClearedQueuedRuns} pending run(s) removed."
+            : $"Runtime queue clear requested for {flowId}: {result.ClearedQueuedRuns} pending run(s) removed.");
+
+        if (message.RequestId != null)
+        {
+            await _bridge.SendResponseAsync(message.RequestId, result);
+        }
+    }
+
+    private async Task HandleRestartFlowAsync(BridgeMessage message)
+    {
+        var flow = await ResolveFlowAsync(message.Payload);
+
+        if (flow == null)
+        {
+            await SendErrorIfRequested(message, "No valid flow provided");
+            return;
+        }
+
+        var validation = ValidateFlow(flow);
+        var security = AnalyzeFlowSecurity(flow);
+        if (!validation.IsValid)
+        {
+            Log($"Flow restart blocked by validation: {flow.Name} ({flow.Id})");
+
+            if (message.RequestId != null)
+            {
+                await _bridge.SendResponseAsync(message.RequestId, new
+                {
+                    queued = false,
+                    restarted = false,
+                    flowId = flow.Id,
+                    validation,
+                    security
+                });
+            }
+
+            return;
+        }
+
+        if (!security.IsSafeToRun && !IsHighRiskExecutionAcknowledged(message.Payload, flow, security, "restartFlow"))
+        {
+            Log($"Flow restart blocked by security lint: {flow.Name} ({flow.Id})");
+
+            if (message.RequestId != null)
+            {
+                await _bridge.SendResponseAsync(message.RequestId, new
+                {
+                    queued = false,
+                    restarted = false,
+                    flowId = flow.Id,
+                    validation,
+                    security
+                });
+            }
+
+            return;
+        }
+
+        var result = _runtimeManager.RestartManualRun(flow);
+        Log($"Flow restart requested: {flow.Name} ({flow.Id}) - cancelledCurrent={result.CancelledCurrentRun}, clearedQueued={result.ClearedQueuedRuns}");
+
+        if (message.RequestId != null)
+        {
+            await _bridge.SendResponseAsync(message.RequestId, new
+            {
+                queued = result.Queued,
+                restarted = true,
+                flowId = flow.Id,
+                queueLength = result.QueueEvent.QueueLength,
+                queuePending = result.QueueEvent.QueuePending,
+                cancelledCurrentRun = result.CancelledCurrentRun,
+                clearedQueuedRuns = result.ClearedQueuedRuns,
+                remainingQueueLength = result.RemainingQueueLength,
+                validation,
+                security
+            });
         }
     }
 

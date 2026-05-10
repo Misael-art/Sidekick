@@ -81,6 +81,175 @@ describe('Toolbar runtime controls', () => {
     });
   }, 15_000);
 
+  it('clears queued runtime work without stopping the active run', async () => {
+    const React = await import('react');
+    const { default: Toolbar } = await import('./Toolbar');
+    const { useAppStore } = await import('../../store/appStore');
+    const { useFlowStore } = await import('../../store/flowStore');
+
+    useFlowStore.setState({
+      flowId: 'flow-1',
+      flowName: 'Toolbar Flow',
+      isDirty: false,
+      nodes: [],
+      edges: [],
+      selectedNodeId: null,
+    });
+
+    useAppStore.getState().setRuntimeStatus({
+      isRunning: true,
+      queueLength: 2,
+      armedFlowCount: 0,
+      currentRun: {
+        flowId: 'flow-1',
+        flowName: 'Toolbar Flow',
+        source: 'manual',
+        startedAt: '2026-04-24T12:00:00.000Z',
+      },
+      flows: [
+        {
+          flowId: 'flow-1',
+          flowName: 'Toolbar Flow',
+          state: 'running',
+          isArmed: false,
+          isRunning: true,
+          queuePending: true,
+          activeTriggerNodeIds: [],
+        },
+      ],
+    });
+
+    sendCommandMock.mockResolvedValue({
+      clearedQueuedRuns: 2,
+      remainingQueueLength: 0,
+      isRunning: true,
+    });
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(React.createElement(Toolbar));
+    });
+
+    const clearQueueButton = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Limpar fila'));
+    expect(clearQueueButton).toBeTruthy();
+
+    await act(async () => {
+      clearQueueButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(sendCommandMock).toHaveBeenCalledWith('engine', 'clearQueue', {});
+    expect(useAppStore.getState().userMessage?.text).toContain('2 item(ns) removido(s)');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('restarts the current flow by validating and sending restartFlow', async () => {
+    const React = await import('react');
+    const { default: Toolbar } = await import('./Toolbar');
+    const { useAppStore } = await import('../../store/appStore');
+    const { useFlowStore } = await import('../../store/flowStore');
+
+    useFlowStore.setState({
+      flowId: 'flow-1',
+      flowName: 'Toolbar Flow',
+      isDirty: false,
+      nodes: [],
+      edges: [],
+      selectedNodeId: null,
+      validationResult: null,
+    });
+
+    useAppStore.getState().setRuntimeStatus({
+      isRunning: true,
+      queueLength: 1,
+      armedFlowCount: 0,
+      currentRun: {
+        flowId: 'flow-1',
+        flowName: 'Toolbar Flow',
+        source: 'manual',
+        startedAt: '2026-04-24T12:00:00.000Z',
+      },
+      flows: [
+        {
+          flowId: 'flow-1',
+          flowName: 'Toolbar Flow',
+          state: 'running',
+          isArmed: false,
+          isRunning: true,
+          queuePending: true,
+          activeTriggerNodeIds: [],
+        },
+      ],
+    });
+
+    sendCommandMock.mockImplementation(async (_channel: string, action: string) => {
+      if (action === 'securityLint') {
+        return {
+          isSafeToRun: true,
+          issues: [],
+          riskLevel: 'low',
+          manifestHash: 'OK',
+        };
+      }
+
+      if (action === 'validateFlow') {
+        return {
+          isValid: true,
+          errors: [],
+          warnings: [],
+          issues: [],
+        };
+      }
+
+      if (action === 'restartFlow') {
+        return {
+          queued: true,
+          restarted: true,
+          flowId: 'flow-1',
+          queueLength: 1,
+          queuePending: true,
+          cancelledCurrentRun: true,
+          clearedQueuedRuns: 1,
+          validation: { isValid: true, errors: [], warnings: [], issues: [] },
+          security: { isSafeToRun: true, issues: [], riskLevel: 'low', manifestHash: 'OK' },
+        };
+      }
+
+      return null;
+    });
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(React.createElement(Toolbar));
+    });
+
+    const restartButton = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Reiniciar'));
+    expect(restartButton).toBeTruthy();
+
+    await act(async () => {
+      restartButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(sendCommandMock).toHaveBeenCalledWith('engine', 'securityLint', expect.any(Object));
+    expect(sendCommandMock).toHaveBeenCalledWith('engine', 'validateFlow', expect.any(Object));
+    expect(sendCommandMock).toHaveBeenCalledWith('engine', 'restartFlow', expect.any(Object));
+    expect(useAppStore.getState().userMessage?.text).toContain('reiniciado');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it('blocks run requests when validation returns errors', async () => {
     const React = await import('react');
     const { default: Toolbar } = await import('./Toolbar');

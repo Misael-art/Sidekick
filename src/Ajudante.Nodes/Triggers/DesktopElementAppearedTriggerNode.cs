@@ -78,13 +78,13 @@ public class DesktopElementAppearedTriggerNode : ITriggerNode, IDisposable
                 try
                 {
                     var selector = BuildSelectorForTrigger();
-                    var element = BrowserSelectorHelper.FindElement(selector);
+                    var element = BrowserSelectorHelper.FindElement(selector, token);
                     if (element is not null && !_wasVisible)
                     {
                         if (debounceMs > 0)
                         {
                             await Task.Delay(debounceMs, token);
-                            element = BrowserSelectorHelper.FindElement(selector);
+                            element = BrowserSelectorHelper.FindElement(selector, token);
                         }
 
                         if (element is not null && CanFire(cooldownMs, maxRepeat))

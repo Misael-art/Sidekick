@@ -102,6 +102,14 @@ Atualizacao WhatsApp v6 em `2026-05-10`:
 - O fallback ancorado no campo de busca foi recalibrado para clicar no primeiro resultado com a janela maximizada, ainda sem depender de coordenada absoluta de tela.
 - Para composicao de automacoes por blocos maiores, o node ponte ja disponivel e `action.runSavedFlow`; ele chama outro flow salvo via `IFlowInvocationService`, respeitando validacao, security lint, allowlist, bloqueio de auto-recursao e confirmacao local para alto risco. `action.listRunnableFlows` complementa a experiencia montando menus de flows invocaveis.
 
+Atualizacao runtime/fila em `2026-05-10`:
+
+- O runtime agora expoe controle explicito para limpar pendencias acumuladas sem cancelar a execucao atual: `FlowRuntimeManager.ClearQueue` e bridge `engine/clearQueue`.
+- Foi adicionado restart conservador de flow: `FlowRuntimeManager.RestartManualRun` e bridge `engine/restartFlow` cancelam a execucao atual do mesmo flow, removem pendencias antigas daquele flow e enfileiram uma execucao nova apos validacao e security lint.
+- A toolbar ganhou comandos PT-BR `Reiniciar` e `Limpar fila`, alem de mensagem com quantidade real removida retornada pelo backend; o dialogo de parada tambem permite limpar apenas a fila.
+- `AutomationElementLocator` passou a respeitar `CancellationToken` durante waits UIAutomation, e os nodes browser/desktop usam esse token para que `Stop`, `Parar Tudo` e restart nao fiquem presos ate o timeout de seletor expirar.
+- Validado nesta rodada: `dotnet build Ajudante.sln --no-restore`, `dotnet test Ajudante.sln --no-build`, `npm run test` e `npm run build`. O build Vite segue com o aviso conhecido de chunk principal acima de 500 kB.
+
 ## Estagio Atual Do Produto
 
 O produto esta em um estagio de `release candidate tecnico com validacao manual final pendente`.

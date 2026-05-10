@@ -45,7 +45,7 @@ public class BrowserClickNode : IActionNode
     {
         var selector = BrowserSelectorHelper.ResolveSelector(context, _properties);
         var clickType = NodeValueHelper.GetString(_properties, "clickType", "single");
-        var element = BrowserSelectorHelper.FindElement(selector);
+        var element = BrowserSelectorHelper.FindElement(selector, ct);
         if (element is null)
             return Task.FromResult(NodeResult.Ok("notFound", new Dictionary<string, object?>
             {

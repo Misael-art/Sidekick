@@ -54,7 +54,7 @@ public class BrowserTypeNode : IActionNode
         var resolvedText = context.ResolveTemplate(NodeValueHelper.GetString(_properties, "text"));
         var clearExisting = NodeValueHelper.GetBool(_properties, "clearExisting");
 
-        var element = BrowserSelectorHelper.FindElement(selector);
+        var element = BrowserSelectorHelper.FindElement(selector, ct);
         if (element is null)
             return Task.FromResult(NodeResult.Ok("notFound", new Dictionary<string, object?>
             {

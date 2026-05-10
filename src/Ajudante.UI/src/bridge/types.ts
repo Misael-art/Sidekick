@@ -646,6 +646,19 @@ export interface GuidedAutomationDraft {
 
 export type StopFlowMode = 'currentOnly' | 'cancelAll';
 
+export interface StopFlowResult {
+  cancelledCurrentRun: boolean;
+  clearedQueuedRuns: number;
+  remainingQueueLength: number;
+  isRunning: boolean;
+}
+
+export interface ClearQueueResult {
+  clearedQueuedRuns: number;
+  remainingQueueLength: number;
+  isRunning: boolean;
+}
+
 export interface CurrentRunSnapshot {
   flowId: string;
   flowName: string;

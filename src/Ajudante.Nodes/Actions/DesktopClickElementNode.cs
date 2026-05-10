@@ -55,7 +55,7 @@ public class DesktopClickElementNode : IActionNode
         var selector = BrowserSelectorHelper.ResolveSelector(context, _properties);
         var clickType = NodeValueHelper.GetString(_properties, "clickType", "single");
         context.EmitPhase(RuntimePhases.WaitingForElement, "Waiting for element before click");
-        var element = BrowserSelectorHelper.FindElement(selector);
+        var element = BrowserSelectorHelper.FindElement(selector, ct);
 
         if (element is not null)
         {
@@ -84,9 +84,9 @@ public class DesktopClickElementNode : IActionNode
         }
 
         if (selector.restoreWindowBeforeFallback)
-            TryRestoreWindow(selector);
+            TryRestoreWindow(selector, ct);
 
-        if (TryAnchorRelativeFallbackClick(selector, clickType))
+        if (TryAnchorRelativeFallbackClick(selector, clickType, ct))
         {
             context.EmitPhase(RuntimePhases.FallbackVisualActive, "anchor-relative fallback active");
             context.EmitPhase(RuntimePhases.ClickExecuted, "Desktop click executed", new { fallbackUsed = true, phase = "anchorRelative" });
@@ -97,7 +97,7 @@ public class DesktopClickElementNode : IActionNode
             }));
         }
 
-        if (selector.useRelativeFallback && TryRelativeFallbackClick(selector, clickType))
+        if (selector.useRelativeFallback && TryRelativeFallbackClick(selector, clickType, ct))
         {
             context.EmitPhase(RuntimePhases.FallbackVisualActive, "relative fallback active");
             context.EmitPhase(RuntimePhases.ClickExecuted, "Desktop click executed", new { fallbackUsed = true, phase = "relativeWindow" });
@@ -138,7 +138,7 @@ public class DesktopClickElementNode : IActionNode
         }));
     }
 
-    private static bool TryAnchorRelativeFallbackClick(DesktopSelector selector, string clickType)
+    private static bool TryAnchorRelativeFallbackClick(DesktopSelector selector, string clickType, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(selector.fallbackAnchorAutomationId) &&
             string.IsNullOrWhiteSpace(selector.fallbackAnchorElementName) &&
@@ -159,7 +159,8 @@ public class DesktopClickElementNode : IActionNode
             selector.processName,
             selector.processPath,
             selector.windowTitleMatch,
-            selector.fallbackAnchorElementNameMatch);
+            selector.fallbackAnchorElementNameMatch,
+            ct);
 
         if (anchor is null)
             return false;
@@ -191,7 +192,7 @@ public class DesktopClickElementNode : IActionNode
         return true;
     }
 
-    private static bool TryRelativeFallbackClick(DesktopSelector selector, string clickType)
+    private static bool TryRelativeFallbackClick(DesktopSelector selector, string clickType, CancellationToken ct)
     {
         var window = AutomationElementLocator.FindElement(
             selector.windowTitle,
@@ -201,7 +202,8 @@ public class DesktopClickElementNode : IActionNode
             selector.timeoutMs,
             selector.processName,
             selector.processPath,
-            selector.windowTitleMatch);
+            selector.windowTitleMatch,
+            cancellationToken: ct);
 
         if (window is null)
             return false;
@@ -265,7 +267,7 @@ public class DesktopClickElementNode : IActionNode
         return false;
     }
 
-    private static void TryRestoreWindow(DesktopSelector selector)
+    private static void TryRestoreWindow(DesktopSelector selector, CancellationToken ct)
     {
         try
         {
@@ -277,7 +279,8 @@ public class DesktopClickElementNode : IActionNode
                 timeoutMs: 1000,
                 processName: selector.processName,
                 processPath: selector.processPath,
-                titleMatch: selector.windowTitleMatch);
+                titleMatch: selector.windowTitleMatch,
+                cancellationToken: ct);
 
             if (window is null)
                 return;
