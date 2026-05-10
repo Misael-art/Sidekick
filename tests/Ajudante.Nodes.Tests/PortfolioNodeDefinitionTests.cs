@@ -35,7 +35,7 @@ public class PortfolioNodeDefinitionTests
     }
 
     [Fact]
-    public async Task BrowserNodes_ReturnFailWhenElementIsMissing()
+    public async Task BrowserNodes_RouteToNotFoundWhenElementIsMissing()
     {
         var context = CreateContext();
 
@@ -73,9 +73,13 @@ public class PortfolioNodeDefinitionTests
         var clickResult = await clickNode.ExecuteAsync(context, CancellationToken.None);
         var typeResult = await typeNode.ExecuteAsync(context, CancellationToken.None);
 
-        Assert.False(waitResult.Success);
-        Assert.False(extractResult.Success);
-        Assert.False(clickResult.Success);
-        Assert.False(typeResult.Success);
+        Assert.True(waitResult.Success, waitResult.Error);
+        Assert.True(extractResult.Success, extractResult.Error);
+        Assert.True(clickResult.Success, clickResult.Error);
+        Assert.True(typeResult.Success, typeResult.Error);
+        Assert.Equal("notFound", waitResult.OutputPort);
+        Assert.Equal("notFound", extractResult.OutputPort);
+        Assert.Equal("notFound", clickResult.OutputPort);
+        Assert.Equal("notFound", typeResult.OutputPort);
     }
 }

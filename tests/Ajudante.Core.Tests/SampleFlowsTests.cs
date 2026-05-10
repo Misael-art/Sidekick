@@ -162,6 +162,78 @@ public class SampleFlowsTests
         Assert.Equal("resultCount", Assert.IsType<JsonElement>(extractNode.Properties["storeInVariable"]).GetString());
     }
 
+    [Fact]
+    public void SampleFlows_WhatsAppRecipeUsesPortugueseMiraSelectorsAndRefreshVersion()
+    {
+        var sampleFlowPath = Path.Combine(GetSampleFlowsDirectory(), "recipe_whatsapp_status_assistant.json");
+        Assert.True(File.Exists(sampleFlowPath), $"Expected WhatsApp recipe flow was not found: {sampleFlowPath}");
+
+        var flow = FlowSerializer.Deserialize(File.ReadAllText(sampleFlowPath));
+        Assert.NotNull(flow);
+
+        Assert.Equal("Recipe - WhatsApp Status Assistant (Draft Safe)", flow.Name);
+        Assert.True(flow.Version >= 4, "WhatsApp recipe must be versioned above stale v3 AppData copies.");
+
+        var searchNode = flow.Nodes.Single(node => node.Id == "type-owner-phone");
+        Assert.Equal("{{whatsappSearchPlaceholder}}", Assert.IsType<JsonElement>(searchNode.Properties["elementName"]).GetString());
+        Assert.Equal("contains", Assert.IsType<JsonElement>(searchNode.Properties["elementNameMatch"]).GetString());
+        Assert.Equal("Edit", Assert.IsType<JsonElement>(searchNode.Properties["controlType"]).GetString());
+        Assert.Contains(flow.Variables, variable =>
+            variable.Name == "whatsappSearchPlaceholder" &&
+            variable.Default?.ToString() == "Pesquisar ou começar uma nova conversa");
+
+        var typeMenuNode = flow.Nodes.Single(node => node.Id == "type-menu");
+        Assert.Equal("{{whatsappComposerHint}}", Assert.IsType<JsonElement>(typeMenuNode.Properties["elementName"]).GetString());
+        Assert.Equal("contains", Assert.IsType<JsonElement>(typeMenuNode.Properties["elementNameMatch"]).GetString());
+        Assert.Contains(flow.Variables, variable =>
+            variable.Name == "whatsappComposerHint" &&
+            variable.Default?.ToString() == "Digite uma mensagem");
+
+        Assert.Contains(flow.Connections, connection =>
+            connection.SourceNodeId == "focus-existing-whatsapp" &&
+            connection.SourcePort == "notFound" &&
+            connection.TargetNodeId == "open-whatsapp");
+    }
+
+    [Fact]
+    public void SampleFlows_WhatsAppRecipeOpensSearchResultWithKeyboardAndAnchoredFallback()
+    {
+        var sampleFlowPath = Path.Combine(GetSampleFlowsDirectory(), "recipe_whatsapp_status_assistant.json");
+        Assert.True(File.Exists(sampleFlowPath), $"Expected WhatsApp recipe flow was not found: {sampleFlowPath}");
+
+        var flow = FlowSerializer.Deserialize(File.ReadAllText(sampleFlowPath));
+        Assert.NotNull(flow);
+
+        var selectFirstResult = flow.Nodes.Single(node => node.Id == "select-first-result");
+        Assert.Equal("action.keyboardPress", selectFirstResult.TypeId);
+        Assert.Equal("Down", Assert.IsType<JsonElement>(selectFirstResult.Properties["key"]).GetString());
+
+        var openSelectedChat = flow.Nodes.Single(node => node.Id == "open-selected-chat");
+        Assert.Equal("action.keyboardPress", openSelectedChat.TypeId);
+        Assert.Equal("Return", Assert.IsType<JsonElement>(openSelectedChat.Properties["key"]).GetString());
+
+        var clickFallback = flow.Nodes.Single(node => node.Id == "click-contact-result");
+        Assert.Equal("{{whatsappSearchPlaceholder}}", Assert.IsType<JsonElement>(clickFallback.Properties["fallbackAnchorElementName"]).GetString());
+        Assert.Equal("contains", Assert.IsType<JsonElement>(clickFallback.Properties["fallbackAnchorElementNameMatch"]).GetString());
+        Assert.Equal("Edit", Assert.IsType<JsonElement>(clickFallback.Properties["fallbackAnchorControlType"]).GetString());
+        Assert.True(Assert.IsType<JsonElement>(clickFallback.Properties["fallbackAnchorOffsetX"]).GetInt32() > 0);
+        Assert.True(Assert.IsType<JsonElement>(clickFallback.Properties["fallbackAnchorOffsetY"]).GetInt32() > 0);
+
+        Assert.Contains(flow.Connections, connection =>
+            connection.SourceNodeId == "delay-search-results" &&
+            connection.TargetNodeId == "select-first-result");
+        Assert.Contains(flow.Connections, connection =>
+            connection.SourceNodeId == "select-first-result" &&
+            connection.TargetNodeId == "delay-after-result-selection");
+        Assert.Contains(flow.Connections, connection =>
+            connection.SourceNodeId == "delay-after-result-selection" &&
+            connection.TargetNodeId == "open-selected-chat");
+        Assert.Contains(flow.Connections, connection =>
+            connection.SourceNodeId == "open-selected-chat" &&
+            connection.TargetNodeId == "wait-composer");
+        Assert.DoesNotContain(flow.Nodes, node => node.Id == "select-chat-by-enter");
+    }
+
     private static string[] GetSampleFlowPaths()
     {
         var sampleFlowsDirectory = GetSampleFlowsDirectory();

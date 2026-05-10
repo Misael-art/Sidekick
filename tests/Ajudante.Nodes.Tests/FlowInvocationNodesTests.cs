@@ -86,6 +86,62 @@ public class FlowInvocationNodesTests
     }
 
     [Fact]
+    public async Task ChatMenuRouterNode_UsesLatestStandaloneCommandFromTranscript()
+    {
+        var context = CreateContext();
+        var node = new ChatMenuRouterNode();
+        node.Configure(new Dictionary<string, object?>
+        {
+            ["message"] = """
+                Ola, eu sou o Sidekick local. Escolha uma opcao:
+                1 - Enviar print da tela
+                2 <comando> - Executar comando permitido
+                3 - Informacoes do sistema
+                10 - Portfolio Print
+                0 - Desarmar/parar pelo Sidekick
+                3
+                """,
+            ["allowedCommands"] = "ipconfig,whoami,hostname",
+            ["flowCatalogJson"] = """
+                [{"number":10,"flowId":"portfolio-print","name":"Enviar print"}]
+                """
+        });
+
+        var result = await node.ExecuteAsync(context, CancellationToken.None);
+
+        Assert.True(result.Success, result.Error);
+        Assert.Equal("systemInfo", result.OutputPort);
+        Assert.Equal("systemInfo", context.GetVariable<string>("chatIntent"));
+    }
+
+    [Fact]
+    public async Task ChatMenuRouterNode_DoesNotExecuteMenuLinesFromTranscript()
+    {
+        var context = CreateContext();
+        var node = new ChatMenuRouterNode();
+        node.Configure(new Dictionary<string, object?>
+        {
+            ["message"] = """
+                Ola, eu sou o Sidekick local. Escolha uma opcao:
+                1 - Enviar print da tela
+                2 <comando> - Executar comando permitido
+                3 - Informacoes do sistema
+                10 - Portfolio Print
+                0 - Desarmar/parar pelo Sidekick
+                """,
+            ["allowedCommands"] = "ipconfig,whoami,hostname",
+            ["flowCatalogJson"] = """
+                [{"number":10,"flowId":"portfolio-print","name":"Enviar print"}]
+                """
+        });
+
+        var result = await node.ExecuteAsync(context, CancellationToken.None);
+
+        Assert.True(result.Success, result.Error);
+        Assert.Equal("unknown", result.OutputPort);
+    }
+
+    [Fact]
     public async Task RunSavedFlowNode_QueuesThroughInvocationServiceWithoutExecutingInline()
     {
         var service = new FakeFlowInvocationService(Array.Empty<RunnableFlowSummary>())

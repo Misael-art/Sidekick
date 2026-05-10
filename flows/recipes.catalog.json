@@ -100,7 +100,7 @@
   },
   {
     "id": "recipe-whatsapp-status-assistant",
-    "name": "WhatsApp Assistant v2",
+    "name": "WhatsApp Status Assistant (Draft Safe)",
     "category": "communication",
     "persona": "office",
     "risk": "medium",

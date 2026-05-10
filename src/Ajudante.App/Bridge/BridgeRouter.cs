@@ -231,7 +231,10 @@ public class BridgeRouter : IDisposable
             return;
         }
 
-        TryEnrichVariablesFromBundledSeed(flow);
+        if (TryEnrichVariablesFromBundledSeed(flow))
+        {
+            await FlowSerializer.SaveAsync(flow, filePath);
+        }
 
         Log($"Flow loaded: {flow.Name} ({flow.Id})");
 
@@ -1027,10 +1030,14 @@ if (-not $consentAccepted) {
             return null;
         }
 
-        var diskFlow = await FlowSerializer.LoadAsync(await FindFlowFilePathAsync(flowId));
+        var diskFlowPath = await FindFlowFilePathAsync(flowId);
+        var diskFlow = await FlowSerializer.LoadAsync(diskFlowPath);
         if (diskFlow != null)
         {
-            TryEnrichVariablesFromBundledSeed(diskFlow);
+            if (TryEnrichVariablesFromBundledSeed(diskFlow))
+            {
+                await FlowSerializer.SaveAsync(diskFlow, diskFlowPath);
+            }
         }
 
         return diskFlow;
@@ -2003,17 +2010,17 @@ if (-not $consentAccepted) {
     /// is stale. Seeding uses overwrite:false, so AppData files may miss variables added later
     /// even when they already contain older variables.
     /// </summary>
-    private void TryEnrichVariablesFromBundledSeed(Flow flow)
+    private bool TryEnrichVariablesFromBundledSeed(Flow flow)
     {
         if (string.IsNullOrWhiteSpace(flow.Id) || !IsNativeFlowId(flow.Id))
         {
-            return;
+            return false;
         }
 
         var bundledFlowsDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "seed-flows");
         if (!Directory.Exists(bundledFlowsDirectory))
         {
-            return;
+            return false;
         }
 
         foreach (var sourcePath in Directory.EnumerateFiles(bundledFlowsDirectory, "*.json", SearchOption.TopDirectoryOnly))
@@ -2026,42 +2033,28 @@ if (-not $consentAccepted) {
                     continue;
                 }
 
-                if (seed.Variables.Count == 0)
+                if (BundledFlowUpdater.RefreshFromSeedIfNewer(flow, seed))
                 {
-                    return;
+                    Log($"Refreshed native flow '{flow.Id}' from bundled seed version {seed.Version}.");
+                    return true;
                 }
 
-                var existingNames = flow.Variables
-                    .Select(v => v.Name)
-                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
-                var added = 0;
-                foreach (var variable in seed.Variables)
-                {
-                    if (string.IsNullOrWhiteSpace(variable.Name) || !existingNames.Add(variable.Name))
-                    {
-                        continue;
-                    }
-
-                    flow.Variables.Add(new FlowVariable
-                    {
-                        Name = variable.Name,
-                        Type = variable.Type,
-                        Default = variable.Default
-                    });
-                    added++;
-                }
+                var added = BundledFlowUpdater.MergeMissingVariables(flow, seed);
 
                 if (added > 0)
                 {
                     Log($"Enriched {added} missing flow variable(s) from bundled seed for native flow '{flow.Id}'.");
+                    return true;
                 }
-                return;
+                return false;
             }
             catch (Exception ex)
             {
                 Log($"Bundled seed parse skipped for '{Path.GetFileName(sourcePath)}': {ex.Message}");
             }
         }
+
+        return false;
     }
 
     private static HashSet<string> LoadNativeBundledFlowIds()

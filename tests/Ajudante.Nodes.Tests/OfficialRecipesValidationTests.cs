@@ -39,6 +39,23 @@ public class OfficialRecipesValidationTests
         Assert.Empty(failures);
     }
 
+    [Fact]
+    public void WhatsAppRecipe_DoesNotReportCycleWarning()
+    {
+        var registry = new NodeRegistry();
+        registry.ScanAssembly(typeof(TextTemplateNode).Assembly);
+        var validator = new FlowValidator(registry);
+        var flowPath = Path.Combine(GetFlowsDirectory(), "recipe_whatsapp_status_assistant.json");
+
+        var flow = FlowSerializer.Deserialize(File.ReadAllText(flowPath));
+        Assert.NotNull(flow);
+
+        var result = validator.Validate(flow);
+
+        Assert.True(result.IsValid, string.Join(" | ", result.Errors));
+        Assert.DoesNotContain(result.Warnings, warning => warning.Contains("cycle", StringComparison.OrdinalIgnoreCase));
+    }
+
     private static bool IsFlowJsonFile(string path)
     {
         try

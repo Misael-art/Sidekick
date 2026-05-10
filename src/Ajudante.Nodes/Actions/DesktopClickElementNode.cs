@@ -86,6 +86,17 @@ public class DesktopClickElementNode : IActionNode
         if (selector.restoreWindowBeforeFallback)
             TryRestoreWindow(selector);
 
+        if (TryAnchorRelativeFallbackClick(selector, clickType))
+        {
+            context.EmitPhase(RuntimePhases.FallbackVisualActive, "anchor-relative fallback active");
+            context.EmitPhase(RuntimePhases.ClickExecuted, "Desktop click executed", new { fallbackUsed = true, phase = "anchorRelative" });
+            return Task.FromResult(NodeResult.Ok("out", new Dictionary<string, object?>
+            {
+                ["clickedName"] = "",
+                ["fallbackUsed"] = true
+            }));
+        }
+
         if (selector.useRelativeFallback && TryRelativeFallbackClick(selector, clickType))
         {
             context.EmitPhase(RuntimePhases.FallbackVisualActive, "relative fallback active");
@@ -127,6 +138,41 @@ public class DesktopClickElementNode : IActionNode
         }));
     }
 
+    private static bool TryAnchorRelativeFallbackClick(DesktopSelector selector, string clickType)
+    {
+        if (string.IsNullOrWhiteSpace(selector.fallbackAnchorAutomationId) &&
+            string.IsNullOrWhiteSpace(selector.fallbackAnchorElementName) &&
+            string.IsNullOrWhiteSpace(selector.fallbackAnchorControlType))
+        {
+            return false;
+        }
+
+        if (selector.fallbackAnchorOffsetX == 0 && selector.fallbackAnchorOffsetY == 0)
+            return false;
+
+        var anchor = AutomationElementLocator.FindElement(
+            selector.windowTitle,
+            automationId: selector.fallbackAnchorAutomationId,
+            name: selector.fallbackAnchorElementName,
+            controlType: selector.fallbackAnchorControlType,
+            selector.timeoutMs,
+            selector.processName,
+            selector.processPath,
+            selector.windowTitleMatch,
+            selector.fallbackAnchorElementNameMatch);
+
+        if (anchor is null)
+            return false;
+
+        var rect = anchor.Current.BoundingRectangle;
+        if (rect.Width <= 0 || rect.Height <= 0)
+            return false;
+
+        var x = (int)rect.Left + selector.fallbackAnchorOffsetX;
+        var y = (int)rect.Top + selector.fallbackAnchorOffsetY;
+        return TryClickPoint(x, y, windowBounds: null, clickType);
+    }
+
     private static bool TryCoordinateClickWithinBounds(AutomationElement element, string clickType)
     {
         var rect = element.Current.BoundingRectangle;
@@ -151,7 +197,7 @@ public class DesktopClickElementNode : IActionNode
             selector.windowTitle,
             automationId: "",
             name: "",
-            controlType: "window",
+            controlType: "",
             selector.timeoutMs,
             selector.processName,
             selector.processPath,
@@ -227,7 +273,7 @@ public class DesktopClickElementNode : IActionNode
                 selector.windowTitle,
                 automationId: "",
                 name: "",
-                controlType: "window",
+                controlType: "",
                 timeoutMs: 1000,
                 processName: selector.processName,
                 processPath: selector.processPath,

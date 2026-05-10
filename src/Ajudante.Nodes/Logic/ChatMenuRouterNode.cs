@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Ajudante.Core;
 using Ajudante.Core.Engine;
 using Ajudante.Core.Interfaces;
@@ -65,7 +66,7 @@ public sealed class ChatMenuRouterNode : ILogicNode
         var startNumber = Math.Max(1, NodeValueHelper.GetInt(_properties, "flowMenuStartNumber", 10));
         var catalogJson = NodeValueHelper.ResolveTemplateProperty(context, _properties, "flowCatalogJson", "");
 
-        var route = ResolveRoute(message, allowedCommands, startNumber, catalogJson);
+        var route = ResolveRoute(SelectLatestStandaloneCommand(message, startNumber), allowedCommands, startNumber, catalogJson);
         Store(context, route);
 
         return Task.FromResult(NodeResult.Ok(route.OutputPort, new Dictionary<string, object?>
@@ -123,6 +124,45 @@ public sealed class ChatMenuRouterNode : ILogicNode
         }
 
         return Unknown("unknownCommand", "Nao entendi esse comando.");
+    }
+
+    private static string SelectLatestStandaloneCommand(string message, int startNumber)
+    {
+        var trimmed = message.Trim();
+        if (string.IsNullOrWhiteSpace(trimmed))
+            return trimmed;
+
+        var lines = trimmed
+            .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(line => !string.IsNullOrWhiteSpace(line))
+            .ToArray();
+
+        for (var i = lines.Length - 1; i >= 0; i--)
+        {
+            var line = lines[i].Trim();
+            if (IsStandaloneMenuCommand(line, startNumber))
+                return line;
+        }
+
+        return trimmed;
+    }
+
+    private static bool IsStandaloneMenuCommand(string line, int startNumber)
+    {
+        if (Regex.IsMatch(line, @"^(0|1|3|4)$", RegexOptions.CultureInvariant))
+            return true;
+
+        if (Regex.IsMatch(line, @"^2\s+\S+.*$", RegexOptions.CultureInvariant))
+            return true;
+
+        if (Regex.IsMatch(line, @"^\d+$", RegexOptions.CultureInvariant) &&
+            int.TryParse(line, out var number) &&
+            number >= startNumber)
+        {
+            return true;
+        }
+
+        return false;
     }
 
     private void Store(FlowExecutionContext context, RouteResult route)

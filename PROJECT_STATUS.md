@@ -76,6 +76,25 @@ Atualizacao de recorder maduro/hardening em `2026-05-09`:
 - Dry-run passou a descrever passos de macro em linguagem de usuario: aguardar elemento/janela, clicar alvo, digitar texto redigido/pendente, arrastar por coordenadas e pausas fixas.
 - Validado nesta rodada: `dotnet build Ajudante.sln --no-restore`, `dotnet test Ajudante.sln --no-build`, `npm run test` e `npm run build`. O build Vite segue com o aviso conhecido de chunk principal acima de 500 kB.
 
+Atualizacao WhatsApp/Marketplace em `2026-05-10`:
+
+- A recipe oficial `Recipe - WhatsApp Status Assistant (Draft Safe)` foi promovida para `version: 3` e ajustada com base em capturas reais do Mira no WhatsApp Web em PT-BR no Edge.
+- O fluxo agora tenta reutilizar/focar uma janela existente do Edge com WhatsApp antes de abrir `https://web.whatsapp.com/`, aguarda login/QR code quando a busca nao aparece, pesquisa o telefone configuravel do proprio usuario (`11959766061` por padrao de busca, normalizado como `5511959766061`) e usa seletores PT-BR para busca/composer.
+- Selectors desktop/browser ganharam `elementNameMatch` (`equals|contains|regex`) para lidar com nomes dinamicos como aba `(50) WhatsApp` e composer `Digite uma mensagem para ...`; `TabItem` e `Group` entraram no parser de control types UIA.
+- Nodes browser que ja expunham porta `notFound` (`browserWaitElement`, `browserType`, `browserClick`, `browserExtractText`) agora roteiam para essa porta em vez de abortar o flow, permitindo fallback e mensagens claras.
+- O parser `logic.chatMenuRouter` passou a extrair o ultimo comando standalone de um transcript de chat, evitando executar linhas do proprio menu enviado pelo Sidekick.
+- Copias antigas de recipes nativas em `%AppData%/Sidekick/flows` agora podem ser atualizadas a partir de `seed-flows` quando o seed oficial tem `version` maior, preservando defaults de variaveis editadas pelo usuario.
+- Validado nesta rodada: `dotnet build Ajudante.sln --no-restore`, `dotnet test Ajudante.sln --no-build`, `npm run test`, `npm run build` e `dotnet publish .\src\Ajudante.App\Ajudante.App.csproj -c Release -o .\src\Ajudante.App\bin\publish --no-restore`. O build Vite segue com o aviso conhecido de chunk principal acima de 500 kB.
+
+Atualizacao WhatsApp v5 em `2026-05-10`:
+
+- A recipe oficial `Recipe - WhatsApp Status Assistant (Draft Safe)` foi promovida para `version: 5` para substituir copias locais v3/v4 preservando variaveis editadas.
+- A abertura do chat do proprio usuario foi endurecida: apos pesquisar o telefone, o fluxo seleciona o primeiro resultado com `Down`, aguarda uma pausa curta e abre com `Return`; se o composer nao aparecer, usa fallback de clique relativo ao campo de busca, nao coordenada absoluta de tela.
+- O retry que gerava warning estatico de ciclo (`type-owner-phone -> log-login-required -> wait-login-after-qr -> type-owner-phone`) foi removido; falha ao focar a busca agora termina com log acionavel em vez de reentrar no fluxo de QR.
+- `action.desktopClickElement` ganhou fallback ancorado em outro elemento UIA (`fallbackAnchor*` + offset), permitindo clicar em areas dinamicas do WhatsApp a partir do campo de busca capturado pelo Mira.
+- Publicacao padrao em `src/Ajudante.App/bin/publish` pode falhar se houver uma instancia do Sidekick segurando DLLs de `bin/Release`; nesta rodada foi gerado publish isolado em `src/Ajudante.App/bin/publish-whatsapp-v5/Sidekick.exe`.
+- Validado nesta rodada: `dotnet build Ajudante.sln --no-restore`, `dotnet test Ajudante.sln --no-build`, `npm run test`, `npm run build` e `dotnet publish .\src\Ajudante.App\Ajudante.App.csproj -c Release -o .\src\Ajudante.App\bin\publish-whatsapp-v5 --no-restore -p:BaseOutputPath=F:\Projects\Sidekick\.artifacts\release-build\`. O build Vite segue com o aviso conhecido de chunk principal acima de 500 kB.
+
 ## Estagio Atual Do Produto
 
 O produto esta em um estagio de `release candidate tecnico com validacao manual final pendente`.

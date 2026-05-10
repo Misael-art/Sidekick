@@ -47,7 +47,11 @@ public class BrowserClickNode : IActionNode
         var clickType = NodeValueHelper.GetString(_properties, "clickType", "single");
         var element = BrowserSelectorHelper.FindElement(selector);
         if (element is null)
-            return Task.FromResult(NodeResult.Fail("Browser element not found"));
+            return Task.FromResult(NodeResult.Ok("notFound", new Dictionary<string, object?>
+            {
+                ["clickedName"] = "",
+                ["reason"] = "Browser element not found"
+            }));
 
         if (!AutomationElementLocator.Invoke(element))
         {
@@ -70,17 +74,11 @@ public class BrowserClickNode : IActionNode
 
     private static List<PropertyDefinition> BrowserPropertyDefinitions()
     {
-        return new List<PropertyDefinition>
-        {
-            new() { Id = "windowTitle", Name = "Window Title", Type = PropertyType.String, DefaultValue = "", Description = "Optional desktop window title" },
-            new() { Id = "windowTitleMatch", Name = "Window Title Match", Type = PropertyType.Dropdown, DefaultValue = "equals", Description = "How to match the window title", Options = new[] { "equals", "contains", "regex" } },
-            new() { Id = "processName", Name = "Process Name", Type = PropertyType.String, DefaultValue = "", Description = "Optional process name, with or without .exe" },
-            new() { Id = "processPath", Name = "Process Path", Type = PropertyType.FilePath, DefaultValue = "", Description = "Optional full executable path for the target process" },
-            new() { Id = "automationId", Name = "Automation ID", Type = PropertyType.String, DefaultValue = "", Description = "Optional automation id" },
-            new() { Id = "elementName", Name = "Element Name", Type = PropertyType.String, DefaultValue = "", Description = "Visible element name/text" },
-            new() { Id = "controlType", Name = "Control Type", Type = PropertyType.String, DefaultValue = "", Description = "Optional UIAutomation control type" },
-            new() { Id = "timeoutMs", Name = "Timeout (ms)", Type = PropertyType.Integer, DefaultValue = 5000, Description = "Maximum wait time for the element" },
-            new() { Id = "clickType", Name = "Click Type", Type = PropertyType.Dropdown, DefaultValue = "single", Description = "Single or double click", Options = new[] { "single", "double" } }
-        };
+        return BrowserSelectorHelper.SelectorPropertyDefinitions()
+            .Concat(new[]
+            {
+                new PropertyDefinition { Id = "clickType", Name = "Click Type", Type = PropertyType.Dropdown, DefaultValue = "single", Description = "Single or double click", Options = new[] { "single", "double" } }
+            })
+            .ToList();
     }
 }

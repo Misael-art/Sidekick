@@ -40,7 +40,8 @@ public static class AutomationElementLocator
         int timeoutMs,
         string? processName,
         string? processPath,
-        TitleMatch titleMatch)
+        TitleMatch titleMatch,
+        TitleMatch nameMatch = TitleMatch.Equals)
     {
         var startedAt = Environment.TickCount64;
 
@@ -53,7 +54,8 @@ public static class AutomationElementLocator
                 controlType,
                 processName,
                 processPath,
-                titleMatch);
+                titleMatch,
+                nameMatch);
             if (element is not null)
                 return element;
 
@@ -96,12 +98,15 @@ public static class AutomationElementLocator
 
     public static string ExtractText(AutomationElement element)
     {
+        var name = string.Empty;
         try
         {
             if (element.TryGetCurrentPattern(ValuePattern.Pattern, out var valuePatternObject) &&
                 valuePatternObject is ValuePattern valuePattern)
             {
-                return valuePattern.Current.Value ?? string.Empty;
+                var value = valuePattern.Current.Value ?? string.Empty;
+                if (!string.IsNullOrWhiteSpace(value))
+                    return value;
             }
         }
         catch
@@ -110,12 +115,19 @@ public static class AutomationElementLocator
 
         try
         {
-            return element.Current.Name ?? string.Empty;
+            name = element.Current.Name ?? string.Empty;
         }
         catch
         {
-            return string.Empty;
         }
+
+        var descendantText = ExtractDescendantText(element);
+        if (string.IsNullOrWhiteSpace(descendantText))
+            return name;
+
+        return string.IsNullOrWhiteSpace(name)
+            ? descendantText
+            : $"{name}{Environment.NewLine}{descendantText}";
     }
 
     public static bool Invoke(AutomationElement element)
@@ -156,7 +168,8 @@ public static class AutomationElementLocator
         string? controlType,
         string? processName,
         string? processPath,
-        TitleMatch titleMatch)
+        TitleMatch titleMatch,
+        TitleMatch nameMatch)
     {
         try
         {
@@ -178,16 +191,30 @@ public static class AutomationElementLocator
             var conditions = new List<Condition>();
             if (!string.IsNullOrWhiteSpace(automationId))
                 conditions.Add(new PropertyCondition(AutomationElement.AutomationIdProperty, automationId));
-            if (!string.IsNullOrWhiteSpace(name))
-                conditions.Add(new PropertyCondition(AutomationElement.NameProperty, name));
             if (!string.IsNullOrWhiteSpace(controlType) && TryParseControlType(controlType, out var parsedControlType))
                 conditions.Add(new PropertyCondition(AutomationElement.ControlTypeProperty, parsedControlType));
 
-            if (conditions.Count == 0)
+            if (conditions.Count == 0 && string.IsNullOrWhiteSpace(name))
                 return window;
 
-            var condition = conditions.Count == 1 ? conditions[0] : new AndCondition(conditions.ToArray());
-            return window.FindFirst(TreeScope.Descendants, condition);
+            var condition = conditions.Count switch
+            {
+                0 => Condition.TrueCondition,
+                1 => conditions[0],
+                _ => new AndCondition(conditions.ToArray())
+            };
+
+            var candidates = window.FindAll(TreeScope.Descendants, condition);
+            if (candidates is null || candidates.Count == 0)
+                return null;
+
+            foreach (AutomationElement candidate in candidates)
+            {
+                if (MatchesElementName(candidate, name, nameMatch))
+                    return candidate;
+            }
+
+            return null;
         }
         catch
         {
@@ -325,6 +352,72 @@ public static class AutomationElementLocator
         }
     }
 
+    private static bool MatchesElementName(AutomationElement element, string? name, TitleMatch nameMatch)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return true;
+
+        try
+        {
+            return TitleMatches(element.Current.Name ?? string.Empty, name, nameMatch);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static string ExtractDescendantText(AutomationElement element)
+    {
+        try
+        {
+            var condition = new OrCondition(
+                new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Text),
+                new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Edit),
+                new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Document));
+            var descendants = element.FindAll(TreeScope.Descendants, condition);
+            if (descendants is null || descendants.Count == 0)
+                return string.Empty;
+
+            var values = new List<string>();
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            for (var i = 0; i < descendants.Count && values.Count < 80; i++)
+            {
+                if (descendants[i] is not AutomationElement child)
+                    continue;
+
+                string text;
+                try
+                {
+                    text = child.Current.Name ?? string.Empty;
+                    if (string.IsNullOrWhiteSpace(text) &&
+                        child.TryGetCurrentPattern(ValuePattern.Pattern, out var valuePatternObject) &&
+                        valuePatternObject is ValuePattern valuePattern)
+                    {
+                        text = valuePattern.Current.Value ?? string.Empty;
+                    }
+                }
+                catch
+                {
+                    continue;
+                }
+
+                text = text.Trim();
+                if (text.Length == 0 || !seen.Add(text))
+                    continue;
+
+                values.Add(text);
+            }
+
+            var joined = string.Join(Environment.NewLine, values);
+            return joined.Length <= 4096 ? joined : joined[..4096];
+        }
+        catch
+        {
+            return string.Empty;
+        }
+    }
+
     private static bool TryParseControlType(string value, out ControlType controlType)
     {
         var normalized = value.Trim().ToLowerInvariant();
@@ -337,8 +430,13 @@ public static class AutomationElementLocator
             "hyperlink" => ControlType.Hyperlink,
             "pane" => ControlType.Pane,
             "listitem" => ControlType.ListItem,
+            "list" => ControlType.List,
             "combobox" => ControlType.ComboBox,
             "checkbox" => ControlType.CheckBox,
+            "group" => ControlType.Group,
+            "tabitem" => ControlType.TabItem,
+            "tab" => ControlType.TabItem,
+            "menuitem" => ControlType.MenuItem,
             "window" => ControlType.Window,
             _ => ControlType.Custom
         };

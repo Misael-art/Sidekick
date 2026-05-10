@@ -56,7 +56,11 @@ public class BrowserTypeNode : IActionNode
 
         var element = BrowserSelectorHelper.FindElement(selector);
         if (element is null)
-            return Task.FromResult(NodeResult.Fail("Browser element not found"));
+            return Task.FromResult(NodeResult.Ok("notFound", new Dictionary<string, object?>
+            {
+                ["typedText"] = "",
+                ["reason"] = "Browser element not found"
+            }));
 
         AutomationElementLocator.Focus(element);
 

@@ -17,7 +17,9 @@ public class DesktopAutomationNodeTests
         {
             new DesktopWaitElementNode().Definition,
             new DesktopClickElementNode().Definition,
-            new DesktopReadElementTextNode().Definition
+            new DesktopReadElementTextNode().Definition,
+            new BrowserWaitElementNode().Definition,
+            new BrowserTypeNode().Definition
         };
 
         foreach (var definition in nodes)
@@ -25,8 +27,44 @@ public class DesktopAutomationNodeTests
             Assert.Contains(definition.Properties, p => p.Id == "processName");
             Assert.Contains(definition.Properties, p => p.Id == "processPath");
             Assert.Contains(definition.Properties, p => p.Id == "windowTitleMatch");
+            Assert.Contains(definition.Properties, p => p.Id == "elementNameMatch");
             Assert.Contains(definition.OutputPorts, p => p.Id == "notFound");
         }
+    }
+
+    [Fact]
+    public void DesktopClickElement_ExposesAnchoredFallbackProperties()
+    {
+        var definition = new DesktopClickElementNode().Definition;
+
+        Assert.Contains(definition.Properties, p => p.Id == "fallbackAnchorAutomationId");
+        Assert.Contains(definition.Properties, p => p.Id == "fallbackAnchorElementName");
+        Assert.Contains(definition.Properties, p => p.Id == "fallbackAnchorElementNameMatch");
+        Assert.Contains(definition.Properties, p => p.Id == "fallbackAnchorControlType");
+        Assert.Contains(definition.Properties, p => p.Id == "fallbackAnchorOffsetX");
+        Assert.Contains(definition.Properties, p => p.Id == "fallbackAnchorOffsetY");
+    }
+
+    [Fact]
+    public async Task BrowserWaitElement_RoutesToNotFoundInsteadOfFailing()
+    {
+        var node = new BrowserWaitElementNode();
+        node.Configure(new Dictionary<string, object?>
+        {
+            ["windowTitle"] = "Sidekick Missing Window For BrowserWait Test",
+            ["windowTitleMatch"] = "equals",
+            ["elementName"] = "Missing Search",
+            ["controlType"] = "Edit",
+            ["timeoutMs"] = 0,
+            ["storeInVariable"] = "found"
+        });
+
+        var context = new FlowExecutionContext(new Flow { Id = "flow-browser-wait", Name = "Browser Wait" }, CancellationToken.None);
+        var result = await node.ExecuteAsync(context, CancellationToken.None);
+
+        Assert.True(result.Success, result.Error);
+        Assert.Equal("notFound", result.OutputPort);
+        Assert.False(context.GetVariable<bool>("found"));
     }
 
     [Fact]

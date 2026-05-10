@@ -55,7 +55,11 @@ public class BrowserWaitElementNode : IActionNode
         NodeValueHelper.SetVariableIfRequested(context, variableName, found);
 
         if (!found)
-            return Task.FromResult(NodeResult.Fail("Browser element not found within timeout"));
+            return Task.FromResult(NodeResult.Ok("notFound", new Dictionary<string, object?>
+            {
+                ["found"] = false,
+                ["reason"] = "Browser element not found within timeout"
+            }));
 
         return Task.FromResult(NodeResult.Ok("out", new Dictionary<string, object?>
         {

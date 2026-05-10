@@ -51,7 +51,14 @@ public class BrowserExtractTextNode : IActionNode
         var variableName = NodeValueHelper.GetString(_properties, "storeInVariable");
         var element = BrowserSelectorHelper.FindElement(selector);
         if (element is null)
-            return Task.FromResult(NodeResult.Fail("Browser element not found"));
+        {
+            NodeValueHelper.SetVariableIfRequested(context, variableName, "");
+            return Task.FromResult(NodeResult.Ok("notFound", new Dictionary<string, object?>
+            {
+                ["text"] = "",
+                ["reason"] = "Browser element not found"
+            }));
+        }
 
         var text = AutomationElementLocator.ExtractText(element);
         NodeValueHelper.SetVariableIfRequested(context, variableName, text);
