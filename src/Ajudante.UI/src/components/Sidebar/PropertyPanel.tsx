@@ -1,10 +1,12 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { sendCommand } from '../../bridge/bridge';
 import type {
+  BrowsePathResponse,
   CapturedElement,
   ImageTemplateValue,
   InspectionAsset,
   PropertyDefinition,
+  SelectorDiagnosticResult,
   SnipAsset,
   SnipAssetTemplatePayload,
 } from '../../bridge/types';
@@ -26,7 +28,7 @@ export default function PropertyPanel() {
     return (
       <div className="property-panel property-panel--empty">
         <div className="property-panel__placeholder">
-          Select a node to view its properties
+          Selecione um bloco para ajustar suas propriedades
         </div>
       </div>
     );
@@ -54,7 +56,7 @@ export default function PropertyPanel() {
         <button
           className="property-panel__delete-btn"
           onClick={() => removeNode(selectedNode.id)}
-          title="Delete node"
+          title="Remover bloco"
         >
           &#x2715;
         </button>
@@ -62,7 +64,7 @@ export default function PropertyPanel() {
 
       {/* Ports info */}
       <div className="property-panel__section">
-        <div className="property-panel__section-title">Ports</div>
+        <div className="property-panel__section-title">Conexoes</div>
         {data.inputPorts.length > 0 && (
           <div className="property-panel__ports">
             <span className="property-panel__port-label">In:</span>
@@ -119,7 +121,7 @@ export default function PropertyPanel() {
       {/* Properties form */}
       {data.properties.length > 0 && (
         <div className="property-panel__section">
-          <div className="property-panel__section-title">Properties</div>
+          <div className="property-panel__section-title">Propriedades</div>
           <div className="property-panel__fields">
             {selectorPropertyIds && (
               <InspectionSelectorField
@@ -324,6 +326,8 @@ function InspectionSelectorField({
   const setUserMessage = useAppStore((s) => s.setUserMessage);
   const [isBrowserOpen, setIsBrowserOpen] = useState(false);
   const [filter, setFilter] = useState('');
+  const [diagnostic, setDiagnostic] = useState<SelectorDiagnosticResult | null>(null);
+  const [isDiagnosing, setIsDiagnosing] = useState(false);
 
   const filteredAssets = useMemo(() => {
     const normalizedFilter = normalizeSearchText(filter);
@@ -386,6 +390,35 @@ function InspectionSelectorField({
     applySelection(createInspectionSelectionFromCapturedElement(capturedElement));
   };
 
+  const handleDiagnoseSelector = async () => {
+    try {
+      setIsDiagnosing(true);
+      const result = await sendCommand<SelectorDiagnosticResult>('assets', 'diagnoseSelector', {
+        windowTitle: getStringPropertyValue(propertyValues, selectorPropertyIds.windowTitleId),
+        titleMatch: getStringPropertyValue(propertyValues, selectorPropertyIds.windowTitleMatchId) || 'contains',
+        processName: getStringPropertyValue(propertyValues, selectorPropertyIds.processNameId),
+        processPath: getStringPropertyValue(propertyValues, selectorPropertyIds.processPathId),
+        automationId: getStringPropertyValue(propertyValues, selectorPropertyIds.automationIdId),
+        elementName: getStringPropertyValue(propertyValues, selectorPropertyIds.elementNameId),
+        controlType: getStringPropertyValue(propertyValues, selectorPropertyIds.controlTypeId),
+        timeoutMs: 1000,
+      });
+      setDiagnostic(result);
+      setUserMessage({
+        type: result.found ? 'success' : 'info',
+        text: result.found
+          ? `Selector Doctor: seletor ${result.strength}.`
+          : 'Selector Doctor: elemento nao encontrado agora; recapture ou use fallback.',
+      });
+    } catch (error) {
+      const message = getErrorMessage(error, 'Selector Doctor falhou ao testar este seletor.');
+      addLog({ timestamp: new Date().toISOString(), level: 'error', message });
+      setUserMessage({ type: 'error', text: message });
+    } finally {
+      setIsDiagnosing(false);
+    }
+  };
+
   const currentAutomationId = getStringPropertyValue(propertyValues, selectorPropertyIds.automationIdId);
   const latestCapturedTitle = capturedElement
     ? (capturedElement.asset?.displayName
@@ -422,7 +455,7 @@ function InspectionSelectorField({
           className="property-field__browse-btn"
           onClick={() => setIsBrowserOpen((state) => !state)}
         >
-          {isBrowserOpen ? 'Hide Mira' : 'Browse Mira'}
+          {isBrowserOpen ? 'Ocultar Mira' : 'Procurar Mira'}
         </button>
         <button
           type="button"
@@ -431,7 +464,16 @@ function InspectionSelectorField({
           disabled={!capturedElement}
           title={capturedElement ? 'Use a ultima captura feita com Mira' : 'Capture um elemento com Mira primeiro'}
         >
-          Use Latest
+          Usar ultima
+        </button>
+        <button
+          type="button"
+          className="property-field__browse-btn"
+          onClick={() => { void handleDiagnoseSelector(); }}
+          disabled={isDiagnosing}
+          title="Testa o seletor atual e recomenda fallback ou reparo"
+        >
+          {isDiagnosing ? 'Testando...' : 'Diagnosticar'}
         </button>
         <button
           type="button"
@@ -442,6 +484,21 @@ function InspectionSelectorField({
           Limpar
         </button>
       </div>
+
+      {diagnostic && (
+        <div className={`property-field__diagnostic property-field__diagnostic--${diagnostic.found ? 'ok' : 'warn'}`} role="status" aria-live="polite">
+          <div className="property-field__diagnostic-title">
+            Selector Doctor: {diagnostic.found ? `encontrado (${diagnostic.strength})` : 'nao encontrado'}
+          </div>
+          <div className="property-field__diagnostic-copy">{diagnostic.reason}</div>
+          <div className="property-field__diagnostic-copy">{diagnostic.fallbackRecommendation}</div>
+          {diagnostic.repairAction === 'repairWithLatestCapture' && capturedElement && (
+            <button type="button" className="property-field__browse-btn" onClick={handleUseLatestCapture}>
+              Reparar com ultima captura
+            </button>
+          )}
+        </div>
+      )}
 
       {isBrowserOpen && (
         <div className="property-field__snip-browser">
@@ -484,7 +541,7 @@ function InspectionSelectorField({
                       {asset.source.windowTitle?.trim() || asset.source.processName?.trim() || 'Janela indisponivel'}
                     </span>
                     <span className="property-field__snip-option-meta">
-                      Selector {asset.locator.strength ?? 'fraca'} • {asset.locator.strategy}
+                      Seletor {asset.locator.strength ?? 'fraca'} • {asset.locator.strategy}
                       {asset.source.processPath ? ' • processPath' : ''}
                     </span>
                     <span className="property-field__snip-option-meta">
@@ -524,12 +581,54 @@ function readImageTemplateValue(value: unknown): ImageTemplateValue | null {
 
 function PropertyField({ definition, value, onChange }: PropertyFieldProps) {
   const { type, name, description, options } = definition;
+  const addLog = useAppStore((s) => s.addLog);
+  const setUserMessage = useAppStore((s) => s.setUserMessage);
+  const [isBrowsingPath, setIsBrowsingPath] = useState(false);
 
   const label = (
     <label className="property-field__label" title={description ?? ''}>
       {name}
     </label>
   );
+
+  const handleBrowsePath = async () => {
+    if (type !== 'FilePath' && type !== 'FolderPath') {
+      return;
+    }
+
+    try {
+      setIsBrowsingPath(true);
+      const result = await sendCommand<BrowsePathResponse>(
+        'platform',
+        type === 'FilePath' ? 'browseFile' : 'browseFolder',
+        {
+          currentPath: typeof value === 'string' ? value : '',
+          propertyId: definition.id,
+          propertyName: name,
+        },
+      );
+
+      const selectedPath = typeof result?.path === 'string' ? result.path.trim() : '';
+      if (!selectedPath || result?.cancelled) {
+        return;
+      }
+
+      onChange(selectedPath);
+      setUserMessage({
+        type: 'success',
+        text: type === 'FilePath' ? 'Arquivo selecionado.' : 'Pasta selecionada.',
+      });
+    } catch (error) {
+      const message = getErrorMessage(
+        error,
+        type === 'FilePath' ? 'Nao foi possivel selecionar o arquivo.' : 'Nao foi possivel selecionar a pasta.',
+      );
+      addLog({ timestamp: new Date().toISOString(), level: 'error', message });
+      setUserMessage({ type: 'error', text: message });
+    } finally {
+      setIsBrowsingPath(false);
+    }
+  };
 
   switch (type) {
     case 'Boolean':
@@ -620,18 +719,17 @@ function PropertyField({ definition, value, onChange }: PropertyFieldProps) {
               value={value ?? ''}
               onChange={(e) => onChange(e.target.value)}
               className="property-field__input"
-              placeholder={type === 'FilePath' ? 'Select a file...' : 'Select a folder...'}
+              placeholder={type === 'FilePath' ? 'Selecione um arquivo...' : 'Selecione uma pasta...'}
             />
             <button
               type="button"
               className="property-field__browse-btn"
-              onClick={() => {
-                // In WebView2, the host would open a native file dialog
-                // For now, this is a placeholder
-              }}
-              title="Browse"
+              onClick={() => { void handleBrowsePath(); }}
+              title={type === 'FilePath' ? 'Procurar arquivo' : 'Procurar pasta'}
+              aria-label={type === 'FilePath' ? 'Procurar arquivo' : 'Procurar pasta'}
+              disabled={isBrowsingPath}
             >
-              ...
+              {isBrowsingPath ? 'Abrindo...' : 'Procurar'}
             </button>
           </div>
         </div>
@@ -699,14 +797,25 @@ function PropertyField({ definition, value, onChange }: PropertyFieldProps) {
 
 function ImageTemplateField({ definition, value, onChange }: PropertyFieldProps) {
   const snipAssets = useAppStore((s) => s.snipAssets);
+  const upsertSnipAsset = useAppStore((s) => s.upsertSnipAsset);
   const capturedRegion = useAppStore((s) => s.capturedRegion);
   const addLog = useAppStore((s) => s.addLog);
   const setUserMessage = useAppStore((s) => s.setUserMessage);
   const [isBrowserOpen, setIsBrowserOpen] = useState(false);
   const [filter, setFilter] = useState('');
   const [pendingAssetId, setPendingAssetId] = useState<string | null>(null);
+  const [ocrDraft, setOcrDraft] = useState('');
+  const [isSavingOcr, setIsSavingOcr] = useState(false);
 
   const currentValue = readImageTemplateValue(value);
+  const currentAsset = useMemo(
+    () => snipAssets.find((asset) => asset.id === currentValue?.assetId) ?? null,
+    [currentValue?.assetId, snipAssets],
+  );
+
+  useEffect(() => {
+    setOcrDraft(currentAsset?.content.ocrText ?? '');
+  }, [currentAsset?.id, currentAsset?.content.ocrText]);
   const filteredAssets = useMemo(() => {
     const normalizedFilter = normalizeSearchText(filter);
     if (!normalizedFilter) {
@@ -774,6 +883,30 @@ function ImageTemplateField({ definition, value, onChange }: PropertyFieldProps)
     setUserMessage({ type: 'success', text: `Ultima captura do Snip vinculada a ${definition.name}.` });
   };
 
+  const handleSaveOcrText = async () => {
+    if (!currentAsset) {
+      return;
+    }
+
+    try {
+      setIsSavingOcr(true);
+      const updated = await sendCommand<SnipAsset>('assets', 'updateSnipAsset', {
+        assetId: currentAsset.id,
+        ocrText: ocrDraft,
+      });
+      if (updated) {
+        upsertSnipAsset(updated);
+      }
+      setUserMessage({ type: 'success', text: 'Texto do ativo Snip atualizado.' });
+    } catch (error) {
+      const message = getErrorMessage(error, 'Nao foi possivel salvar o texto do Snip.');
+      addLog({ timestamp: new Date().toISOString(), level: 'error', message });
+      setUserMessage({ type: 'error', text: message });
+    } finally {
+      setIsSavingOcr(false);
+    }
+  };
+
   return (
     <div className="property-field">
       <label className="property-field__label" title={definition.description ?? ''}>
@@ -800,16 +933,16 @@ function ImageTemplateField({ definition, value, onChange }: PropertyFieldProps)
           className="property-field__browse-btn"
           onClick={() => setIsBrowserOpen((state) => !state)}
         >
-          {isBrowserOpen ? 'Hide Snips' : 'Browse Snips'}
+          {isBrowserOpen ? 'Ocultar Snips' : 'Procurar Snips'}
         </button>
         <button
           type="button"
           className="property-field__browse-btn"
           onClick={handleUseLatestCapture}
           disabled={!capturedRegion?.image}
-          title={capturedRegion?.image ? 'Use the latest region captured with Snip' : 'Capture a region with Snip first'}
+          title={capturedRegion?.image ? 'Use a ultima regiao capturada com Snip' : 'Capture uma regiao com Snip primeiro'}
         >
-          Use Latest
+          Usar ultima
         </button>
         <button
           type="button"
@@ -820,6 +953,30 @@ function ImageTemplateField({ definition, value, onChange }: PropertyFieldProps)
           Limpar
         </button>
       </div>
+
+      {currentAsset && (
+        <div className="property-field__asset-edit">
+          <label className="property-field__label" htmlFor={`snip-ocr-${currentAsset.id}`}>
+            Texto editavel do Snip
+          </label>
+          <textarea
+            id={`snip-ocr-${currentAsset.id}`}
+            className="property-field__input property-field__textarea"
+            value={ocrDraft}
+            onChange={(event) => setOcrDraft(event.target.value)}
+            placeholder="Texto percebido nesta captura, notas de OCR ou fallback manual"
+            rows={3}
+          />
+          <button
+            type="button"
+            className="property-field__browse-btn"
+            onClick={() => { void handleSaveOcrText(); }}
+            disabled={isSavingOcr}
+          >
+            {isSavingOcr ? 'Salvando...' : 'Salvar texto'}
+          </button>
+        </div>
+      )}
 
       {isBrowserOpen && (
         <div className="property-field__snip-browser">

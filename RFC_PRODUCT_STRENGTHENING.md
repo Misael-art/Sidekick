@@ -52,6 +52,20 @@ Atualizacao `2026-05-02`:
 - Foi criada a recipe Marketplace `Tempo de Jogo - ROBLOX`, com processo real, timer de 2 minutos, overlay, sons, fechamento gracioso, kill fallback, cooldown e bloqueio persistido ate meia-noite.
 - Export Runner inicial implementado como pacote semi-autonomo com `flow.json`, arquivos do app e `run-sidekick-flow.cmd`; single EXE embutido segue fora desta fase.
 
+Atualizacao `2026-05-09`:
+
+- A jornada guiada recebeu Macro Recorder maduro em modo local/offline:
+  - hooks globais de mouse/teclado ficam em `Ajudante.Platform/Input/MacroRecorderService`;
+  - modelos, coalescencia e geracao de rascunho ficam em `Ajudante.Core.Recorder`;
+  - a Bridge expoe start/status/stop/cancel/convert sem executar o conteudo gravado;
+  - o frontend exige revisao em painel dedicado antes de aplicar nodes ao canvas.
+- Privacidade e resiliencia passam a ser contrato explicito do recorder:
+  - texto sensivel e redigido por padrao;
+  - UIA forte vira node desktop semantico;
+  - coordenada absoluta e ultimo recurso com warning;
+  - Selector Doctor pode diagnosticar seletores de macros em lote e reparar eventos compativeis com a ultima captura Mira.
+- Flow Health e dry-run foram estendidos para macros gravadas, mantendo a regra de honestidade funcional: nenhuma macro gravada e executada, armada ou aplicada sem acao explicita do usuario.
+
 ## Objetivo
 
 Fortalecer o produto alem da base tecnica atual, priorizando:

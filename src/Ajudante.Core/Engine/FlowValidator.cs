@@ -11,7 +11,31 @@ public class FlowValidator
     {
         "loopIndex",
         "loopIteration",
-        "loopCount"
+        "loopCount",
+        "now",
+        "today"
+    };
+    private static readonly HashSet<string> LocalFileTemplateTokens = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "timestamp",
+        "date",
+        "time",
+        "guid",
+        "uuid",
+        "sequence",
+        "fileName",
+        "filename",
+        "extension",
+        "ext"
+    };
+    private static readonly HashSet<string> LocalFileTokenPropertyIds = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "filenameTemplate",
+        "fileNameTemplate",
+        "outputFilename",
+        "outputFileName",
+        "outputPathTemplate",
+        "mediaFilenameTemplate"
     };
     private static readonly HashSet<string> RequiredPropertyIds = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -130,14 +154,22 @@ public class FlowValidator
 
         foreach (var node in flow.Nodes)
         {
-            if (node.Properties.TryGetValue("storeInVariable", out var storeInVariable) &&
-                TryGetStringValue(storeInVariable, out var storeVariableName) &&
-                !string.IsNullOrWhiteSpace(storeVariableName))
+            foreach (var property in node.Properties)
             {
-                knownVariables.Add(storeVariableName);
+                if (!property.Key.StartsWith("store", StringComparison.OrdinalIgnoreCase) ||
+                    !property.Key.EndsWith("InVariable", StringComparison.OrdinalIgnoreCase) ||
+                    !TryGetStringValue(property.Value, out var producedVariableName) ||
+                    string.IsNullOrWhiteSpace(producedVariableName) ||
+                    ContainsTemplate(producedVariableName))
+                {
+                    continue;
+                }
+
+                knownVariables.Add(producedVariableName);
             }
 
-            if (string.Equals(node.TypeId, "logic.setVariable", StringComparison.OrdinalIgnoreCase) &&
+            if ((string.Equals(node.TypeId, "logic.setVariable", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(node.TypeId, "action.consoleSetDirectory", StringComparison.OrdinalIgnoreCase)) &&
                 node.Properties.TryGetValue("variableName", out var variableName) &&
                 TryGetStringValue(variableName, out var explicitVariableName) &&
                 !string.IsNullOrWhiteSpace(explicitVariableName) &&
@@ -170,7 +202,7 @@ public class FlowValidator
         {
             node.Properties.TryGetValue(property.Id, out var rawValue);
 
-            if (IsRequired(property) && IsBlankValue(rawValue))
+            if (IsRequired(property) && IsBlankValue(rawValue) && !HasAlternativeRequiredValue(node, property))
             {
                 issues.Add(ValidationIssue.Error(
                     "property.required",
@@ -205,7 +237,8 @@ public class FlowValidator
             }
 
             if (property.Type == PropertyType.ImageTemplate &&
-                !IsValidImageTemplateValue(rawValue))
+                !IsValidImageTemplateValue(rawValue) &&
+                !HasAlternativeRequiredValue(node, property))
             {
                 issues.Add(ValidationIssue.Error(
                     "property.imageTemplate.invalid",
@@ -216,6 +249,9 @@ public class FlowValidator
 
             foreach (var reference in ExtractTemplateReferences(rawValue))
             {
+                if (IsLocalPropertyToken(reference, property))
+                    continue;
+
                 if (!IsKnownReference(reference, nodesById, definitionsByNodeId, knownVariables, out var referenceError))
                 {
                     issues.Add(ValidationIssue.Error(
@@ -232,8 +268,12 @@ public class FlowValidator
 
     private static void ValidateSelector(NodeInstance node, NodeDefinition definition, ICollection<ValidationIssue> issues)
     {
+        if (string.Equals(node.TypeId, "action.windowControl", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
         var hasSelectorProperties = definition.Properties.Any(property =>
-            string.Equals(property.Id, "windowTitle", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(property.Id, "automationId", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(property.Id, "elementName", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(property.Id, "controlType", StringComparison.OrdinalIgnoreCase));
@@ -313,6 +353,16 @@ public class FlowValidator
     private static bool IsRequired(PropertyDefinition property)
     {
         return RequiredPropertyIds.Contains(property.Id);
+    }
+
+    private static bool HasAlternativeRequiredValue(NodeInstance node, PropertyDefinition property)
+    {
+        if (!string.Equals(property.Id, "templateImage", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return node.Properties.TryGetValue("templatePath", out var templatePath) && !IsBlankValue(templatePath);
     }
 
     private static bool IsBlankValue(object? value)
@@ -474,6 +524,12 @@ public class FlowValidator
     private static bool ContainsTemplate(string value)
     {
         return value.Contains("{{", StringComparison.Ordinal);
+    }
+
+    private static bool IsLocalPropertyToken(string reference, PropertyDefinition property)
+    {
+        return LocalFileTokenPropertyIds.Contains(property.Id) &&
+               LocalFileTemplateTokens.Contains(reference);
     }
 
     private static string GetStringValue(IReadOnlyDictionary<string, object?> properties, string key)

@@ -5,6 +5,7 @@ import NodePalette from './components/Sidebar/NodePalette';
 import FlowCanvas from './components/Canvas/FlowCanvas';
 import PropertyPanel from './components/Sidebar/PropertyPanel';
 import ExecutionStatus from './components/StatusBar/ExecutionStatus';
+import MacroRecorderReview from './components/Recorder/MacroRecorderReview';
 import { useFlowStore } from './store/flowStore';
 import { useAppStore } from './store/appStore';
 import { initBridge, onEvent, sendCommand } from './bridge/bridge';
@@ -16,10 +17,12 @@ import {
   type FlowQueuedEvent,
   type FlowRuntimeSnapshot,
   type InspectionAsset,
+  type MacroRecordingSession,
   type NodeDefinition,
   type RuntimeErrorEvent,
   type RuntimePhaseEvent,
   type RuntimeStatusSnapshot,
+  type SecuritySettings,
   type SnipAsset,
   type TriggerRuntimeEvent,
 } from './bridge/types';
@@ -74,6 +77,8 @@ export default function App() {
   const setInspectionAssets = useAppStore((s) => s.setInspectionAssets);
   const upsertInspectionAsset = useAppStore((s) => s.upsertInspectionAsset);
   const setUserMessage = useAppStore((s) => s.setUserMessage);
+  const setMacroRecorderActive = useAppStore((s) => s.setMacroRecorderActive);
+  const setMacroRecorderStatus = useAppStore((s) => s.setMacroRecorderStatus);
 
   useEffect(() => {
     const webViewWindow = window as WebViewWindow;
@@ -256,6 +261,15 @@ export default function App() {
       upsertExecutionHistory(payload);
     });
 
+    const offMacroRecorderStopRequested = onEvent<{ hotkey: string; status: MacroRecordingSession; message?: string }>('platform', 'macroRecorderStopRequested', (payload) => {
+      setMacroRecorderStatus(payload.status);
+      setMacroRecorderActive(payload.status.status === 'recording');
+      setUserMessage({
+        type: 'info',
+        text: payload.message ?? `Hotkey ${payload.hotkey} detectada. Pare o recorder para revisar o rascunho.`,
+      });
+    });
+
     const bootstrap = async () => {
       let resolvedDefinitions: NodeDefinition[] = [];
 
@@ -335,6 +349,15 @@ export default function App() {
       } catch (err) {
         console.warn('[App] Failed to fetch inspection assets:', err);
       }
+
+      try {
+        const securitySettings = await sendCommand<SecuritySettings>('engine', 'getSecuritySettings', {});
+        if (!isDisposed && securitySettings && typeof securitySettings.allowHighRiskExecution === 'boolean') {
+          useAppStore.getState().hydrateSecuritySettings(securitySettings);
+        }
+      } catch (err) {
+        console.warn('[App] Failed to fetch security settings:', err);
+      }
     };
 
     void bootstrap();
@@ -359,6 +382,7 @@ export default function App() {
       offFlowQueueCoalesced();
       offRuntimeError();
       offExecutionHistoryRecorded();
+      offMacroRecorderStopRequested();
     };
   }, [
     addLog,
@@ -374,6 +398,8 @@ export default function App() {
     setSnipAssets,
     setRuntimeStatus,
     setUserMessage,
+    setMacroRecorderActive,
+    setMacroRecorderStatus,
     upsertFlowRuntime,
     upsertExecutionHistory,
     upsertInspectionAsset,
@@ -394,6 +420,7 @@ export default function App() {
           )}
         </div>
         <ExecutionStatus />
+        <MacroRecorderReview />
       </div>
     </ReactFlowProvider>
   );

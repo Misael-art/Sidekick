@@ -16,5 +16,7 @@ export default defineConfig({
   },
   test: {
     environment: 'jsdom',
+    pool: 'threads',
+    maxWorkers: 2,
   },
 })

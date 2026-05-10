@@ -198,6 +198,48 @@ describe('FlowCanvas context menu', () => {
     });
   }, 15_000);
 
+  it('shows a guided empty state with the primary creation paths', async () => {
+    const React = await import('react');
+    const { default: FlowCanvas } = await import('./FlowCanvas');
+    const { useFlowStore } = await import('../../store/flowStore');
+    const { useAppStore } = await import('../../store/appStore');
+    const { getDevNodeDefinitions } = await import('../../devNodeDefinitions');
+
+    useFlowStore.setState({
+      flowId: 'flow-empty',
+      flowName: 'Novo Flow',
+      nodes: [],
+      edges: [],
+      stickyNotes: [],
+      selectedNodeId: null,
+      nodeDefinitions: getDevNodeDefinitions(),
+    });
+    useAppStore.setState({
+      capturedElement: null,
+      capturedRegion: null,
+      macroRecorderActive: false,
+      guidedDraft: null,
+    });
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    act(() => {
+      root.render(React.createElement(FlowCanvas));
+    });
+
+    expect(container.textContent).toContain('Assistente de Automacao');
+    expect(container.textContent).toContain('Usar receita');
+    expect(container.textContent).toContain('Capturar elemento');
+    expect(container.textContent).toContain('Gravar passos');
+    expect(container.textContent).toContain('Comecar do zero');
+
+    act(() => {
+      root.unmount();
+    });
+  }, 15_000);
+
   it('creates and auto-connects a node when dropping a connection on empty pane', async () => {
     const React = await import('react');
     const { default: FlowCanvas } = await import('./FlowCanvas');

@@ -62,6 +62,9 @@ export default function ExecutionStatus() {
   const flowId = useFlowStore((s) => s.flowId);
   const flowName = useFlowStore((s) => s.flowName);
   const validationResult = useFlowStore((s) => s.validationResult);
+  const debugVisualEnabled = useAppStore((s) => s.debugVisualEnabled);
+  const nodeStatusTimeline = useAppStore((s) => s.nodeStatusTimeline);
+  const flowHealthReport = useAppStore((s) => s.flowHealthReport);
 
   const currentEditorRuntime = flowRuntimes[flowId] ?? null;
   const armedFlows = useMemo(
@@ -84,6 +87,13 @@ export default function ExecutionStatus() {
     [executionHistory, flowId],
   );
   const latestRun = recentFlowRuns[0] ?? null;
+  const timelineEntries = useMemo(
+    () => nodeStatusTimeline
+      .filter(() => !flowId || latestRun?.flowId === flowId)
+      .slice(-8)
+      .reverse(),
+    [flowId, latestRun?.flowId, nodeStatusTimeline],
+  );
 
   return (
     <div className={`exec-status ${isLogsExpanded ? 'exec-status--expanded' : ''}`}>
@@ -154,12 +164,17 @@ export default function ExecutionStatus() {
       </div>
 
       {userMessage && (
-        <div className={`exec-status__message exec-status__message--${userMessage.type}`}>
+        <div
+          className={`exec-status__message exec-status__message--${userMessage.type}`}
+          role={userMessage.type === 'error' ? 'alert' : 'status'}
+          aria-live={userMessage.type === 'error' ? 'assertive' : 'polite'}
+        >
           <span>{userMessage.text}</span>
           <button
             className="exec-status__message-close"
             onClick={() => setUserMessage(null)}
-            title="Dismiss message"
+            title="Fechar mensagem"
+            aria-label="Fechar mensagem"
           >
             x
           </button>
@@ -209,6 +224,17 @@ export default function ExecutionStatus() {
         </div>
 
         <div className="exec-status__summary-card">
+          <span className="exec-status__summary-label">Flow Health</span>
+          <strong>{flowHealthReport ? `${flowHealthReport.score}/100` : 'Not run'}</strong>
+          <span className="exec-status__summary-meta">
+            Level: {flowHealthReport?.level ?? 'n/a'}
+          </span>
+          <span className="exec-status__summary-meta">
+            Issues: {flowHealthReport?.issues.length ?? 0}
+          </span>
+        </div>
+
+        <div className="exec-status__summary-card">
           <span className="exec-status__summary-label">Recent run</span>
           <strong>{latestRun ? formatHistoryResult(latestRun) : 'No history yet'}</strong>
           <span className="exec-status__summary-meta">
@@ -248,6 +274,17 @@ export default function ExecutionStatus() {
                   <span>{formatHistoryResult(entry)}</span>
                   <span>{formatTime(entry.startedAt)}</span>
                   <span>{entry.logs.length} log{entry.logs.length !== 1 ? 's' : ''}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {debugVisualEnabled && timelineEntries.length > 0 && (
+            <div className="exec-status__history">
+              {timelineEntries.map((entry) => (
+                <div key={`${entry.at}-${entry.nodeId}`} className="exec-status__history-item">
+                  <strong>{entry.nodeId}</strong>
+                  <span>{entry.status}</span>
+                  <span>{formatTime(entry.at)}</span>
                 </div>
               ))}
             </div>

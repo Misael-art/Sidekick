@@ -1,7 +1,11 @@
 import { create } from 'zustand';
+import { sendCommand } from '../bridge/bridge';
 import {
   type CapturedElement,
   type FlowExecutionHistoryEntry,
+  type FlowDryRunReport,
+  type FlowHealthReport,
+  type GuidedAutomationDraft,
   normalizeFlowRuntimeSnapshot,
   normalizeFlowExecutionHistoryEntry,
   normalizeRuntimeStatusSnapshot,
@@ -11,10 +15,13 @@ import {
   type InspectionAsset,
   type InspectorMode,
   type LogEntry,
+  type MacroRecordingSession,
   type NodeStatus,
   type RuntimeStatusSnapshot,
+  type SecuritySettings,
   type SnipAsset,
 } from '../bridge/types';
+import { redactLogMessage } from '../utils/logRedaction';
 
 export interface UserMessage {
   type: 'info' | 'success' | 'error';
@@ -87,12 +94,26 @@ export interface AppState {
   upsertExecutionHistory: (entry: Partial<FlowExecutionHistoryEntry> | FlowExecutionHistoryEntry | null | undefined) => void;
 
   nodeStatuses: Record<string, NodeStatus>;
+  debugVisualEnabled: boolean;
+  nodePulseUntil: Record<string, number>;
+  nodeStatusTimeline: Array<{ at: string; nodeId: string; status: NodeStatus }>;
   setNodeStatus: (nodeId: string, status: NodeStatus) => void;
   clearNodeStatuses: () => void;
+  setDebugVisualEnabled: (enabled: boolean) => void;
 
   logs: LogEntry[];
   addLog: (entry: LogEntry) => void;
   clearLogs: () => void;
+  flowHealthReport: FlowHealthReport | null;
+  setFlowHealthReport: (report: FlowHealthReport | null) => void;
+  dryRunReport: FlowDryRunReport | null;
+  setDryRunReport: (report: FlowDryRunReport | null) => void;
+  macroRecorderActive: boolean;
+  macroRecorderStatus: MacroRecordingSession | null;
+  guidedDraft: GuidedAutomationDraft | null;
+  setMacroRecorderActive: (active: boolean) => void;
+  setMacroRecorderStatus: (status: MacroRecordingSession | null) => void;
+  setGuidedDraft: (draft: GuidedAutomationDraft | null) => void;
 
   inspectorMode: InspectorMode;
   setInspectorMode: (mode: InspectorMode) => void;
@@ -113,6 +134,10 @@ export interface AppState {
   toggleLogsExpanded: () => void;
   userMessage: UserMessage | null;
   setUserMessage: (message: UserMessage | null) => void;
+
+  allowHighRiskExecution: boolean;
+  hydrateSecuritySettings: (settings: SecuritySettings) => void;
+  setAllowHighRiskExecution: (enabled: boolean) => Promise<void>;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -199,19 +224,52 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   nodeStatuses: {},
+  debugVisualEnabled: false,
+  nodePulseUntil: {},
+  nodeStatusTimeline: [],
   setNodeStatus: (nodeId, status) =>
-    set({ nodeStatuses: { ...get().nodeStatuses, [nodeId]: status } }),
-  clearNodeStatuses: () => set({ nodeStatuses: {} }),
+    set((state) => {
+      const now = Date.now();
+      const pulseUntil = status === 'Running' && state.debugVisualEnabled ? now + 900 : 0;
+      const nextPulseUntil = pulseUntil > 0
+        ? { ...state.nodePulseUntil, [nodeId]: pulseUntil }
+        : state.nodePulseUntil;
+      const nextTimeline = state.debugVisualEnabled
+        ? [...state.nodeStatusTimeline, { at: new Date(now).toISOString(), nodeId, status }].slice(-300)
+        : state.nodeStatusTimeline;
+
+      return {
+        nodeStatuses: { ...state.nodeStatuses, [nodeId]: status },
+        nodePulseUntil: nextPulseUntil,
+        nodeStatusTimeline: nextTimeline,
+      };
+    }),
+  clearNodeStatuses: () => set({ nodeStatuses: {}, nodePulseUntil: {}, nodeStatusTimeline: [] }),
+  setDebugVisualEnabled: (enabled) => set({ debugVisualEnabled: enabled }),
 
   logs: [],
   addLog: (entry) => {
     const current = get().logs;
+    const safeEntry = {
+      ...entry,
+      message: redactLogMessage(entry.message),
+    };
     const updated = current.length >= MAX_LOGS
-      ? [...current.slice(current.length - MAX_LOGS + 1), entry]
-      : [...current, entry];
+      ? [...current.slice(current.length - MAX_LOGS + 1), safeEntry]
+      : [...current, safeEntry];
     set({ logs: updated });
   },
   clearLogs: () => set({ logs: [] }),
+  flowHealthReport: null,
+  setFlowHealthReport: (report) => set({ flowHealthReport: report }),
+  dryRunReport: null,
+  setDryRunReport: (report) => set({ dryRunReport: report }),
+  macroRecorderActive: false,
+  macroRecorderStatus: null,
+  guidedDraft: null,
+  setMacroRecorderActive: (active) => set({ macroRecorderActive: active }),
+  setMacroRecorderStatus: (status) => set({ macroRecorderStatus: status }),
+  setGuidedDraft: (draft) => set({ guidedDraft: draft }),
 
   inspectorMode: 'none',
   setInspectorMode: (mode) => set({ inspectorMode: mode }),
@@ -244,4 +302,14 @@ export const useAppStore = create<AppState>((set, get) => ({
   toggleLogsExpanded: () => set({ isLogsExpanded: !get().isLogsExpanded }),
   userMessage: null,
   setUserMessage: (message) => set({ userMessage: message }),
+
+  allowHighRiskExecution: false,
+  hydrateSecuritySettings: (settings) =>
+    set({ allowHighRiskExecution: Boolean(settings.allowHighRiskExecution) }),
+  setAllowHighRiskExecution: async (enabled) => {
+    const updated = await sendCommand<SecuritySettings>('engine', 'setSecuritySettings', {
+      allowHighRiskExecution: enabled,
+    });
+    set({ allowHighRiskExecution: Boolean(updated?.allowHighRiskExecution ?? enabled) });
+  },
 }));

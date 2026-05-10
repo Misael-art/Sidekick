@@ -12,7 +12,7 @@ public class SampleFlowsTests
 
         Assert.True(Directory.Exists(sampleFlowsDirectory), $"Sample flows directory not found: {sampleFlowsDirectory}");
 
-        var sampleFlowPaths = Directory.GetFiles(sampleFlowsDirectory, "*.json", SearchOption.TopDirectoryOnly);
+        var sampleFlowPaths = GetSampleFlowPaths();
         Assert.NotEmpty(sampleFlowPaths);
 
         var seenIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -166,7 +166,27 @@ public class SampleFlowsTests
     {
         var sampleFlowsDirectory = GetSampleFlowsDirectory();
         Assert.True(Directory.Exists(sampleFlowsDirectory), $"Sample flows directory not found: {sampleFlowsDirectory}");
-        return Directory.GetFiles(sampleFlowsDirectory, "*.json", SearchOption.TopDirectoryOnly);
+        return Directory
+            .GetFiles(sampleFlowsDirectory, "*.json", SearchOption.TopDirectoryOnly)
+            .Where(IsFlowJsonFile)
+            .ToArray();
+    }
+
+    private static bool IsFlowJsonFile(string path)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(File.ReadAllText(path));
+            return document.RootElement.ValueKind == JsonValueKind.Object
+                && document.RootElement.TryGetProperty("nodes", out var nodes)
+                && nodes.ValueKind == JsonValueKind.Array
+                && document.RootElement.TryGetProperty("connections", out var connections)
+                && connections.ValueKind == JsonValueKind.Array;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
     }
 
     private static string GetSampleFlowsDirectory()

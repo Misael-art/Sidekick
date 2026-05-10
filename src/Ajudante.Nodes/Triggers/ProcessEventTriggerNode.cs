@@ -62,7 +62,10 @@ public class ProcessEventTriggerNode : ITriggerNode, IDisposable
         var intervalMs = Math.Max(250, NodeValueHelper.GetInt(_properties, "intervalMs", 1000));
         var eventType = NodeValueHelper.GetString(_properties, "eventType", "started");
         var processName = NormalizeProcessName(NodeValueHelper.GetString(_properties, "processName"));
-        var processPath = NodeValueHelper.GetString(_properties, "processPath");
+        var rawPath = NodeValueHelper.GetString(_properties, "processPath");
+        var processPath = string.IsNullOrWhiteSpace(rawPath)
+            ? string.Empty
+            : Environment.ExpandEnvironmentVariables(rawPath.Trim());
 
         _knownProcessIds = Snapshot(processName, processPath).Select(process => process.Id).ToHashSet();
         _cts = CancellationTokenSource.CreateLinkedTokenSource(ct);

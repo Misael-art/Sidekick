@@ -54,10 +54,26 @@ public class TraeFlowTests
         Assert.Contains(flow.Nodes, node => node.TypeId == "logic.untilDateTime");
         Assert.Contains(flow.Nodes, node => node.TypeId == "action.overlayText" && GetString(node.Properties, "text").Contains("Seu tempo acabou", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(flow.Nodes, node => node.TypeId == "action.windowControl" && GetString(node.Properties, "operation") == "close");
+        Assert.Contains(
+            flow.Nodes,
+            node => node.TypeId == "action.windowControl"
+                    && GetString(node.Properties, "operation") == "close"
+                    && string.Equals(GetString(node.Properties, "processName"), "GamingServicesUI", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(flow.Nodes, node => node.TypeId == "action.killProcess");
         Assert.Contains(flow.Nodes, node => node.Properties.ContainsKey("__ui.alias") && node.Properties.ContainsKey("__ui.comment"));
         Assert.Contains(flow.Annotations, sticky => sticky.Title.Contains("Como usar", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(flow.Variables, variable => variable.Name == "tempoPermitidoMs" && variable.Type == VariableType.Integer);
+        Assert.Contains(flow.Variables, variable => variable.Name == "duracaoSilenciosaMs" && variable.Type == VariableType.Integer);
+        Assert.Contains(flow.Variables, variable => variable.Name == "duracaoAlertaFinalMs" && variable.Type == VariableType.Integer);
+        Assert.Contains(flow.Variables, variable => variable.Name == "robloxPlayerExePath" && variable.Type == VariableType.String);
+
+        var watchPlayer = flow.Nodes.Single(node => node.Id == "watch-player");
+        Assert.False(watchPlayer.Properties.ContainsKey("cooldownMs"));
+        Assert.Contains("robloxPlayerExePath", GetString(watchPlayer.Properties, "processPath"), StringComparison.Ordinal);
+
+        var closePlayer = flow.Nodes.Single(node => node.Id == "close-window");
+        Assert.Contains("robloxPlayerExePath", GetString(closePlayer.Properties, "processPath"), StringComparison.Ordinal);
+        Assert.True(GetInt(closePlayer.Properties, "timeoutMs") >= 3000);
     }
 
     private static Flow LoadTraeFlow()

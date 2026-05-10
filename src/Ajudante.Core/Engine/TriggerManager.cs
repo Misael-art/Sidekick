@@ -73,7 +73,7 @@ public sealed class TriggerManager : IDisposable
                 }
 
                 node.Id = instance.Id;
-                node.Configure(instance.Properties);
+                node.Configure(FlowVariableTemplateResolver.ResolvePropertyTemplates(flow, instance.Properties));
 
                 Action<TriggerEventArgs> handler = args => OnTriggerFired(flow, instance.Id, args);
                 trigger.Triggered += handler;

@@ -1,3 +1,4 @@
+using System.Globalization;
 using Ajudante.Core;
 using Ajudante.Core.Engine;
 using Ajudante.Core.Interfaces;
@@ -65,7 +66,7 @@ public sealed class OverlayColorNode : IActionNode
     {
         return new[]
         {
-            new PropertyDefinition { Id = "durationMs", Name = "Timer (ms)", Type = PropertyType.Integer, DefaultValue = 1000, Description = "How long the overlay stays visible. Use 0 to keep it until cancellation when wait is enabled." },
+            new PropertyDefinition { Id = "durationMs", Name = "Timer (ms)", Type = PropertyType.Integer, DefaultValue = 1000, Description = "How long the overlay stays visible. Use 0 to keep it until cancellation when wait is enabled. Supports {{flowVariable}} templates." },
             new PropertyDefinition { Id = "waitForClose", Name = "Wait For Timer", Type = PropertyType.Boolean, DefaultValue = true, Description = "Wait for the timer before continuing the flow" },
             new PropertyDefinition { Id = "plane", Name = "Plane", Type = PropertyType.Dropdown, DefaultValue = "foreground", Description = "Foreground overlays stay above normal windows", Options = new[] { "foreground", "normal" } },
             new PropertyDefinition { Id = "fullScreen", Name = "Full Screen", Type = PropertyType.Boolean, DefaultValue = true, Description = "Cover all screens instead of a custom rectangle" },
@@ -81,6 +82,19 @@ public sealed class OverlayColorNode : IActionNode
         };
     }
 
+    /// <summary>
+    /// Parses duration from property value after resolving <c>{{variable}}</c> templates (same pattern as Delay node).
+    /// </summary>
+    internal static int ResolveDurationMs(FlowExecutionContext context, Dictionary<string, object?> properties, int fallbackMs = 1000)
+    {
+        var raw = NodeValueHelper.GetString(properties, "durationMs", fallbackMs.ToString(CultureInfo.InvariantCulture));
+        var resolved = context.ResolveTemplate(raw).Trim();
+        if (int.TryParse(resolved, NumberStyles.Integer, CultureInfo.InvariantCulture, out var ms) && ms >= 0)
+            return ms;
+
+        return Math.Max(0, NodeValueHelper.GetInt(properties, "durationMs", fallbackMs));
+    }
+
     internal static OverlayDisplayOptions BuildDisplayOptions(FlowExecutionContext context, Dictionary<string, object?> properties)
     {
         var plane = NodeValueHelper.GetString(properties, "plane", "foreground");
@@ -92,7 +106,7 @@ public sealed class OverlayColorNode : IActionNode
                 NodeValueHelper.GetInt(properties, "width", 640),
                 NodeValueHelper.GetInt(properties, "height", 360),
                 NodeValueHelper.GetBool(properties, "fullScreen", true)),
-            DurationMs = Math.Max(0, NodeValueHelper.GetInt(properties, "durationMs", 1000)),
+            DurationMs = ResolveDurationMs(context, properties, 1000),
             WaitForClose = NodeValueHelper.GetBool(properties, "waitForClose", true),
             TopMost = !string.Equals(plane, "normal", StringComparison.OrdinalIgnoreCase),
             ClickThrough = NodeValueHelper.GetBool(properties, "clickThrough", true),

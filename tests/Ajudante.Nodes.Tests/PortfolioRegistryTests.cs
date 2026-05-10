@@ -36,7 +36,10 @@ public class PortfolioRegistryTests
             "action.browserWaitElement",
             "action.browserExtractText",
             "action.sendEmail",
-            "action.showNotification"
+            "action.showNotification",
+            "action.listRunnableFlows",
+            "logic.chatMenuRouter",
+            "action.runSavedFlow"
         };
 
         var definitions = registry.GetAllDefinitions();
@@ -54,5 +57,8 @@ public class PortfolioRegistryTests
         Assert.IsType<HttpRequestNode>(registry.CreateInstance("action.httpRequest"));
         Assert.IsType<RetryFlowNode>(registry.CreateInstance("logic.retryFlow"));
         Assert.IsType<SendEmailNode>(registry.CreateInstance("action.sendEmail"));
+        Assert.IsType<ListRunnableFlowsNode>(registry.CreateInstance("action.listRunnableFlows"));
+        Assert.IsType<ChatMenuRouterNode>(registry.CreateInstance("logic.chatMenuRouter"));
+        Assert.IsType<RunSavedFlowNode>(registry.CreateInstance("action.runSavedFlow"));
     }
 }

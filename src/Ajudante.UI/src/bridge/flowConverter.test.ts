@@ -13,10 +13,22 @@ function getSampleFlows(): Array<{ fileName: string; flow: BackendFlow }> {
   return readdirSync(directory)
     .filter((fileName: string) => fileName.endsWith('.json'))
     .sort()
-    .map((fileName: string) => ({
-      fileName,
-      flow: JSON.parse(readFileSync(resolve(directory, fileName), 'utf-8')) as BackendFlow,
-    }));
+    .map((fileName: string) => {
+      const parsed = JSON.parse(readFileSync(resolve(directory, fileName), 'utf-8')) as unknown;
+      return isBackendFlow(parsed)
+        ? { fileName, flow: parsed }
+        : null;
+    })
+    .filter((sample): sample is { fileName: string; flow: BackendFlow } => sample !== null);
+}
+
+function isBackendFlow(value: unknown): value is BackendFlow {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return false;
+  }
+
+  const candidate = value as Partial<BackendFlow>;
+  return Array.isArray(candidate.nodes) && Array.isArray(candidate.connections);
 }
 
 describe('flowConverter sample flows', () => {

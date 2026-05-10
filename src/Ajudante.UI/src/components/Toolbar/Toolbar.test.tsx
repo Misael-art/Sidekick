@@ -65,7 +65,7 @@ describe('Toolbar runtime controls', () => {
     });
 
     const stopButton = Array.from(container.querySelectorAll('button'))
-      .find((button) => button.textContent?.includes('Stop'));
+      .find((button) => button.textContent?.includes('Parar'));
     expect(stopButton).toBeTruthy();
 
     await act(async () => {
@@ -97,13 +97,28 @@ describe('Toolbar runtime controls', () => {
       validationResult: null,
     });
 
-    sendCommandMock.mockResolvedValue({
-      isValid: false,
-      errors: ['Missing trigger'],
-      warnings: [],
-      issues: [
-        { severity: 'error', code: 'flow.trigger.missing', message: 'Missing trigger' },
-      ],
+    sendCommandMock.mockImplementation(async (_channel: string, action: string) => {
+      if (action === 'securityLint') {
+        return {
+          isSafeToRun: true,
+          issues: [],
+          riskLevel: 'low',
+          manifestHash: 'AB',
+        };
+      }
+
+      if (action === 'validateFlow') {
+        return {
+          isValid: false,
+          errors: ['Missing trigger'],
+          warnings: [],
+          issues: [
+            { severity: 'error', code: 'flow.trigger.missing', message: 'Missing trigger' },
+          ],
+        };
+      }
+
+      return null;
     });
 
     const container = document.createElement('div');
@@ -115,17 +130,77 @@ describe('Toolbar runtime controls', () => {
     });
 
     const runButton = Array.from(container.querySelectorAll('button'))
-      .find((button) => button.textContent?.includes('Run Now'));
+      .find((button) => button.textContent?.includes('Executar'));
     expect(runButton).toBeTruthy();
 
     await act(async () => {
       runButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
-    expect(sendCommandMock).toHaveBeenCalledTimes(1);
+    expect(sendCommandMock).toHaveBeenCalledWith('engine', 'securityLint', expect.any(Object));
     expect(sendCommandMock).toHaveBeenCalledWith('engine', 'validateFlow', expect.any(Object));
     expect(useAppStore.getState().userMessage?.type).toBe('error');
     expect(useAppStore.getState().userMessage?.text).toContain('Corrija 1 erro(s)');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('runs dry-run without executing the flow', async () => {
+    const React = await import('react');
+    const { default: Toolbar } = await import('./Toolbar');
+    const { useAppStore } = await import('../../store/appStore');
+    const { useFlowStore } = await import('../../store/flowStore');
+
+    useFlowStore.setState({
+      flowId: 'flow-1',
+      flowName: 'Toolbar Flow',
+      isDirty: false,
+      nodes: [],
+      edges: [],
+      selectedNodeId: null,
+    });
+
+    sendCommandMock.mockImplementation(async (_channel: string, action: string) => {
+      if (action === 'dryRunFlow') {
+        return {
+          canRun: true,
+          summary: 'Dry-run pronto: nenhuma acao foi executada.',
+          steps: [
+            { nodeId: 'start', typeId: 'trigger.manualStart', displayName: 'Start', status: 'Ready', requiresConfirmation: false },
+          ],
+          checkpoints: [],
+          validation: { isValid: true, errors: [], warnings: [], issues: [] },
+          security: { isSafeToRun: true, issues: [], riskLevel: 'low', manifestHash: 'OK' },
+          health: { score: 92, level: 'otimo', canRunWithoutAttention: true, issues: [], suggestions: [] },
+        };
+      }
+
+      return null;
+    });
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(React.createElement(Toolbar));
+    });
+
+    const dryRunButton = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Dry-run'));
+    expect(dryRunButton).toBeTruthy();
+
+    await act(async () => {
+      dryRunButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(sendCommandMock).toHaveBeenCalledWith('engine', 'dryRunFlow', expect.any(Object));
+    expect(useAppStore.getState().userMessage?.text).toContain('Dry-run pronto');
+    expect(container.textContent).toContain('Dry-run');
+    expect(container.textContent).toContain('Start');
+    expect(sendCommandMock).not.toHaveBeenCalledWith('engine', 'runFlow', expect.any(Object));
 
     await act(async () => {
       root.unmount();
@@ -170,7 +245,7 @@ describe('Toolbar runtime controls', () => {
     });
 
     const loadButton = Array.from(container.querySelectorAll('button'))
-      .find((button) => button.getAttribute('title') === 'Load Flow');
+      .find((button) => button.getAttribute('title') === 'Carregar flow');
     expect(loadButton).toBeTruthy();
 
     await act(async () => {
@@ -211,7 +286,7 @@ describe('Toolbar runtime controls', () => {
       if (action === 'listFlows') {
         return [
           { id: 'recipe-overlay-visual-message', name: 'Recipe - Overlay Visual Message', isNative: true, nodeCount: 3 },
-          { id: 'recipe-roblox-playtime-limit', name: 'Tempo de Jogo - ROBLOX', isNative: true, nodeCount: 18 },
+          { id: 'recipe-roblox-playtime-limit', name: 'Tempo de Jogo - ROBLOX', isNative: true, nodeCount: 19 },
           { id: 'custom-flow', name: 'Meu Fluxo', isNative: false, nodeCount: 2 },
         ];
       }

@@ -10,6 +10,7 @@ using Ajudante.App.Configuration;
 using Ajudante.App.Runtime;
 using Ajudante.App.TrayIcon;
 using Ajudante.Core;
+using Ajudante.Core.Engine;
 using Ajudante.Core.Registry;
 using Microsoft.Web.WebView2.Core;
 
@@ -90,7 +91,7 @@ public partial class MainWindow : Window
         var flowsDirectory = App.FlowsDirectory;
         var snipAssetCatalog = new SnipAssetCatalog(App.DataDirectory, App.SnipAssetsDirectory, App.AssetManifestsDirectory);
         var miraInspectionCatalog = new MiraInspectionCatalog(App.DataDirectory, App.InspectionAssetsDirectory, App.AssetManifestsDirectory);
-        _router = new BridgeRouter(_bridge, _registry, _runtimeManager, flowsDirectory, Dispatcher, snipAssetCatalog, miraInspectionCatalog);
+        _router = new BridgeRouter(_bridge, _registry, _runtimeManager, flowsDirectory, App.DataDirectory, Dispatcher, snipAssetCatalog, miraInspectionCatalog);
         _router.LogMessage += OnLogMessage;
         _bridge.SetRouter(_router);
 
@@ -130,6 +131,13 @@ public partial class MainWindow : Window
         if (flow is null)
         {
             throw new InvalidOperationException($"Startup flow not found or invalid: {flowPath}");
+        }
+
+        var authorized = await StartupRunnerSecurity.TryAuthorizeAsync(flowPath, flow).ConfigureAwait(true);
+        if (!authorized)
+        {
+            Application.Current.Shutdown();
+            return;
         }
 
         if (App.ExitAfterStartupRun)
@@ -185,7 +193,7 @@ public partial class MainWindow : Window
         _ = ForwardBridgeEventAsync(
             BridgeMessage.Channels.Engine,
             "logMessage",
-            new { nodeId, message, timestamp = DateTime.UtcNow });
+            new { nodeId, message = LogRedactor.Redact(message), timestamp = DateTime.UtcNow });
     }
 
     private void OnFlowCompleted(string flowId)
@@ -211,7 +219,7 @@ public partial class MainWindow : Window
         _ = ForwardBridgeEventAsync(
             BridgeMessage.Channels.Engine,
             "flowError",
-            new { flowId, error });
+            new { flowId, error = LogRedactor.Redact(error) });
 
         if (_trayManager != null)
         {
@@ -278,7 +286,12 @@ public partial class MainWindow : Window
         _ = ForwardBridgeEventAsync(
             BridgeMessage.Channels.Engine,
             "runtimeError",
-            runtimeError);
+            new
+            {
+                runtimeError.FlowId,
+                runtimeError.FlowName,
+                error = LogRedactor.Redact(runtimeError.Error)
+            });
     }
 
     private void OnExecutionHistoryRecorded(object? sender, FlowExecutionHistoryEntry historyEntry)
@@ -294,7 +307,16 @@ public partial class MainWindow : Window
         _ = ForwardBridgeEventAsync(
             BridgeMessage.Channels.Engine,
             "runtimePhaseChanged",
-            phaseEvent);
+            new
+            {
+                phaseEvent.FlowId,
+                phaseEvent.FlowName,
+                phaseEvent.NodeId,
+                phaseEvent.Phase,
+                message = LogRedactor.Redact(phaseEvent.Message),
+                phaseEvent.Detail,
+                phaseEvent.Timestamp
+            });
     }
 
     private void UpdateTrayRunningState()
@@ -429,6 +451,7 @@ public partial class MainWindow : Window
 
     private void CleanupResources()
     {
+        _router?.Dispose();
         _runtimeManager?.Dispose();
         _bridge?.Dispose();
         _trayManager?.Dispose();

@@ -23,15 +23,18 @@ const statusLabels: Record<string, string> = {
 
 function BaseNode({ id, data, selected }: BaseNodeProps) {
   const status = useAppStore((s) => s.nodeStatuses[id] ?? 'Idle');
+  const debugVisualEnabled = useAppStore((s) => s.debugVisualEnabled);
+  const pulseUntil = useAppStore((s) => s.nodePulseUntil[id] ?? 0);
 
   const headerColor = data.color ?? '#6b7280';
   const displayTitle = data.nodeAlias?.trim() || data.displayName;
   const hoverComment = data.nodeComment?.trim();
   const isDisabled = data.nodeDisabled === true;
+  const isPulsing = debugVisualEnabled && status === 'Running' && pulseUntil > Date.now();
 
   return (
     <div
-      className={`base-node ${selected ? 'base-node--selected' : ''} ${isDisabled ? 'base-node--disabled' : ''}`}
+      className={`base-node ${selected ? 'base-node--selected' : ''} ${isDisabled ? 'base-node--disabled' : ''} ${isPulsing ? 'base-node--runtime-pulse' : ''}`}
       title={hoverComment || undefined}
       style={{
         borderColor: selected ? headerColor : 'transparent',

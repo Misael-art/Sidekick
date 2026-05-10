@@ -118,6 +118,48 @@ public sealed class SnipAssetCatalog
             : null;
     }
 
+    public async Task<SnipAssetManifest?> UpdateAsync(
+        string assetId,
+        string? displayName,
+        string? notes,
+        IEnumerable<string>? tags,
+        string? ocrText,
+        CancellationToken cancellationToken = default)
+    {
+        var manifest = await GetAsync(assetId, cancellationToken);
+        if (manifest == null)
+        {
+            return null;
+        }
+
+        if (!string.IsNullOrWhiteSpace(displayName))
+        {
+            manifest.DisplayName = displayName.Trim();
+        }
+
+        manifest.Notes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim();
+        if (tags != null)
+        {
+            manifest.Tags = tags
+                .Where(tag => !string.IsNullOrWhiteSpace(tag))
+                .Select(tag => tag.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(tag => tag, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
+        if (ocrText != null)
+        {
+            manifest.Content.OcrText = string.IsNullOrWhiteSpace(ocrText) ? null : ocrText.Trim();
+            manifest.Content.OcrConfidence ??= 0;
+        }
+
+        manifest.UpdatedAt = DateTime.UtcNow;
+        await using var stream = File.Create(GetManifestPath(assetId));
+        await JsonSerializer.SerializeAsync(stream, manifest, JsonOptions, cancellationToken);
+        return manifest;
+    }
+
     public async Task<string?> GetImageBase64Async(string assetId, CancellationToken cancellationToken = default)
     {
         var manifest = await GetAsync(assetId, cancellationToken);

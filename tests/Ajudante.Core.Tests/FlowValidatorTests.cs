@@ -186,6 +186,90 @@ public class FlowValidatorTests
             }
         });
 
+        registry.RegisterDefinition(new NodeDefinition
+        {
+            TypeId = "action.consoleRunCommand",
+            DisplayName = "Console Run Command",
+            Category = NodeCategory.Action,
+            InputPorts = new List<PortDefinition>
+            {
+                new() { Id = "in", Name = "In" }
+            },
+            OutputPorts = new List<PortDefinition>
+            {
+                new() { Id = "out", Name = "Out" }
+            },
+            Properties = new List<PropertyDefinition>
+            {
+                new() { Id = "command", Name = "Command", Type = PropertyType.String, DefaultValue = "" },
+                new() { Id = "workingDirectory", Name = "Working Directory", Type = PropertyType.FolderPath, DefaultValue = "" },
+                new() { Id = "storeStdoutInVariable", Name = "Store Stdout", Type = PropertyType.String, DefaultValue = "" },
+                new() { Id = "storeStderrInVariable", Name = "Store Stderr", Type = PropertyType.String, DefaultValue = "" }
+            }
+        });
+
+        registry.RegisterDefinition(new NodeDefinition
+        {
+            TypeId = "action.consoleSetDirectory",
+            DisplayName = "Console Set Directory",
+            Category = NodeCategory.Action,
+            InputPorts = new List<PortDefinition>
+            {
+                new() { Id = "in", Name = "In" }
+            },
+            OutputPorts = new List<PortDefinition>
+            {
+                new() { Id = "out", Name = "Out" }
+            },
+            Properties = new List<PropertyDefinition>
+            {
+                new() { Id = "path", Name = "Path", Type = PropertyType.FolderPath, DefaultValue = "" },
+                new() { Id = "variableName", Name = "Variable Name", Type = PropertyType.String, DefaultValue = "" }
+            }
+        });
+
+        registry.RegisterDefinition(new NodeDefinition
+        {
+            TypeId = "action.captureRecording",
+            DisplayName = "Capture Recording",
+            Category = NodeCategory.Action,
+            InputPorts = new List<PortDefinition>
+            {
+                new() { Id = "in", Name = "In" }
+            },
+            OutputPorts = new List<PortDefinition>
+            {
+                new() { Id = "out", Name = "Out" }
+            },
+            Properties = new List<PropertyDefinition>
+            {
+                new() { Id = "outputFolder", Name = "Output Folder", Type = PropertyType.FolderPath, DefaultValue = "" },
+                new() { Id = "filenameTemplate", Name = "Filename Template", Type = PropertyType.String, DefaultValue = "capture-{{timestamp}}.mp4" },
+                new() { Id = "storePathInVariable", Name = "Store Path", Type = PropertyType.String, DefaultValue = "" }
+            }
+        });
+
+        registry.RegisterDefinition(new NodeDefinition
+        {
+            TypeId = "action.windowControl",
+            DisplayName = "Window Control",
+            Category = NodeCategory.Action,
+            InputPorts = new List<PortDefinition>
+            {
+                new() { Id = "in", Name = "In" }
+            },
+            OutputPorts = new List<PortDefinition>
+            {
+                new() { Id = "out", Name = "Out" }
+            },
+            Properties = new List<PropertyDefinition>
+            {
+                new() { Id = "windowTitle", Name = "Window Title", Type = PropertyType.String, DefaultValue = "" },
+                new() { Id = "processName", Name = "Process Name", Type = PropertyType.String, DefaultValue = "" },
+                new() { Id = "action", Name = "Action", Type = PropertyType.Dropdown, DefaultValue = "focus" }
+            }
+        });
+
         return registry;
     }
 
@@ -623,6 +707,161 @@ public class FlowValidatorTests
 
         Assert.True(result.IsValid);
         Assert.DoesNotContain(result.Errors, e => e.Contains("generatedText"));
+    }
+
+    [Fact]
+    public void Validate_TemplateReferenceProducedByConsoleStdoutVariable_IsAccepted()
+    {
+        var registry = CreateRegistryWithStandardTypes();
+        var validator = new FlowValidator(registry);
+        var flow = new Flow
+        {
+            Nodes = new List<NodeInstance>
+            {
+                new() { Id = "start", TypeId = "trigger.hotkey" },
+                new()
+                {
+                    Id = "run-command",
+                    TypeId = "action.consoleRunCommand",
+                    Properties = new Dictionary<string, object?>
+                    {
+                        ["command"] = "pwd",
+                        ["storeStdoutInVariable"] = "lastConsoleOutput"
+                    }
+                },
+                new()
+                {
+                    Id = "log",
+                    TypeId = "action.logMessage",
+                    Properties = new Dictionary<string, object?> { ["message"] = "Output {{lastConsoleOutput}}" }
+                }
+            },
+            Connections = new List<Connection>
+            {
+                new() { Id = "c1", SourceNodeId = "start", SourcePort = "triggered", TargetNodeId = "run-command", TargetPort = "in" },
+                new() { Id = "c2", SourceNodeId = "run-command", SourcePort = "out", TargetNodeId = "log", TargetPort = "in" }
+            }
+        };
+
+        var result = validator.Validate(flow);
+
+        Assert.True(result.IsValid);
+        Assert.DoesNotContain(result.Errors, e => e.Contains("lastConsoleOutput"));
+    }
+
+    [Fact]
+    public void Validate_TemplateReferenceProducedByConsoleDirectoryVariable_IsAccepted()
+    {
+        var registry = CreateRegistryWithStandardTypes();
+        var validator = new FlowValidator(registry);
+        var flow = new Flow
+        {
+            Nodes = new List<NodeInstance>
+            {
+                new() { Id = "start", TypeId = "trigger.hotkey" },
+                new()
+                {
+                    Id = "pwd",
+                    TypeId = "action.consoleSetDirectory",
+                    Properties = new Dictionary<string, object?>
+                    {
+                        ["path"] = "C:\\Temp",
+                        ["variableName"] = "pwd"
+                    }
+                },
+                new()
+                {
+                    Id = "run-command",
+                    TypeId = "action.consoleRunCommand",
+                    Properties = new Dictionary<string, object?>
+                    {
+                        ["command"] = "dir",
+                        ["workingDirectory"] = "{{pwd}}"
+                    }
+                }
+            },
+            Connections = new List<Connection>
+            {
+                new() { Id = "c1", SourceNodeId = "start", SourcePort = "triggered", TargetNodeId = "pwd", TargetPort = "in" },
+                new() { Id = "c2", SourceNodeId = "pwd", SourcePort = "out", TargetNodeId = "run-command", TargetPort = "in" }
+            }
+        };
+
+        var result = validator.Validate(flow);
+
+        Assert.True(result.IsValid);
+        Assert.DoesNotContain(result.Errors, e => e.Contains("pwd"));
+    }
+
+    [Fact]
+    public void Validate_TimestampInFilenameTemplate_IsAcceptedAsLocalToken()
+    {
+        var registry = CreateRegistryWithStandardTypes();
+        var validator = new FlowValidator(registry);
+        var flow = new Flow
+        {
+            Variables = new List<FlowVariable>
+            {
+                new() { Name = "recordFolder", Type = VariableType.String, Default = "C:\\Temp" }
+            },
+            Nodes = new List<NodeInstance>
+            {
+                new() { Id = "start", TypeId = "trigger.hotkey" },
+                new()
+                {
+                    Id = "record",
+                    TypeId = "action.captureRecording",
+                    Properties = new Dictionary<string, object?>
+                    {
+                        ["outputFolder"] = "{{recordFolder}}",
+                        ["filenameTemplate"] = "recording-{{timestamp}}.mp4"
+                    }
+                }
+            },
+            Connections = new List<Connection>
+            {
+                new() { Id = "c1", SourceNodeId = "start", SourcePort = "triggered", TargetNodeId = "record", TargetPort = "in" }
+            }
+        };
+
+        var result = validator.Validate(flow);
+
+        Assert.True(result.IsValid);
+        Assert.DoesNotContain(result.Errors, e => e.Contains("timestamp"));
+    }
+
+    [Fact]
+    public void Validate_WindowControlWithWindowScopeOnly_DoesNotRequireElementSelector()
+    {
+        var registry = CreateRegistryWithStandardTypes();
+        var validator = new FlowValidator(registry);
+        var flow = new Flow
+        {
+            Nodes = new List<NodeInstance>
+            {
+                new() { Id = "start", TypeId = "trigger.hotkey" },
+                new()
+                {
+                    Id = "focus-trae",
+                    TypeId = "action.windowControl",
+                    Properties = new Dictionary<string, object?>
+                    {
+                        ["windowTitle"] = "Trae",
+                        ["processName"] = "Trae",
+                        ["action"] = "focus"
+                    }
+                }
+            },
+            Connections = new List<Connection>
+            {
+                new() { Id = "c1", SourceNodeId = "start", SourcePort = "triggered", TargetNodeId = "focus-trae", TargetPort = "in" }
+            }
+        };
+
+        var result = validator.Validate(flow);
+
+        Assert.True(result.IsValid);
+        Assert.DoesNotContain(result.Errors, e => e.Contains("incomplete selector"));
     }
 
     [Fact]

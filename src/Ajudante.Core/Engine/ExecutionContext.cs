@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using Ajudante.Core.Interfaces;
 
 namespace Ajudante.Core.Engine;
 
@@ -27,6 +28,7 @@ public class FlowExecutionContext
     public CancellationToken CancellationToken { get; }
     public Action<string, string, string?, object?>? PhaseSink { get; set; }
     public string CurrentNodeId { get; internal set; } = "";
+    public IFlowInvocationService? FlowInvocationService { get; set; }
 
     public FlowExecutionContext(Flow flow, CancellationToken ct)
     {

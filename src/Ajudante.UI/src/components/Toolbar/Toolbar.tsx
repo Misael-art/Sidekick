@@ -1,13 +1,18 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { sendCommand } from '../../bridge/bridge';
-import { toBackendFlow } from '../../bridge/flowConverter';
+import { toBackendFlow, type BackendFlow } from '../../bridge/flowConverter';
 import type {
   CapturedElement,
+  FlowDryRunReport,
+  FlowHealthReport,
   FlowValidationResult,
   FlowNodeData,
   FlowRuntimeSnapshot,
+  GuidedAutomationDraft,
   InspectionAsset,
   InspectionAssetTestResult,
+  MacroRecordingSession,
+  SecurityReport,
   StopFlowMode,
 } from '../../bridge/types';
 import { useAppStore } from '../../store/appStore';
@@ -20,6 +25,18 @@ interface FlowSummary {
   modifiedAt?: string;
   nodeCount?: number;
   isNative?: boolean;
+  preflightStatus?: 'ready' | 'needsConfiguration' | 'blocked' | string;
+  preflightMessage?: string;
+}
+
+interface RecipeCatalogEntry {
+  id: string;
+  name: string;
+  category: string;
+  persona: string;
+  risk: 'low' | 'medium' | 'high' | string;
+  popularity: number;
+  tags: string[];
 }
 
 interface FlowActivationResponse {
@@ -27,6 +44,7 @@ interface FlowActivationResponse {
   flow?: FlowRuntimeSnapshot;
   warnings?: string[];
   validation?: FlowValidationResult;
+  security?: SecurityReport;
 }
 
 interface RunFlowResponse {
@@ -35,6 +53,7 @@ interface RunFlowResponse {
   queueLength?: number;
   queuePending?: boolean;
   validation?: FlowValidationResult;
+  security?: SecurityReport;
 }
 
 function getErrorMessage(error: unknown, fallback: string): string {
@@ -161,6 +180,52 @@ function buildValidationWarningMessage(validation: FlowValidationResult, success
     : successLabel;
 }
 
+function isSecuritySeverity(issue: { severity?: string }, expected: 'block' | 'warning' | 'info'): boolean {
+  return (issue.severity ?? '').toLocaleLowerCase('en-US') === expected;
+}
+
+function buildSecurityBlockMessage(security: SecurityReport): string {
+  const blocks = security.issues.filter((issue) => isSecuritySeverity(issue, 'block'));
+  const warnings = security.issues.filter((issue) => isSecuritySeverity(issue, 'warning'));
+  if (blocks.length > 0) {
+    return `Execucao bloqueada por seguranca (${security.riskLevel}): ${summarizeIssues(blocks.map((item) => item.message), 2)}`;
+  }
+  if (warnings.length > 0) {
+    return `Atencao: fluxo com risco ${security.riskLevel}. ${summarizeIssues(warnings.map((item) => item.message), 2)}`;
+  }
+  return `Fluxo com risco ${security.riskLevel}.`;
+}
+
+function withSecurityAckIfNeeded(
+  flowPayload: BackendFlow,
+  security: SecurityReport,
+  acknowledged: boolean,
+): BackendFlow & { securityAck?: { manifestHash: string } } {
+  if (!acknowledged || security.isSafeToRun) {
+    return flowPayload;
+  }
+
+  return { ...flowPayload, securityAck: { manifestHash: security.manifestHash } };
+}
+
+function isElevatedCatalogRisk(risk: string | undefined): boolean {
+  const normalized = (risk ?? '').toLowerCase();
+  return normalized === 'medium' || normalized === 'high';
+}
+
+function getPreflightLabel(flow: FlowSummary): string {
+  switch (flow.preflightStatus) {
+    case 'ready':
+      return 'Pronto';
+    case 'needsConfiguration':
+      return 'Precisa configurar';
+    case 'blocked':
+      return 'Bloqueado';
+    default:
+      return 'Preflight';
+  }
+}
+
 export default function Toolbar() {
   const { t, locale } = useTranslation();
   const setLocale = useLocaleStore((s) => s.setLocale);
@@ -189,6 +254,21 @@ export default function Toolbar() {
   const inspectionAssets = useAppStore((s) => s.inspectionAssets);
   const addLog = useAppStore((s) => s.addLog);
   const setUserMessage = useAppStore((s) => s.setUserMessage);
+  const debugVisualEnabled = useAppStore((s) => s.debugVisualEnabled);
+  const setDebugVisualEnabled = useAppStore((s) => s.setDebugVisualEnabled);
+  const allowHighRiskExecution = useAppStore((s) => s.allowHighRiskExecution);
+  const setAllowHighRiskExecution = useAppStore((s) => s.setAllowHighRiskExecution);
+  const flowHealthReport = useAppStore((s) => s.flowHealthReport);
+  const setFlowHealthReport = useAppStore((s) => s.setFlowHealthReport);
+  const dryRunReport = useAppStore((s) => s.dryRunReport);
+  const setDryRunReport = useAppStore((s) => s.setDryRunReport);
+  const macroRecorderActive = useAppStore((s) => s.macroRecorderActive);
+  const setMacroRecorderActive = useAppStore((s) => s.setMacroRecorderActive);
+  const setMacroRecorderStatus = useAppStore((s) => s.setMacroRecorderStatus);
+  const setGuidedDraft = useAppStore((s) => s.setGuidedDraft);
+
+  const highRiskResolveRef = useRef<((ok: boolean) => void) | null>(null);
+  const [highRiskDialogSecurity, setHighRiskDialogSecurity] = useState<SecurityReport | null>(null);
 
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(flowName);
@@ -200,10 +280,16 @@ export default function Toolbar() {
   const [marketplaceFilter, setMarketplaceFilter] = useState('');
   const [selectedMarketplaceFlowId, setSelectedMarketplaceFlowId] = useState<string | null>(null);
   const [isLoadingFlowList, setIsLoadingFlowList] = useState(false);
+  const [recipeCatalog, setRecipeCatalog] = useState<RecipeCatalogEntry[]>([]);
   const [isApplyingLoadedFlow, setIsApplyingLoadedFlow] = useState(false);
   const [deletingFlowId, setDeletingFlowId] = useState<string | null>(null);
   const [isStopDialogOpen, setIsStopDialogOpen] = useState(false);
   const [isStoppingFlow, setIsStoppingFlow] = useState(false);
+  const [isDryRunDialogOpen, setIsDryRunDialogOpen] = useState(false);
+  const [isRunningDryRun, setIsRunningDryRun] = useState(false);
+  const [isAnalyzingHealth, setIsAnalyzingHealth] = useState(false);
+  const [isKillSwitching, setIsKillSwitching] = useState(false);
+  const [isMacroRecorderBusy, setIsMacroRecorderBusy] = useState(false);
   const [isExportingRunner, setIsExportingRunner] = useState(false);
   const [isInspectionLibraryOpen, setIsInspectionLibraryOpen] = useState(false);
   const [inspectionFilter, setInspectionFilter] = useState('');
@@ -217,6 +303,37 @@ export default function Toolbar() {
   const loadSearchInputRef = useRef<HTMLInputElement>(null);
   const marketplaceSearchInputRef = useRef<HTMLInputElement>(null);
   const inspectionSearchInputRef = useRef<HTMLInputElement>(null);
+
+  const waitForHighRiskConfirmation = (security: SecurityReport) =>
+    new Promise<boolean>((resolve) => {
+      highRiskResolveRef.current = resolve;
+      setHighRiskDialogSecurity(security);
+    });
+
+  const resolveHighRiskDialog = (ok: boolean) => {
+    setHighRiskDialogSecurity(null);
+    const fn = highRiskResolveRef.current;
+    highRiskResolveRef.current = null;
+    fn?.(ok);
+  };
+
+  const handleToggleHighRiskPermission = async () => {
+    try {
+      setUserMessage(null);
+      const next = !allowHighRiskExecution;
+      await setAllowHighRiskExecution(next);
+      setUserMessage({
+        type: 'info',
+        text: next
+          ? 'Permissao ativada: fluxos com bloqueio de seguranca exigem confirmacao no modal antes de executar, armar ou exportar.'
+          : 'Permissao desativada: fluxos com bloqueio de seguranca voltam a ser recusados.',
+      });
+    } catch (error) {
+      const message = getErrorMessage(error, 'Nao foi possivel atualizar as definicoes de seguranca.');
+      addLog({ timestamp: new Date().toISOString(), level: 'error', message });
+      setUserMessage({ type: 'error', text: message });
+    }
+  };
 
   const filteredFlows = useMemo(() => {
     const normalizedFilter = normalizeSearchText(loadFilter);
@@ -233,18 +350,29 @@ export default function Toolbar() {
 
   const marketplaceFlows = useMemo(() => {
     const normalizedFilter = normalizeSearchText(marketplaceFilter);
+    const byId = new Map(recipeCatalog.map((entry) => [entry.id, entry]));
     return availableFlows
       .filter((flow) => {
         const haystack = normalizeSearchText(`${flow.id} ${flow.name ?? ''}`);
+        const catalog = byId.get(flow.id);
+        const catalogTags = normalizeSearchText(catalog?.tags?.join(' ') ?? '');
         const isRecipe = haystack.includes('recipe')
           || haystack.includes('trae')
           || haystack.includes('portfolio')
-          || Boolean(flow.isNative);
+          || Boolean(flow.isNative)
+          || Boolean(catalog);
 
-        return isRecipe && (!normalizedFilter || haystack.includes(normalizedFilter));
+        return isRecipe && (!normalizedFilter || haystack.includes(normalizedFilter) || catalogTags.includes(normalizedFilter));
       })
-      .sort((left, right) => (left.name ?? left.id).localeCompare(right.name ?? right.id, 'pt-BR'));
-  }, [availableFlows, marketplaceFilter]);
+      .sort((left, right) => {
+        const leftPopularity = byId.get(left.id)?.popularity ?? 0;
+        const rightPopularity = byId.get(right.id)?.popularity ?? 0;
+        if (leftPopularity !== rightPopularity) {
+          return rightPopularity - leftPopularity;
+        }
+        return (left.name ?? left.id).localeCompare(right.name ?? right.id, 'pt-BR');
+      });
+  }, [availableFlows, marketplaceFilter, recipeCatalog]);
 
   const filteredInspectionAssets = useMemo(() => {
     const normalizedFilter = normalizeSearchText(inspectionFilter);
@@ -265,6 +393,7 @@ export default function Toolbar() {
   const isCurrentFlowArmed = Boolean(currentFlowRuntime?.isArmed);
   const canArmCurrentFlow = hasContinuousTriggers(nodes);
   const canStop = isRunning || queueLength > 0;
+  const canKillSwitch = canStop || Object.values(flowRuntimes).some((flow) => flow.isArmed || flow.queuePending);
 
   useEffect(() => {
     if (isEditing && inputRef.current) {
@@ -431,6 +560,26 @@ export default function Toolbar() {
   const handlePlay = async () => {
     try {
       setUserMessage(null);
+      const securityFlow = toBackendFlow(flowId, flowName, nodes, edges, { runtimeView: true, variables: flowVariables });
+      const security = await sendCommand<SecurityReport>('engine', 'securityLint', securityFlow);
+      let securityAcknowledged = false;
+      if (!security.isSafeToRun) {
+        if (!allowHighRiskExecution) {
+          const message = buildSecurityBlockMessage(security);
+          addLog({ timestamp: new Date().toISOString(), level: 'error', message });
+          setUserMessage({ type: 'error', text: message });
+          return;
+        }
+
+        const confirmed = await waitForHighRiskConfirmation(security);
+        if (!confirmed) {
+          setUserMessage({ type: 'info', text: 'Execucao cancelada pelo utilizador.' });
+          return;
+        }
+
+        securityAcknowledged = true;
+      }
+
       const validation = await validateFlow();
       if (!validation.isValid) {
         const message = buildValidationErrorMessage(validation);
@@ -444,8 +593,17 @@ export default function Toolbar() {
         runtimeView: true,
         variables: flowVariables,
       });
-      const result = await sendCommand<RunFlowResponse>('engine', 'runFlow', backendFlow);
+      const runPayload = withSecurityAckIfNeeded(backendFlow, security, securityAcknowledged);
+      const result = await sendCommand<RunFlowResponse>('engine', 'runFlow', runPayload);
       const runtimeValidation = result?.validation ?? validation;
+      const runtimeSecurity = result?.security ?? security;
+
+      if (!runtimeSecurity.isSafeToRun) {
+        const message = buildSecurityBlockMessage(runtimeSecurity);
+        addLog({ timestamp: new Date().toISOString(), level: 'error', message });
+        setUserMessage({ type: 'error', text: message });
+        return;
+      }
 
       if (!result?.queued) {
         const message = buildValidationErrorMessage(runtimeValidation);
@@ -470,6 +628,26 @@ export default function Toolbar() {
   const handleArm = async () => {
     try {
       setUserMessage(null);
+      const securityFlow = toBackendFlow(flowId, flowName, nodes, edges, { runtimeView: true, variables: flowVariables });
+      const security = await sendCommand<SecurityReport>('engine', 'securityLint', securityFlow);
+      let securityAcknowledged = false;
+      if (!security.isSafeToRun) {
+        if (!allowHighRiskExecution) {
+          const message = buildSecurityBlockMessage(security);
+          addLog({ timestamp: new Date().toISOString(), level: 'error', message });
+          setUserMessage({ type: 'error', text: message });
+          return;
+        }
+
+        const confirmed = await waitForHighRiskConfirmation(security);
+        if (!confirmed) {
+          setUserMessage({ type: 'info', text: 'Armamento cancelado pelo utilizador.' });
+          return;
+        }
+
+        securityAcknowledged = true;
+      }
+
       const validation = await validateFlow();
       if (!validation.isValid) {
         const message = buildValidationErrorMessage(validation);
@@ -482,8 +660,16 @@ export default function Toolbar() {
         runtimeView: true,
         variables: flowVariables,
       });
-      const result = await sendCommand<FlowActivationResponse>('engine', 'activateFlow', backendFlow);
+      const armPayload = withSecurityAckIfNeeded(backendFlow, security, securityAcknowledged);
+      const result = await sendCommand<FlowActivationResponse>('engine', 'activateFlow', armPayload);
       const runtimeValidation = result?.validation ?? validation;
+      const runtimeSecurity = result?.security ?? security;
+      if (!runtimeSecurity.isSafeToRun) {
+        const message = buildSecurityBlockMessage(runtimeSecurity);
+        addLog({ timestamp: new Date().toISOString(), level: 'error', message });
+        setUserMessage({ type: 'error', text: message });
+        return;
+      }
       if (!result?.armed) {
         const message = buildValidationErrorMessage(runtimeValidation);
         addLog({ timestamp: new Date().toISOString(), level: 'error', message });
@@ -532,6 +718,69 @@ export default function Toolbar() {
       setUserMessage({ type: 'error', text: message });
     } finally {
       setIsStoppingFlow(false);
+    }
+  };
+
+  const handleKillSwitch = async () => {
+    if (!canKillSwitch) {
+      return;
+    }
+
+    try {
+      setIsKillSwitching(true);
+      setUserMessage(null);
+      await sendCommand('engine', 'killSwitch', {});
+      setUserMessage({ type: 'info', text: 'Kill switch acionado: runtime parado, fila limpa e monitoramentos desarmados.' });
+    } catch (error) {
+      const message = getErrorMessage(error, 'Nao foi possivel acionar o kill switch.');
+      addLog({ timestamp: new Date().toISOString(), level: 'error', message });
+      setUserMessage({ type: 'error', text: message });
+    } finally {
+      setIsKillSwitching(false);
+    }
+  };
+
+  const analyzeFlowExperience = async () => {
+    try {
+      setIsAnalyzingHealth(true);
+      const backendFlow = toBackendFlow(flowId, flowName, nodes, edges, {
+        runtimeView: true,
+        variables: flowVariables,
+      });
+      const report = await sendCommand<FlowHealthReport>('flow', 'analyzeFlowExperience', backendFlow);
+      setFlowHealthReport(report);
+      setUserMessage({
+        type: report.score >= 70 ? 'success' : 'info',
+        text: `Flow Health ${report.score}/100 (${report.level}). ${report.issues[0]?.message ?? 'Nenhum problema critico encontrado.'}`,
+      });
+    } catch (error) {
+      const message = getErrorMessage(error, 'Nao foi possivel analisar a saude do flow.');
+      addLog({ timestamp: new Date().toISOString(), level: 'error', message });
+      setUserMessage({ type: 'error', text: message });
+    } finally {
+      setIsAnalyzingHealth(false);
+    }
+  };
+
+  const runDryRun = async () => {
+    try {
+      setIsRunningDryRun(true);
+      setUserMessage(null);
+      const backendFlow = toBackendFlow(flowId, flowName, nodes, edges, {
+        runtimeView: true,
+        variables: flowVariables,
+      });
+      const report = await sendCommand<FlowDryRunReport>('engine', 'dryRunFlow', backendFlow);
+      setDryRunReport(report);
+      setFlowHealthReport(report.health);
+      setIsDryRunDialogOpen(true);
+      setUserMessage({ type: report.canRun ? 'success' : 'info', text: report.summary });
+    } catch (error) {
+      const message = getErrorMessage(error, 'Nao foi possivel executar o dry-run.');
+      addLog({ timestamp: new Date().toISOString(), level: 'error', message });
+      setUserMessage({ type: 'error', text: message });
+    } finally {
+      setIsRunningDryRun(false);
     }
   };
 
@@ -592,7 +841,9 @@ export default function Toolbar() {
       setUserMessage(null);
       setIsLoadingFlowList(true);
       const flows = await sendCommand<FlowSummary[]>('flow', 'listFlows', {});
+      const catalog = await sendCommand<RecipeCatalogEntry[]>('flow', 'listRecipeCatalog', {});
       const normalizedFlows = Array.isArray(flows) ? flows : [];
+      setRecipeCatalog(Array.isArray(catalog) ? catalog : []);
       setAvailableFlows(normalizedFlows);
       setLoadFilter('');
       setSelectedFlowId(normalizedFlows[0]?.id ?? null);
@@ -611,7 +862,9 @@ export default function Toolbar() {
       setUserMessage(null);
       setIsLoadingFlowList(true);
       const flows = await sendCommand<FlowSummary[]>('flow', 'listFlows', {});
+      const catalog = await sendCommand<RecipeCatalogEntry[]>('flow', 'listRecipeCatalog', {});
       const normalizedFlows = Array.isArray(flows) ? flows : [];
+      setRecipeCatalog(Array.isArray(catalog) ? catalog : []);
       setAvailableFlows(normalizedFlows);
       setMarketplaceFilter('');
       const firstRecipe = normalizedFlows.find((flow) => {
@@ -737,6 +990,49 @@ export default function Toolbar() {
     }
   };
 
+  const toggleMacroRecorder = async () => {
+    try {
+      setIsMacroRecorderBusy(true);
+      if (!macroRecorderActive) {
+        const session = await sendCommand<MacroRecordingSession & { started?: boolean }>('platform', 'startMacroRecorder', {
+          goal: 'Rascunho guiado',
+          captureMouse: true,
+          captureKeyboard: true,
+          captureText: true,
+          captureSensitiveText: false,
+          stopHotkey: 'Ctrl+Shift+F12',
+          maxEvents: 1000,
+          idlePauseMs: 1500,
+        });
+        setMacroRecorderActive(true);
+        setMacroRecorderStatus(session);
+        setUserMessage({ type: 'info', text: 'Recorder global ativo. Grave a tarefa e pare para revisar a timeline.' });
+        return;
+      }
+
+      const draft = await sendCommand<GuidedAutomationDraft>('platform', 'stopMacroRecorder', {});
+      setMacroRecorderActive(false);
+      setMacroRecorderStatus({
+        sessionId: draft.sessionId ?? '',
+        startedAt: draft.startedAt ?? new Date().toISOString(),
+        stoppedAt: draft.stoppedAt ?? new Date().toISOString(),
+        status: 'stopped',
+        eventCount: draft.events.length,
+        privacyMode: draft.events.some((event) => event.privacy?.isRedacted) ? 'redactSensitive' : 'default',
+      });
+      setGuidedDraft(draft);
+      setUserMessage({ type: 'success', text: 'Gravacao pronta para revisao. Nada foi aplicado ou executado automaticamente.' });
+    } catch (error) {
+      const message = getErrorMessage(error, 'Nao foi possivel controlar o recorder.');
+      setMacroRecorderActive(false);
+      setMacroRecorderStatus(null);
+      addLog({ timestamp: new Date().toISOString(), level: 'error', message });
+      setUserMessage({ type: 'error', text: message });
+    } finally {
+      setIsMacroRecorderBusy(false);
+    }
+  };
+
   const openInspectionLibrary = () => {
     setInspectionFilter('');
     setSelectedInspectionAssetId(inspectionAssets[0]?.id ?? null);
@@ -756,7 +1052,27 @@ export default function Toolbar() {
         persistUiMetadata: true,
         variables: flowVariables,
       });
-      const result = await sendCommand<{ packageDirectory?: string }>('flow', 'exportRunnerPackage', backendFlow);
+      const security = await sendCommand<SecurityReport>('engine', 'securityLint', backendFlow);
+      let securityAcknowledged = false;
+      if (!security.isSafeToRun) {
+        if (!allowHighRiskExecution) {
+          const message = buildSecurityBlockMessage(security);
+          setUserMessage({ type: 'error', text: message });
+          addLog({ timestamp: new Date().toISOString(), level: 'error', message });
+          return;
+        }
+
+        const confirmed = await waitForHighRiskConfirmation(security);
+        if (!confirmed) {
+          setUserMessage({ type: 'info', text: 'Export cancelado pelo utilizador.' });
+          return;
+        }
+
+        securityAcknowledged = true;
+      }
+
+      const exportPayload = withSecurityAckIfNeeded(backendFlow, security, securityAcknowledged);
+      const result = await sendCommand<{ packageDirectory?: string }>('flow', 'exportRunnerPackage', exportPayload);
       const message = result?.packageDirectory
         ? `Pacote runner exportado em ${result.packageDirectory}`
         : 'Pacote runner exportado.';
@@ -881,22 +1197,22 @@ export default function Toolbar() {
     <>
       <div className="toolbar">
         <div className="toolbar__group">
-          <button className="toolbar__btn" onClick={handleNew} title="New Flow">
+          <button className="toolbar__btn" onClick={handleNew} title="Novo flow">
             <span className="toolbar__btn-icon">&#x1F4C4;</span>
-            <span className="toolbar__btn-label">New</span>
+            <span className="toolbar__btn-label">Novo</span>
           </button>
-          <button className="toolbar__btn" onClick={handleSave} title="Save Flow">
+          <button className="toolbar__btn" onClick={handleSave} title="Salvar flow">
             <span className="toolbar__btn-icon">&#x1F4BE;</span>
-            <span className="toolbar__btn-label">Save</span>
+            <span className="toolbar__btn-label">Salvar</span>
           </button>
           <button
             className={`toolbar__btn ${isLoadingFlowList ? 'toolbar__btn--disabled' : ''}`}
             onClick={handleLoad}
-            title="Load Flow"
+            title="Carregar flow"
             disabled={isLoadingFlowList}
           >
             <span className="toolbar__btn-icon">&#x1F4C2;</span>
-            <span className="toolbar__btn-label">{isLoadingFlowList ? 'Loading...' : 'Load'}</span>
+            <span className="toolbar__btn-label">{isLoadingFlowList ? 'Carregando...' : 'Carregar'}</span>
           </button>
           <button
             className={`toolbar__btn ${isLoadingFlowList ? 'toolbar__btn--disabled' : ''}`}
@@ -916,7 +1232,7 @@ export default function Toolbar() {
             type="button"
           >
             <span className="toolbar__btn-icon">&#x1F4E6;</span>
-            <span className="toolbar__btn-label">{isExportingRunner ? 'Export...' : 'Export Runner'}</span>
+            <span className="toolbar__btn-label">{isExportingRunner ? 'Exportando...' : 'Exportar Runner'}</span>
           </button>
         </div>
 
@@ -939,7 +1255,7 @@ export default function Toolbar() {
                 setEditName(flowName);
                 setIsEditing(true);
               }}
-              title="Click to rename"
+              title="Clique para renomear"
             >
               {flowName}
               {isDirty ? ' *' : ''}
@@ -952,39 +1268,81 @@ export default function Toolbar() {
 
         <div className="toolbar__group">
           <button
+            type="button"
+            className={`toolbar__btn ${allowHighRiskExecution ? 'toolbar__btn--active' : ''}`}
+            onClick={() => { void handleToggleHighRiskPermission(); }}
+            title="Quando ativo, permite abrir o modal de confirmacao para executar, armar ou exportar fluxos com bloqueio de seguranca (exige securityAck)."
+            aria-pressed={allowHighRiskExecution}
+          >
+            <span className="toolbar__btn-icon">&#9888;</span>
+            <span className="toolbar__btn-label">{allowHighRiskExecution ? 'Risco: on' : 'Risco: off'}</span>
+          </button>
+          <button
+            type="button"
+            className={`toolbar__btn ${isAnalyzingHealth ? 'toolbar__btn--disabled' : ''}`}
+            onClick={() => { void analyzeFlowExperience(); }}
+            title="Analisar saude do flow sem executar"
+            disabled={isAnalyzingHealth}
+          >
+            <span className="toolbar__btn-icon">&#x2695;</span>
+            <span className="toolbar__btn-label">
+              {flowHealthReport ? `Saude ${flowHealthReport.score}` : 'Saude'}
+            </span>
+          </button>
+          <button
+            type="button"
+            className={`toolbar__btn ${isRunningDryRun ? 'toolbar__btn--disabled' : ''}`}
+            onClick={() => { void runDryRun(); }}
+            title="Dry-run: validar passos sem executar acoes"
+            disabled={isRunningDryRun}
+          >
+            <span className="toolbar__btn-icon">&#x23ED;</span>
+            <span className="toolbar__btn-label">{isRunningDryRun ? 'Testando...' : 'Dry-run'}</span>
+          </button>
+          <button
             className="toolbar__btn toolbar__btn--play"
             onClick={handlePlay}
-            title="Queue an immediate run"
+            title="Executar este flow agora"
           >
             <span className="toolbar__btn-icon">&#9654;</span>
-            <span className="toolbar__btn-label">Run Now</span>
+            <span className="toolbar__btn-label">Executar</span>
           </button>
           <button
             className={`toolbar__btn ${!canArmCurrentFlow || isCurrentFlowArmed ? 'toolbar__btn--disabled' : ''}`}
             onClick={handleArm}
             disabled={!canArmCurrentFlow || isCurrentFlowArmed}
-            title="Arm flow triggers"
+            title="Monitorar gatilhos deste flow"
           >
             <span className="toolbar__btn-icon">&#128276;</span>
-            <span className="toolbar__btn-label">Arm</span>
+            <span className="toolbar__btn-label">Monitorar</span>
           </button>
           <button
             className={`toolbar__btn ${!isCurrentFlowArmed ? 'toolbar__btn--disabled' : ''}`}
             onClick={handleDisarm}
             disabled={!isCurrentFlowArmed}
-            title="Disarm flow triggers"
+            title="Desativar monitoramento deste flow"
           >
             <span className="toolbar__btn-icon">&#128277;</span>
-            <span className="toolbar__btn-label">Disarm</span>
+            <span className="toolbar__btn-label">Desarmar</span>
           </button>
           <button
             className={`toolbar__btn toolbar__btn--stop ${!canStop ? 'toolbar__btn--disabled' : ''}`}
             onClick={() => { void handleStop(); }}
             disabled={!canStop}
-            title="Stop current run"
+            title="Parar execucao atual"
           >
             <span className="toolbar__btn-icon">&#9632;</span>
-            <span className="toolbar__btn-label">Stop</span>
+            <span className="toolbar__btn-label">Parar</span>
+          </button>
+          <button
+            className={`toolbar__btn toolbar__btn--stop ${!canKillSwitch || isKillSwitching ? 'toolbar__btn--disabled' : ''}`}
+            onClick={() => { void handleKillSwitch(); }}
+            disabled={!canKillSwitch || isKillSwitching}
+            title="Parar tudo: cancela runtime, limpa fila e desarma monitoramentos"
+            type="button"
+          >
+            <span className="toolbar__btn-icon">&#x26D4;</span>
+            <span className="toolbar__btn-label">{isKillSwitching ? 'Parando...' : 'Parar Tudo'}</span>
           </button>
         </div>
 
@@ -994,15 +1352,25 @@ export default function Toolbar() {
           <button
             className={`toolbar__btn ${inspectorMode === 'mira' ? 'toolbar__btn--active' : ''}`}
             onClick={toggleMira}
-            title="Mira Inspector - Element detection"
+            title="Mira - capturar elemento da tela"
           >
             <span className="toolbar__btn-icon">&#x1F441;</span>
             <span className="toolbar__btn-label">Mira</span>
           </button>
           <button
+            className={`toolbar__btn ${macroRecorderActive ? 'toolbar__btn--active' : ''} ${isMacroRecorderBusy ? 'toolbar__btn--disabled' : ''}`}
+            onClick={() => { void toggleMacroRecorder(); }}
+            disabled={isMacroRecorderBusy}
+            title={macroRecorderActive ? 'Parar recorder e revisar timeline' : 'Gravar passos em rascunho seguro'}
+            type="button"
+          >
+            <span className="toolbar__btn-icon">&#x23FA;</span>
+            <span className="toolbar__btn-label">{macroRecorderActive ? 'Parar rec' : 'Recorder'}</span>
+          </button>
+          <button
             className="toolbar__btn"
             onClick={openInspectionLibrary}
-            title="Browse saved Mira inspection assets"
+            title="Abrir biblioteca de capturas Mira"
             type="button"
           >
             <span className="toolbar__btn-icon">&#x1F5C2;</span>
@@ -1011,7 +1379,7 @@ export default function Toolbar() {
           <button
             className={`toolbar__btn ${inspectorMode === 'snip' ? 'toolbar__btn--active' : ''}`}
             onClick={toggleSnip}
-            title="Snip - Screen region capture"
+            title="Snip - capturar regiao da tela"
           >
             <span className="toolbar__btn-icon">&#x2702;</span>
             <span className="toolbar__btn-label">Snip</span>
@@ -1019,17 +1387,26 @@ export default function Toolbar() {
           <button
             className="toolbar__btn"
             onClick={handleAddSticky}
-            title="Add sticky note (teach the why and expected result)"
+            title="Adicionar nota ao canvas"
             aria-label="Adicionar nota adesiva"
           >
             <span className="toolbar__btn-icon">&#x1F4DD;</span>
-            <span className="toolbar__btn-label">Sticky</span>
+            <span className="toolbar__btn-label">Nota</span>
           </button>
         </div>
 
         <div className="toolbar__divider" />
 
         <div className="toolbar__group">
+          <button
+            className={`toolbar__btn ${debugVisualEnabled ? 'toolbar__btn--active' : ''}`}
+            onClick={() => setDebugVisualEnabled(!debugVisualEnabled)}
+            title="Ativar visual de debug (pulso em nodes em execução)"
+            type="button"
+          >
+            <span className="toolbar__btn-icon">&#x1F41E;</span>
+            <span className="toolbar__btn-label">{debugVisualEnabled ? 'Debug on' : 'Debug off'}</span>
+          </button>
           <label
             className="toolbar__btn toolbar__locale"
             title={t('toolbar.languageSwitch')}
@@ -1228,27 +1605,54 @@ export default function Toolbar() {
               </div>
             ) : (
               <div className="toolbar__dialog-list" role="listbox" aria-label="Receitas do marketplace">
-                {marketplaceFlows.map((flow) => (
-                  <button
-                    key={flow.id}
-                    className={`toolbar__flow-option ${selectedMarketplaceFlowId === flow.id ? 'toolbar__flow-option--selected' : ''}`}
-                    onClick={() => setSelectedMarketplaceFlowId(flow.id)}
-                    onDoubleClick={() => { void handleSelectFlow(flow.id); }}
-                    type="button"
-                  >
-                    <span className="toolbar__flow-option-header">
-                      <span className="toolbar__flow-option-title">{flow.name?.trim() || flow.id}</span>
-                      <span className="toolbar__flow-option-badges">
-                        <span className="toolbar__flow-option-badge">Recipe</span>
-                        {flow.isNative && <span className="toolbar__flow-option-badge">Native</span>}
+                {marketplaceFlows.map((flow) => {
+                  const recipeInfo = recipeCatalog.find((entry) => entry.id === flow.id);
+                  return (
+                    <button
+                      key={flow.id}
+                      className={`toolbar__flow-option ${selectedMarketplaceFlowId === flow.id ? 'toolbar__flow-option--selected' : ''}`}
+                      onClick={() => setSelectedMarketplaceFlowId(flow.id)}
+                      onDoubleClick={() => { void handleSelectFlow(flow.id); }}
+                      type="button"
+                    >
+                      <span className="toolbar__flow-option-header">
+                        {recipeInfo && isElevatedCatalogRisk(recipeInfo.risk) ? (
+                          <span
+                            className="toolbar__flow-option-alert"
+                            title={`Receita com risco catalogado: ${recipeInfo.risk}. Revise os nodes antes de executar.`}
+                            aria-hidden
+                          >
+                            &#9888;
+                          </span>
+                        ) : null}
+                        <span className="toolbar__flow-option-title">{flow.name?.trim() || flow.id}</span>
+                        <span className="toolbar__flow-option-badges">
+                          <span className="toolbar__flow-option-badge">Recipe</span>
+                          {recipeInfo && <span className="toolbar__flow-option-badge">Popular {recipeInfo.popularity}</span>}
+                          {recipeInfo?.risk && <span className="toolbar__flow-option-badge">{recipeInfo.risk}</span>}
+                          {flow.isNative && <span className="toolbar__flow-option-badge">Native</span>}
+                          {flow.preflightStatus && (
+                            <span
+                              className={`toolbar__flow-option-badge toolbar__flow-option-badge--${flow.preflightStatus}`}
+                              title={flow.preflightMessage ?? getPreflightLabel(flow)}
+                            >
+                              {getPreflightLabel(flow)}
+                            </span>
+                          )}
+                        </span>
                       </span>
-                    </span>
-                    <span className="toolbar__flow-option-meta">
-                      {flow.nodeCount ?? 0} no(s) • {formatModifiedAt(flow.modifiedAt)}
-                    </span>
-                    <span className="toolbar__flow-option-id">{flow.id}</span>
-                  </button>
-                ))}
+                      <span className="toolbar__flow-option-meta">
+                        {flow.nodeCount ?? 0} no(s) • {formatModifiedAt(flow.modifiedAt)}
+                      </span>
+                      {recipeInfo && (
+                        <span className="toolbar__flow-option-meta">
+                          {recipeInfo.category} • {recipeInfo.persona}
+                        </span>
+                      )}
+                      <span className="toolbar__flow-option-id">{flow.id}</span>
+                    </button>
+                  );
+                })}
               </div>
             )}
 
@@ -1268,6 +1672,161 @@ export default function Toolbar() {
                 type="button"
               >
                 {isApplyingLoadedFlow ? 'Abrindo...' : 'Abrir receita'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {highRiskDialogSecurity && (
+        <div
+          className="toolbar__dialog-backdrop"
+          onClick={() => resolveHighRiskDialog(false)}
+          role="presentation"
+        >
+          <div
+            className="toolbar__dialog toolbar__dialog--compact"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="high-risk-dialog-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="toolbar__dialog-header">
+              <div>
+                <h2 id="high-risk-dialog-title" className="toolbar__dialog-title">
+                  Confirmar fluxo de alto risco
+                </h2>
+                <p className="toolbar__dialog-subtitle">
+                  Nivel: {highRiskDialogSecurity.riskLevel}. Hash de manifesto: {(highRiskDialogSecurity.manifestHash ?? '').slice(0, 12)}...
+                </p>
+              </div>
+            </div>
+            <div className="toolbar__asset-summary">
+              <div className="toolbar__asset-summary-title">Alertas de seguranca</div>
+              <ul className="toolbar__high-risk-issue-list">
+                {highRiskDialogSecurity.issues.map((issue) => (
+                  <li key={`${issue.code}-${issue.nodeId ?? ''}-${issue.message}`}>
+                    <strong>{issue.severity}</strong>: {issue.message}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="toolbar__dialog-actions">
+              <button
+                type="button"
+                className="toolbar__dialog-btn toolbar__dialog-btn--secondary"
+                onClick={() => resolveHighRiskDialog(false)}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="toolbar__dialog-btn toolbar__dialog-btn--primary"
+                onClick={() => resolveHighRiskDialog(true)}
+              >
+                Confirmar e continuar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isDryRunDialogOpen && dryRunReport && (
+        <div
+          className="toolbar__dialog-backdrop"
+          onClick={() => setIsDryRunDialogOpen(false)}
+        >
+          <div
+            className="toolbar__dialog toolbar__dialog--wide"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="dry-run-dialog-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="toolbar__dialog-header">
+              <div>
+                <h2 id="dry-run-dialog-title" className="toolbar__dialog-title">Dry-run</h2>
+                <p className="toolbar__dialog-subtitle">
+                  Validacao local sem executar acoes. Flow Health {dryRunReport.health.score}/100 ({dryRunReport.health.level}).
+                </p>
+              </div>
+              <button
+                className="toolbar__dialog-close"
+                onClick={() => setIsDryRunDialogOpen(false)}
+                title="Fechar"
+                type="button"
+              >
+                x
+              </button>
+            </div>
+
+            <div className="toolbar__asset-summary">
+              <div className="toolbar__asset-summary-title">{dryRunReport.summary}</div>
+              <div className="toolbar__asset-summary-copy">
+                {dryRunReport.canRun
+                  ? 'Nenhuma acao foi disparada. Use Executar apenas quando os passos fizerem sentido para o estado atual da janela.'
+                  : 'Revise os bloqueios antes de executar ou armar este flow.'}
+              </div>
+            </div>
+
+            <div className="toolbar__dryrun-layout">
+              <div className="toolbar__dryrun-list" role="list" aria-label="Passos do dry-run">
+                {dryRunReport.steps.length === 0 ? (
+                  <div className="toolbar__dialog-empty">Nenhum passo planejado.</div>
+                ) : dryRunReport.steps.map((step, index) => (
+                  <div key={`${step.nodeId}-${index}`} className={`toolbar__dryrun-step toolbar__dryrun-step--${String(step.status).toLowerCase()}`}>
+                    <div className="toolbar__dryrun-step-index">{index + 1}</div>
+                    <div className="toolbar__dryrun-step-copy">
+                      <strong>{step.displayName || step.typeId}</strong>
+                      <span>{step.message || step.typeId}</span>
+                      {step.requiresConfirmation && (
+                        <em>Pausa de confirmacao antes deste passo</em>
+                      )}
+                    </div>
+                    <span className="toolbar__dryrun-step-status">{step.status}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="toolbar__dryrun-side">
+                <div className="toolbar__asset-detail-card">
+                  <span className="toolbar__asset-detail-label">Problemas</span>
+                  <strong>{dryRunReport.health.issues.length}</strong>
+                  <span className="toolbar__asset-detail-copy">
+                    {dryRunReport.health.issues[0]?.message ?? 'Nenhum problema critico encontrado.'}
+                  </span>
+                </div>
+                <div className="toolbar__asset-detail-card">
+                  <span className="toolbar__asset-detail-label">Sugestoes</span>
+                  <strong>{dryRunReport.health.suggestions.length}</strong>
+                  <span className="toolbar__asset-detail-copy">
+                    {dryRunReport.health.suggestions[0]?.title ?? 'Sem sugestoes adicionais.'}
+                  </span>
+                </div>
+                <div className="toolbar__asset-detail-card">
+                  <span className="toolbar__asset-detail-label">Checkpoints</span>
+                  <strong>{dryRunReport.checkpoints.length}</strong>
+                  <span className="toolbar__asset-detail-copy">
+                    {dryRunReport.checkpoints[0]?.message ?? 'Sem pausa obrigatoria.'}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="toolbar__dialog-actions">
+              <button
+                type="button"
+                className="toolbar__dialog-btn toolbar__dialog-btn--secondary"
+                onClick={() => setIsDryRunDialogOpen(false)}
+              >
+                Fechar
+              </button>
+              <button
+                type="button"
+                className="toolbar__dialog-btn toolbar__dialog-btn--primary"
+                onClick={() => { void runDryRun(); }}
+              >
+                Repetir dry-run
               </button>
             </div>
           </div>

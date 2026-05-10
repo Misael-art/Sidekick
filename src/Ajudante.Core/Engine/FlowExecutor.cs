@@ -11,6 +11,7 @@ public class FlowExecutor
 
     public int MaxStepsPerRun { get; set; } = 10_000;
     public int MaxRecursionDepth { get; set; } = 1_024;
+    public IFlowInvocationService? FlowInvocationService { get; set; }
 
     public event Action<string, NodeStatus>? NodeStatusChanged;
     public event Action<string, string>? LogMessage;
@@ -30,6 +31,7 @@ public class FlowExecutor
         _cts?.Dispose();
         _cts = new CancellationTokenSource();
         context ??= new FlowExecutionContext(flow, _cts.Token);
+        context.FlowInvocationService ??= FlowInvocationService;
 
         await ExecuteInternalAsync(flow, startNodeId, context, null, _cts.Token, isTriggerRun: false);
     }
@@ -41,6 +43,7 @@ public class FlowExecutor
         _cts = CancellationTokenSource.CreateLinkedTokenSource(externalCt);
 
         var context = new FlowExecutionContext(flow, _cts.Token);
+        context.FlowInvocationService = FlowInvocationService;
         context.SetNodeOutputs(triggerNodeId, triggerData);
 
         await ExecuteInternalAsync(flow, triggerNodeId, context, "triggered", _cts.Token, isTriggerRun: true);

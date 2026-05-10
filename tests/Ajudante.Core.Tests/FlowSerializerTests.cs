@@ -269,6 +269,22 @@ public class FlowSerializerTests : IDisposable
     }
 
     [Fact]
+    public async Task LoadAllAsync_IgnoresJsonFilesThatAreNotFlows()
+    {
+        await FlowSerializer.SaveAsync(new Flow { Id = "f1" }, Path.Combine(_tempDir, "flow.json"));
+        await File.WriteAllTextAsync(Path.Combine(_tempDir, "recipes.catalog.json"), """
+[
+  { "id": "recipe_1", "name": "Recipe" }
+]
+""");
+
+        var result = await FlowSerializer.LoadAllAsync(_tempDir);
+
+        Assert.Single(result);
+        Assert.Equal("f1", result[0].Id);
+    }
+
+    [Fact]
     public void Serialize_EnumValues_UseCamelCase()
     {
         var flow = new Flow

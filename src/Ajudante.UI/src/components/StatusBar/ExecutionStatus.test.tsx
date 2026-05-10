@@ -108,4 +108,34 @@ describe('ExecutionStatus', () => {
       root.unmount();
     });
   }, 15_000);
+
+  it('announces user messages to assistive technology', async () => {
+    const React = await import('react');
+    const { useAppStore } = await import('../../store/appStore');
+    const { default: ExecutionStatus } = await import('./ExecutionStatus');
+
+    useAppStore.setState({
+      userMessage: { type: 'success', text: 'Fluxo salvo com sucesso.' },
+      isLogsExpanded: false,
+      logs: [],
+    });
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(React.createElement(ExecutionStatus));
+    });
+
+    const message = container.querySelector('.exec-status__message');
+    expect(message).toBeTruthy();
+    expect(message?.getAttribute('role')).toBe('status');
+    expect(message?.getAttribute('aria-live')).toBe('polite');
+    expect(message?.textContent).toContain('Fluxo salvo com sucesso.');
+
+    await act(async () => {
+      root.unmount();
+    });
+  }, 15_000);
 });

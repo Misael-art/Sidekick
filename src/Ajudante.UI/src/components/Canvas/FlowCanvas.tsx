@@ -14,7 +14,8 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
-import type { FlowNodeData } from '../../bridge/types';
+import { sendCommand } from '../../bridge/bridge';
+import type { FlowNodeData, GuidedAutomationDraft, MacroRecordingSession } from '../../bridge/types';
 import type { StickyNoteData } from '../../bridge/flowConverter';
 import TriggerNode from '../Nodes/TriggerNode';
 import LogicNode from '../Nodes/LogicNode';
@@ -89,8 +90,14 @@ export default function FlowCanvas() {
   const toggleNodeDisabled = useFlowStore((s) => s.toggleNodeDisabled);
   const setUserMessage = useAppStore((s) => s.setUserMessage);
   const addLog = useAppStore((s) => s.addLog);
+  const setInspectorMode = useAppStore((s) => s.setInspectorMode);
   const capturedElement = useAppStore((s) => s.capturedElement);
   const capturedRegion = useAppStore((s) => s.capturedRegion);
+  const macroRecorderActive = useAppStore((s) => s.macroRecorderActive);
+  const setMacroRecorderActive = useAppStore((s) => s.setMacroRecorderActive);
+  const setMacroRecorderStatus = useAppStore((s) => s.setMacroRecorderStatus);
+  const guidedDraft = useAppStore((s) => s.guidedDraft);
+  const setGuidedDraft = useAppStore((s) => s.setGuidedDraft);
   const [pendingConnection, setPendingConnection] = useState<PendingConnection | null>(null);
   const selectedNode = nodes.find((node) => node.id === selectedNodeId) ?? null;
   const selectedStickyNote = stickyNotes.find((sticky) => sticky.id === selectedNodeId) ?? null;
@@ -289,6 +296,34 @@ export default function FlowCanvas() {
     });
   }, [contextMenu?.filter, nodeDefinitions]);
 
+  const recommendedDefinitions = useMemo(() => {
+    if (!contextMenu) {
+      return [];
+    }
+
+    const ids = new Set<string>();
+    if (capturedElement) {
+      ids.add('action.desktopClickElement');
+      ids.add('action.desktopWaitElement');
+      ids.add('action.desktopReadElementText');
+    }
+    if (capturedRegion) {
+      ids.add('action.clickImageMatch');
+    }
+    if (contextMenu.pendingConnection) {
+      ids.add('logic.delay');
+      ids.add('logic.ifElse');
+      ids.add('action.logMessage');
+    }
+    if (!contextMenu.pendingConnection && !contextMenu.insertEdgeId) {
+      ids.add('trigger.manualStart');
+      ids.add('trigger.scheduleTime');
+      ids.add('trigger.processEvent');
+    }
+
+    return nodeDefinitions.filter((definition) => ids.has(definition.typeId)).slice(0, 6);
+  }, [capturedElement, capturedRegion, contextMenu, nodeDefinitions]);
+
   const miraOverrides = useMemo(() => createMiraSelectorOverrides(capturedElement), [capturedElement]);
   const snipOverrides = useMemo(() => createSnipTemplateOverrides(capturedRegion), [capturedRegion]);
 
@@ -299,6 +334,72 @@ export default function FlowCanvas() {
     }),
     [],
   );
+
+  const startMiraFromEmptyState = useCallback(() => {
+    setInspectorMode('mira');
+    setUserMessage({ type: 'info', text: 'Mira ativo: clique no elemento que deseja capturar.' });
+    void sendCommand('platform', 'startMira', {}).catch((error) => {
+      const message = error instanceof Error ? error.message : 'Nao foi possivel iniciar o Mira.';
+      setInspectorMode('none');
+      setUserMessage({ type: 'error', text: message });
+      addLog({ timestamp: new Date().toISOString(), level: 'error', message });
+    });
+  }, [addLog, setInspectorMode, setUserMessage]);
+
+  const startFromScratch = useCallback(() => {
+    const manualStart = nodeDefinitions.find((definition) => definition.typeId === 'trigger.manualStart')
+      ?? nodeDefinitions.find((definition) => definition.category === 'Trigger');
+    if (!manualStart) {
+      setUserMessage({ type: 'error', text: 'Nenhum gatilho disponivel para iniciar o flow.' });
+      return;
+    }
+
+    addNode(manualStart.typeId, { x: 120, y: 120 });
+    setUserMessage({ type: 'success', text: 'Inicio manual criado. Conecte o proximo passo pelo handle de saida.' });
+  }, [addNode, nodeDefinitions, setUserMessage]);
+
+  const toggleMacroRecorder = useCallback(async () => {
+    try {
+      if (!macroRecorderActive) {
+        const session = await sendCommand<MacroRecordingSession & { started?: boolean }>('platform', 'startMacroRecorder', {
+          goal: 'Rascunho guiado',
+          captureMouse: true,
+          captureKeyboard: true,
+          captureText: true,
+          captureSensitiveText: false,
+          stopHotkey: 'Ctrl+Shift+F12',
+          maxEvents: 1000,
+          idlePauseMs: 1500,
+        });
+        setMacroRecorderActive(true);
+        setMacroRecorderStatus(session);
+        setUserMessage({ type: 'info', text: 'Recorder global ativo. Use Ctrl+Shift+F12 ou pare aqui para revisar a gravacao.' });
+        return;
+      }
+
+      const draft = await sendCommand<GuidedAutomationDraft>('platform', 'stopMacroRecorder', {});
+      setMacroRecorderActive(false);
+      setMacroRecorderStatus({
+        sessionId: draft.sessionId ?? '',
+        startedAt: draft.startedAt ?? new Date().toISOString(),
+        stoppedAt: draft.stoppedAt ?? new Date().toISOString(),
+        status: 'stopped',
+        eventCount: draft.events.length,
+        privacyMode: draft.events.some((event) => event.privacy?.isRedacted) ? 'redactSensitive' : 'default',
+      });
+      setGuidedDraft(draft);
+      if (draft?.savedInspectionAsset) {
+        useAppStore.getState().upsertInspectionAsset(draft.savedInspectionAsset);
+      }
+      setUserMessage({ type: 'success', text: 'Rascunho gravado. Revise a timeline antes de aplicar ao canvas.' });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Nao foi possivel controlar o gravador.';
+      setMacroRecorderActive(false);
+      setMacroRecorderStatus(null);
+      setUserMessage({ type: 'error', text: message });
+      addLog({ timestamp: new Date().toISOString(), level: 'error', message });
+    }
+  }, [addLog, macroRecorderActive, setGuidedDraft, setMacroRecorderActive, setMacroRecorderStatus, setUserMessage]);
 
   const resolveClientPoint = useCallback((event: CanvasPointerLikeEvent): { x: number; y: number } | null => {
     if ('clientX' in event && 'clientY' in event) {
@@ -578,6 +679,41 @@ export default function FlowCanvas() {
           }}
         />
       </ReactFlow>
+      {nodes.length === 0 && stickyNotes.length === 0 && (
+        <div className="flow-empty-state" role="region" aria-label="Assistente de Automacao">
+          <div className="flow-empty-state__eyebrow">Assistente de Automacao</div>
+          <h2 className="flow-empty-state__title">Crie o primeiro passo sem decorar nodes</h2>
+          <p className="flow-empty-state__copy">
+            Capture um alvo, use uma receita ou comece por um gatilho manual. O flow nasce desarmado e pode passar por dry-run antes de executar.
+          </p>
+          <div className="flow-empty-state__actions">
+            <button
+              type="button"
+              className="flow-empty-state__btn"
+              onClick={() => setUserMessage({ type: 'info', text: 'Abra o Marketplace na toolbar para escolher uma receita local segura.' })}
+            >
+              Usar receita
+            </button>
+            <button type="button" className="flow-empty-state__btn" onClick={startMiraFromEmptyState}>
+              Capturar elemento
+            </button>
+            <button type="button" className="flow-empty-state__btn" onClick={() => { void toggleMacroRecorder(); }}>
+              {macroRecorderActive ? 'Parar gravacao' : 'Gravar passos'}
+            </button>
+            <button type="button" className="flow-empty-state__btn flow-empty-state__btn--primary" onClick={startFromScratch}>
+              Comecar do zero
+            </button>
+          </div>
+          {guidedDraft && (
+            <div className="flow-empty-state__draft">
+              <span>{guidedDraft.displayName} aberto para revisao</span>
+              <button type="button" onClick={() => setUserMessage({ type: 'info', text: 'Revise a timeline no painel Recorder antes de aplicar.' })}>
+                Revisar timeline
+              </button>
+            </div>
+          )}
+        </div>
+      )}
       {nodeContextMenu && (
         <div
           className="flow-mini-menu"
@@ -723,6 +859,23 @@ export default function FlowCanvas() {
                   <small>{capturedRegion.bounds.width} x {capturedRegion.bounds.height} px visual fallback</small>
                 </button>
               )}
+            </div>
+          )}
+
+          {recommendedDefinitions.length > 0 && (
+            <div className="flow-context-menu__section">
+              <div className="flow-context-menu__section-title">Recomendados agora</div>
+              {recommendedDefinitions.map((definition) => (
+                <button
+                  key={definition.typeId}
+                  type="button"
+                  className="flow-context-menu__quick"
+                  onClick={() => addNodeFromContext(definition.typeId)}
+                >
+                  <span>{definition.displayName}</span>
+                  <small>{definition.description}</small>
+                </button>
+              ))}
             </div>
           )}
 

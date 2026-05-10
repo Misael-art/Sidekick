@@ -47,8 +47,19 @@ public static class FlowSerializer
 
         foreach (var file in Directory.GetFiles(directoryPath, "*.json"))
         {
-            var flow = await LoadAsync(file);
-            if (flow != null) flows.Add(flow);
+            try
+            {
+                var flow = await LoadAsync(file);
+                if (flow != null) flows.Add(flow);
+            }
+            catch (JsonException)
+            {
+                // A directory may contain non-flow JSON sidecars such as recipe catalogs.
+            }
+            catch (NotSupportedException)
+            {
+                // Keep flow listing resilient when a JSON file is not shaped like a Flow.
+            }
         }
 
         return flows;

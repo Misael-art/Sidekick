@@ -1,4 +1,4 @@
-import { memo, useState, useCallback, useEffect, useRef, type CSSProperties } from 'react';
+import { memo, useState, useCallback, useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
 import { NodeResizer, type NodeProps } from '@xyflow/react';
 import type { StickyNoteData } from '../../bridge/flowConverter';
 import { useFlowStore } from '../../store/flowStore';
@@ -13,6 +13,100 @@ const COLORS: Record<string, { bg: string; border: string; text: string }> = {
 
 const COLOR_KEYS = Object.keys(COLORS);
 
+function isSafeLocalImagePath(path: string): boolean {
+  const normalized = path.trim().replace(/\\/g, '/');
+  if (!normalized || normalized.startsWith('http://') || normalized.startsWith('https://') || normalized.startsWith('data:')) {
+    return false;
+  }
+
+  return normalized.startsWith('./')
+    || normalized.startsWith('../')
+    || normalized.startsWith('assets/')
+    || normalized.startsWith('/assets/');
+}
+
+function renderInlineMarkdown(text: string): ReactNode[] {
+  const nodes: ReactNode[] = [];
+  const pattern = /(\*\*([^*]+)\*\*|\*([^*]+)\*|\[([^\]]+)\]\(([^)]+)\))/g;
+  let cursor = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = pattern.exec(text)) !== null) {
+    if (match.index > cursor) {
+      nodes.push(text.slice(cursor, match.index));
+    }
+
+    if (match[2]) {
+      nodes.push(<strong key={`strong-${match.index}`}>{match[2]}</strong>);
+    } else if (match[3]) {
+      nodes.push(<em key={`em-${match.index}`}>{match[3]}</em>);
+    } else if (match[4] && match[5]) {
+      const href = match[5].trim();
+      if (href.startsWith('javascript:')) {
+        nodes.push(match[4]);
+      } else {
+        nodes.push(
+          <a key={`link-${match.index}`} href={href} target="_blank" rel="noreferrer">
+            {match[4]}
+          </a>,
+        );
+      }
+    }
+    cursor = match.index + match[0].length;
+  }
+
+  if (cursor < text.length) {
+    nodes.push(text.slice(cursor));
+  }
+
+  return nodes;
+}
+
+function renderSafeMarkdown(markdown: string): ReactNode {
+  const lines = markdown.split(/\r?\n/);
+  const rendered: ReactNode[] = [];
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i].trim();
+    if (!line) {
+      rendered.push(<div key={`gap-${i}`} style={{ height: 4 }} />);
+      continue;
+    }
+
+    const imageMatch = line.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
+    if (imageMatch) {
+      const alt = imageMatch[1];
+      const src = imageMatch[2].trim();
+      if (isSafeLocalImagePath(src)) {
+        rendered.push(<img key={`img-${i}`} src={src} alt={alt} className="sticky-note__markdown-image" />);
+      } else {
+        rendered.push(<p key={`img-warn-${i}`}>[imagem bloqueada por seguranca]</p>);
+      }
+      continue;
+    }
+
+    if (line.startsWith('- ') || line.startsWith('* ')) {
+      const items: ReactNode[] = [];
+      let j = i;
+      while (j < lines.length) {
+        const itemLine = lines[j].trim();
+        if (!(itemLine.startsWith('- ') || itemLine.startsWith('* '))) {
+          break;
+        }
+        items.push(<li key={`li-${j}`}>{renderInlineMarkdown(itemLine.slice(2))}</li>);
+        j += 1;
+      }
+      rendered.push(<ul key={`ul-${i}`}>{items}</ul>);
+      i = j - 1;
+      continue;
+    }
+
+    rendered.push(<p key={`p-${i}`}>{renderInlineMarkdown(line)}</p>);
+  }
+
+  return <div className="sticky-note__markdown">{rendered}</div>;
+}
+
 function StickyNoteImpl({ id, data, selected }: NodeProps) {
   const sticky = data as StickyNoteData;
   const updateSticky = useFlowStore((s) => s.updateStickyNote);
@@ -22,11 +116,13 @@ function StickyNoteImpl({ id, data, selected }: NodeProps) {
   const [editingBody, setEditingBody] = useState(false);
   const [draftTitle, setDraftTitle] = useState(sticky.title);
   const [draftBody, setDraftBody] = useState(sticky.body);
+  const [draftFormat, setDraftFormat] = useState<'plain' | 'markdown'>(sticky.contentFormat === 'markdown' ? 'markdown' : 'plain');
   const titleRef = useRef<HTMLInputElement>(null);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => setDraftTitle(sticky.title), [sticky.title]);
   useEffect(() => setDraftBody(sticky.body), [sticky.body]);
+  useEffect(() => setDraftFormat(sticky.contentFormat === 'markdown' ? 'markdown' : 'plain'), [sticky.contentFormat]);
 
   useEffect(() => {
     if (editingTitle) titleRef.current?.focus();
@@ -43,9 +139,12 @@ function StickyNoteImpl({ id, data, selected }: NodeProps) {
   }, [draftTitle, sticky.title, updateSticky, id]);
 
   const commitBody = useCallback(() => {
-    if (draftBody !== sticky.body) updateSticky(id, { body: draftBody });
+    const currentFormat = sticky.contentFormat === 'markdown' ? 'markdown' : 'plain';
+    if (draftBody !== sticky.body || draftFormat !== currentFormat) {
+      updateSticky(id, { body: draftBody, contentFormat: draftFormat });
+    }
     setEditingBody(false);
-  }, [draftBody, sticky.body, updateSticky, id]);
+  }, [draftBody, draftFormat, sticky.body, sticky.contentFormat, updateSticky, id]);
 
   const cycleColor = useCallback(() => {
     const idx = COLOR_KEYS.indexOf(sticky.color);
@@ -142,6 +241,28 @@ function StickyNoteImpl({ id, data, selected }: NodeProps) {
           />
           <button
             type="button"
+            onClick={() => {
+              const next = draftFormat === 'plain' ? 'markdown' : 'plain';
+              setDraftFormat(next);
+              updateSticky(id, { contentFormat: next });
+            }}
+            title={draftFormat === 'markdown' ? 'Modo markdown ativo' : 'Modo texto simples ativo'}
+            aria-label="Alternar formato da nota"
+            className="sticky-note__format-btn"
+            style={{
+              border: 'none',
+              background: 'transparent',
+              cursor: 'pointer',
+              color: palette.text,
+              opacity: 0.85,
+              fontSize: 11,
+              fontWeight: 700,
+            }}
+          >
+            {draftFormat === 'markdown' ? 'MD' : 'TXT'}
+          </button>
+          <button
+            type="button"
             onClick={() => removeSticky(id)}
             title="Remover nota"
             aria-label="Remover nota"
@@ -174,7 +295,7 @@ function StickyNoteImpl({ id, data, selected }: NodeProps) {
                 setEditingBody(false);
               }
             }}
-            placeholder="Resultado esperado, contexto, dica..."
+            placeholder={draftFormat === 'markdown' ? 'Use markdown seguro: **negrito**, *italico*, [link](url), ![img](./assets/x.png)' : 'Resultado esperado, contexto, dica...'}
             className="sticky-note__body-input nodrag"
             style={{
               flex: 1,
@@ -207,7 +328,9 @@ function StickyNoteImpl({ id, data, selected }: NodeProps) {
               padding: 0,
             }}
           >
-            {sticky.body || <span style={{ opacity: 0.55 }}>Resultado esperado, contexto, dica...</span>}
+            {sticky.body
+              ? (sticky.contentFormat === 'markdown' ? renderSafeMarkdown(sticky.body) : sticky.body)
+              : <span style={{ opacity: 0.55 }}>Resultado esperado, contexto, dica...</span>}
           </button>
         )}
       </div>

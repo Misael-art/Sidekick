@@ -127,6 +127,125 @@ export interface FlowValidationResult {
   issues: ValidationIssue[];
 }
 
+export type SecuritySeverity = 'Info' | 'Warning' | 'Block' | 'info' | 'warning' | 'block';
+
+export interface SecurityIssue {
+  code: string;
+  severity: SecuritySeverity;
+  message: string;
+  nodeId?: string;
+}
+
+export interface SecurityReport {
+  isSafeToRun: boolean;
+  issues: SecurityIssue[];
+  riskLevel: 'low' | 'medium' | 'high' | string;
+  manifestHash: string;
+}
+
+export interface SecurityAck {
+  manifestHash: string;
+  acceptedAt?: string;
+}
+
+export interface SecuritySettings {
+  allowHighRiskExecution: boolean;
+}
+
+export type FlowHealthSeverity = 'Info' | 'Warning' | 'Error' | 'info' | 'warning' | 'error';
+
+export interface FlowHealthIssue {
+  code: string;
+  severity: FlowHealthSeverity;
+  message: string;
+  nodeId?: string | null;
+  propertyId?: string | null;
+  action?: string | null;
+}
+
+export interface FlowHealthSuggestion {
+  id: string;
+  title: string;
+  detail: string;
+  action: string;
+  priority: 'high' | 'medium' | 'low' | string;
+  nodeId?: string | null;
+}
+
+export interface FlowHealthReport {
+  score: number;
+  level: string;
+  canRunWithoutAttention: boolean;
+  generatedAt?: string;
+  issues: FlowHealthIssue[];
+  suggestions: FlowHealthSuggestion[];
+}
+
+export type DryRunStepStatus = 'Ready' | 'Warning' | 'Blocked' | 'ready' | 'warning' | 'blocked';
+
+export interface DryRunNodeStep {
+  nodeId: string;
+  typeId: string;
+  displayName: string;
+  status: DryRunStepStatus;
+  requiresConfirmation: boolean;
+  isDestructive?: boolean;
+  message?: string;
+}
+
+export interface DryRunCheckpoint {
+  kind: string;
+  message: string;
+  nodeId?: string | null;
+}
+
+export interface FlowDryRunReport {
+  canRun: boolean;
+  summary: string;
+  validation: FlowValidationResult;
+  security: SecurityReport;
+  health: FlowHealthReport;
+  steps: DryRunNodeStep[];
+  checkpoints: DryRunCheckpoint[];
+}
+
+export interface RunnableFlowSummary {
+  flowId: string;
+  name: string;
+  category: string;
+  riskLevel: 'low' | 'medium' | 'high' | string;
+  isPortfolio: boolean;
+  requiresLocalConfirmation: boolean;
+}
+
+export interface FlowInvocationRequest {
+  flowId: string;
+  source: string;
+  requestedBy: string;
+  allowHighRisk: boolean;
+  correlationId?: string;
+  currentFlowId?: string | null;
+  allowedFlowIds?: string[];
+}
+
+export type FlowInvocationStatus =
+  | 'queued'
+  | 'blocked'
+  | 'needsConfiguration'
+  | 'requiresLocalConfirmation'
+  | 'notFound'
+  | 'invalid'
+  | 'unavailable';
+
+export interface FlowInvocationResult {
+  status: FlowInvocationStatus | string;
+  flowId: string;
+  flowName: string;
+  message: string;
+  validation?: FlowValidationResult | null;
+  security?: SecurityReport | null;
+}
+
 // ── Runtime Types ─────────────────────────────────────────────────
 
 export type NodeStatus = 'Idle' | 'Running' | 'Completed' | 'Error' | 'Skipped';
@@ -204,6 +323,11 @@ export interface ImageTemplateValue {
   assetId?: string;
   displayName?: string;
   imagePath?: string;
+}
+
+export interface BrowsePathResponse {
+  path?: string | null;
+  cancelled?: boolean;
 }
 
 export interface InspectionAssetBounds {
@@ -364,11 +488,158 @@ export interface InspectionAssetTestResult {
   strength?: string;
 }
 
+export interface SelectorDiagnosticResult {
+  testedAt?: string;
+  found: boolean;
+  strength: 'forte' | 'media' | 'fraca' | 'inexistente' | string;
+  reason: string;
+  fallbackRecommendation: string;
+  repairAction?: 'repairWithLatestCapture' | 'none' | string;
+  bounds?: InspectionAssetBounds | null;
+  selector?: {
+    windowTitle?: string | null;
+    automationId?: string | null;
+    name?: string | null;
+    controlType?: string | null;
+    processName?: string | null;
+    processPath?: string | null;
+    titleMatch?: string | null;
+  };
+}
+
 export interface CapturedRegion {
   image: string;
   bounds: SnipAssetBounds;
   asset?: SnipAsset | null;
   assetSaveError?: string | null;
+}
+
+export interface MacroRecorderOptions {
+  captureMouse?: boolean;
+  captureKeyboard?: boolean;
+  captureText?: boolean;
+  captureSensitiveText?: boolean;
+  stopHotkey?: string;
+  targetProcessName?: string | null;
+  maxEvents?: number;
+  idlePauseMs?: number;
+  goal?: string | null;
+}
+
+export interface MacroRecordingSession {
+  sessionId: string;
+  startedAt: string;
+  stoppedAt?: string | null;
+  status: 'idle' | 'recording' | 'stopped' | 'cancelled' | string;
+  eventCount: number;
+  privacyMode: string;
+  goal?: string | null;
+}
+
+export interface RecorderWindowContext {
+  windowTitle?: string | null;
+  processName?: string | null;
+  processPath?: string | null;
+  processId?: number;
+  windowHandle?: number;
+}
+
+export interface RecorderElementContext {
+  automationId?: string | null;
+  name?: string | null;
+  className?: string | null;
+  controlType?: string | null;
+  windowTitle?: string | null;
+  processName?: string | null;
+  processPath?: string | null;
+  processId?: number;
+  bounds?: InspectionAssetBounds | null;
+  windowBounds?: InspectionAssetBounds | null;
+  relativeX?: number;
+  relativeY?: number;
+  normalizedX?: number;
+  normalizedY?: number;
+  absoluteX?: number;
+  absoluteY?: number;
+  selectorStrength?: string;
+  selectorStrategy?: string;
+}
+
+export interface RecorderMousePayload {
+  x?: number;
+  y?: number;
+  startX?: number;
+  startY?: number;
+  endX?: number;
+  endY?: number;
+  delta?: number;
+  button?: string;
+}
+
+export interface RecorderKeyboardPayload {
+  key?: string;
+  text?: string;
+  modifiers?: string[];
+}
+
+export interface RecorderTextPayload {
+  value?: string | null;
+  length: number;
+  isRedacted?: boolean;
+}
+
+export interface RecorderPrivacyInfo {
+  isRedacted: boolean;
+  mode: string;
+  reason?: string | null;
+}
+
+export interface RecorderEvent {
+  id: string;
+  kind: string;
+  timestamp: string;
+  label?: string;
+  window?: RecorderWindowContext | null;
+  element?: RecorderElementContext | Partial<CapturedElement> | null;
+  mouse?: RecorderMousePayload | null;
+  keyboard?: RecorderKeyboardPayload | null;
+  text?: RecorderTextPayload | null;
+  privacy?: RecorderPrivacyInfo;
+  confidence?: number;
+  warnings?: string[];
+}
+
+export interface RecorderSuggestedNode {
+  id: string;
+  typeId: string;
+  position: { x: number; y: number };
+  properties: Record<string, unknown>;
+  confidence?: number;
+  warnings?: string[];
+}
+
+export interface RecorderSuggestedConnection {
+  id: string;
+  sourceNodeId: string;
+  sourcePort: string;
+  targetNodeId: string;
+  targetPort: string;
+}
+
+export interface GuidedAutomationDraft {
+  id: string;
+  sessionId?: string;
+  displayName: string;
+  isDraft: boolean;
+  startedAt?: string;
+  stoppedAt?: string;
+  events: RecorderEvent[];
+  suggestedNodes?: RecorderSuggestedNode[];
+  suggestedConnections?: RecorderSuggestedConnection[];
+  savedInspectionAsset?: InspectionAsset | null;
+  warnings?: string[];
+  limitations?: string[];
+  score?: number;
 }
 
 // ── Flow Runtime Types ───────────────────────────────────────────

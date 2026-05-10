@@ -1,6 +1,8 @@
+using System.Globalization;
 using Ajudante.Core;
 using Ajudante.Core.Engine;
 using Ajudante.Core.Interfaces;
+using Ajudante.Nodes.Common;
 
 namespace Ajudante.Nodes.Logic;
 
@@ -12,7 +14,8 @@ namespace Ajudante.Nodes.Logic;
     Color = "#EAB308")]
 public class DelayNode : ILogicNode
 {
-    private int _milliseconds = 1000;
+    private Dictionary<string, object?> _properties = new(StringComparer.OrdinalIgnoreCase);
+    private int _fallbackMilliseconds = 1000;
 
     public string Id { get; set; } = "";
 
@@ -46,13 +49,25 @@ public class DelayNode : ILogicNode
 
     public void Configure(Dictionary<string, object?> properties)
     {
-        if (properties.TryGetValue("milliseconds", out var ms))
-            _milliseconds = Convert.ToInt32(ms);
+        _properties = new Dictionary<string, object?>(properties, StringComparer.OrdinalIgnoreCase);
+        var raw = NodeValueHelper.GetString(_properties, "milliseconds", "1000");
+        if (int.TryParse(raw.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) && parsed >= 0)
+            _fallbackMilliseconds = parsed;
+        else
+            _fallbackMilliseconds = 1000;
     }
 
     public async Task<NodeResult> ExecuteAsync(FlowExecutionContext context, CancellationToken ct)
     {
-        await Task.Delay(_milliseconds, ct);
+        var raw = NodeValueHelper.GetString(
+            _properties,
+            "milliseconds",
+            _fallbackMilliseconds.ToString(CultureInfo.InvariantCulture));
+        var resolved = context.ResolveTemplate(raw).Trim();
+        if (!int.TryParse(resolved, NumberStyles.Integer, CultureInfo.InvariantCulture, out var ms) || ms < 0)
+            ms = _fallbackMilliseconds;
+
+        await Task.Delay(ms, ct);
         return NodeResult.Ok("out");
     }
 }

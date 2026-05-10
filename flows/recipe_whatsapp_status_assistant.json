@@ -1,245 +1,384 @@
 {
   "id": "recipe-whatsapp-status-assistant",
-  "name": "Recipe - WhatsApp Status Assistant (Draft Safe)",
-  "version": 1,
+  "name": "Recipe - WhatsApp Assistant v2",
+  "version": 2,
   "variables": [
     {
-      "name": "contactName",
+      "name": "whatsappOwnerPhone",
       "type": "String",
-      "default": "Equipe Operacoes"
+      "default": "5511959766061"
     },
     {
-      "name": "customText",
+      "name": "whatsappWebUrl",
       "type": "String",
-      "default": "Status automatico Sidekick"
+      "default": "https://web.whatsapp.com/"
     },
     {
-      "name": "allowSendSensitiveData",
-      "type": "Boolean",
-      "default": false
+      "name": "allowedCommands",
+      "type": "String",
+      "default": "ipconfig,whoami,hostname,systeminfo,ver"
     },
     {
-      "name": "sendMode",
+      "name": "runnableFlowAllowlist",
       "type": "String",
-      "default": "draftOnly"
+      "default": "portfolio-*"
     },
     {
-      "name": "lastDownload",
+      "name": "screenshotFolder",
       "type": "String",
-      "default": "desconhecido"
+      "default": "%USERPROFILE%\\Pictures\\Sidekick"
+    },
+    {
+      "name": "lastChatMessage",
+      "type": "String",
+      "default": "4"
+    },
+    {
+      "name": "whatsappResponseMessage",
+      "type": "String",
+      "default": ""
     }
   ],
   "nodes": [
     {
       "id": "start",
       "typeId": "trigger.manualStart",
-      "position": { "x": 80, "y": 220 },
+      "position": { "x": 80, "y": 120 },
       "properties": {}
     },
     {
       "id": "open-whatsapp",
       "typeId": "action.browserOpenUrl",
-      "position": { "x": 320, "y": 220 },
+      "position": { "x": 320, "y": 120 },
       "properties": {
-        "url": "https://web.whatsapp.com/",
-        "browserPath": ""
+        "url": "{{whatsappWebUrl}}"
       }
     },
     {
       "id": "wait-login",
       "typeId": "action.browserWaitElement",
-      "position": { "x": 600, "y": 220 },
-      "properties": {
-        "windowTitle": "WhatsApp",
-        "automationId": "",
-        "elementName": "Search",
-        "controlType": "edit",
-        "timeoutMs": 120000
-      }
-    },
-    {
-      "id": "compose-message",
-      "typeId": "logic.textTemplate",
-      "position": { "x": 1720, "y": 120 },
-      "properties": {
-        "template": "Status Sidekick\\nData/Hora: {{var:now}}\\nUltimo download: {{lastDownload}}\\nCPU: {{cpu-command.stdout}}\\nDisco: {{disk-command.stdout}}\\nRede/Wi-Fi: {{wifi-command.stdout}}\\nGPU/Temperatura: indisponivel sem fonte segura configurada\\nMensagem customizada: {{customText}}\\nEnvio automatico bloqueado sem confirmacao explicita.",
-        "storeInVariable": "whatsappDraftMessage"
-      }
-    },
-    {
-      "id": "search-contact",
-      "typeId": "action.browserType",
-      "position": { "x": 880, "y": 220 },
+      "position": { "x": 600, "y": 120 },
       "properties": {
         "windowTitle": "WhatsApp",
         "windowTitleMatch": "contains",
+        "automationId": "",
         "elementName": "Search",
         "controlType": "edit",
-        "text": "{{contactName}}",
-        "timeoutMs": 7000
+        "timeoutMs": 120000,
+        "storeInVariable": "whatsappLoggedIn"
       }
     },
     {
-      "id": "safety-gate",
-      "typeId": "logic.conditionGroup",
-      "position": { "x": 1160, "y": 220 },
+      "id": "open-self-chat",
+      "typeId": "action.browserOpenUrl",
+      "position": { "x": 880, "y": 120 },
       "properties": {
-        "mode": "ALL",
-        "conditionsJson": "[{\"left\":\"{{allowSendSensitiveData}}\",\"operator\":\"equals\",\"right\":\"true\"},{\"left\":\"{{sendMode}}\",\"operator\":\"equals\",\"right\":\"sendAfterConfirm\"}]"
+        "url": "https://web.whatsapp.com/send?phone={{whatsappOwnerPhone}}"
       }
     },
     {
-      "id": "cpu-command",
-      "typeId": "action.consoleCommand",
-      "position": { "x": 1420, "y": 80 },
+      "id": "wait-composer",
+      "typeId": "action.browserWaitElement",
+      "position": { "x": 1160, "y": 120 },
       "properties": {
-        "shell": "powershell",
-        "command": "Get-CimInstance Win32_Processor | Select-Object -ExpandProperty LoadPercentage",
-        "arguments": "",
-        "workingDirectory": "",
-        "timeoutMs": 12000,
-        "captureOutput": true,
-        "failOnNonZeroExit": false,
-        "storeStdoutInVariable": "cpuStatus",
-        "storeStderrInVariable": "cpuError",
-        "storeExitCodeInVariable": "cpuExitCode"
+        "windowTitle": "WhatsApp",
+        "windowTitleMatch": "contains",
+        "automationId": "",
+        "elementName": "Type a message",
+        "controlType": "edit",
+        "timeoutMs": 60000,
+        "storeInVariable": "whatsappComposerReady"
       }
     },
     {
-      "id": "disk-command",
-      "typeId": "action.consoleCommand",
-      "position": { "x": 1420, "y": 150 },
+      "id": "list-flows-start",
+      "typeId": "action.listRunnableFlows",
+      "position": { "x": 1440, "y": 120 },
       "properties": {
-        "shell": "powershell",
-        "command": "Get-CimInstance Win32_LogicalDisk -Filter \\\"DriveType=3\\\" | Select-Object DeviceID,FreeSpace,Size",
-        "arguments": "",
-        "workingDirectory": "",
-        "timeoutMs": 12000,
-        "captureOutput": true,
-        "failOnNonZeroExit": false
+        "allowedFlowIds": "{{runnableFlowAllowlist}}",
+        "includeHighRisk": true,
+        "startNumber": 10,
+        "storeMenuInVariable": "runnableFlowsMenu",
+        "storeCatalogInVariable": "runnableFlowsCatalog"
       }
     },
     {
-      "id": "wifi-command",
+      "id": "compose-menu",
+      "typeId": "logic.textTemplate",
+      "position": { "x": 1720, "y": 120 },
+      "properties": {
+        "template": "Ola, eu sou o Sidekick local. Escolha uma opcao:\\n1 - Enviar print da tela\\n2 <comando> - Executar comando permitido\\n3 - Informacoes do sistema\\n4 - Atualizar lista de flows do portfolio\\n{{runnableFlowsMenu}}\\n0 - Desarmar/parar pelo Sidekick\\n\\nComandos permitidos: {{allowedCommands}}",
+        "storeInVariable": "whatsappResponseMessage"
+      }
+    },
+    {
+      "id": "type-menu",
+      "typeId": "action.browserType",
+      "position": { "x": 2000, "y": 120 },
+      "properties": {
+        "windowTitle": "WhatsApp",
+        "windowTitleMatch": "contains",
+        "automationId": "",
+        "elementName": "Type a message",
+        "controlType": "edit",
+        "text": "{{whatsappResponseMessage}}",
+        "clearExisting": false,
+        "timeoutMs": 10000
+      }
+    },
+    {
+      "id": "send-menu",
+      "typeId": "action.keyboardPress",
+      "position": { "x": 2280, "y": 120 },
+      "properties": {
+        "key": "Return",
+        "modifiers": "None"
+      }
+    },
+    {
+      "id": "watch-message",
+      "typeId": "trigger.desktopElementTextChanged",
+      "position": { "x": 80, "y": 440 },
+      "properties": {
+        "windowTitle": "WhatsApp",
+        "windowTitleMatch": "contains",
+        "processName": "",
+        "processPath": "",
+        "automationId": "",
+        "elementName": "message-in",
+        "controlType": "text",
+        "timeoutMs": 1000,
+        "intervalMs": 1500,
+        "cooldownMs": 1500,
+        "fireInitial": false
+      }
+    },
+    {
+      "id": "list-flows-command",
+      "typeId": "action.listRunnableFlows",
+      "position": { "x": 360, "y": 440 },
+      "properties": {
+        "allowedFlowIds": "{{runnableFlowAllowlist}}",
+        "includeHighRisk": true,
+        "startNumber": 10,
+        "storeMenuInVariable": "runnableFlowsMenu",
+        "storeCatalogInVariable": "runnableFlowsCatalog"
+      }
+    },
+    {
+      "id": "route-command",
+      "typeId": "logic.chatMenuRouter",
+      "position": { "x": 640, "y": 440 },
+      "properties": {
+        "message": "{{watch-message.newText}}",
+        "allowedCommands": "{{allowedCommands}}",
+        "flowMenuStartNumber": 10,
+        "flowCatalogJson": "{{runnableFlowsCatalog}}",
+        "storeIntentInVariable": "chatIntent",
+        "storeCommandInVariable": "requestedCommand",
+        "storeFlowIdInVariable": "requestedFlowId",
+        "storeReasonInVariable": "chatRouteReason"
+      }
+    },
+    {
+      "id": "capture-screen",
+      "typeId": "action.captureScreenshot",
+      "position": { "x": 960, "y": 280 },
+      "properties": {
+        "target": "fullDesktop",
+        "outputPath": "",
+        "outputFolder": "{{screenshotFolder}}",
+        "filenameTemplate": "sidekick_whatsapp_{{timestamp}}",
+        "format": "png",
+        "quality": 90,
+        "delayMs": 250,
+        "includeCursor": true
+      }
+    },
+    {
+      "id": "compose-screenshot-response",
+      "typeId": "logic.textTemplate",
+      "position": { "x": 1280, "y": 280 },
+      "properties": {
+        "template": "Print capturado localmente: {{capture-screen.filePath}}. Envio de midia automatico pelo WhatsApp Web ainda exige revisao local.",
+        "storeInVariable": "whatsappResponseMessage"
+      }
+    },
+    {
+      "id": "run-command",
       "typeId": "action.consoleCommand",
-      "position": { "x": 1420, "y": 220 },
+      "position": { "x": 960, "y": 420 },
       "properties": {
         "shell": "cmd",
-        "command": "netsh",
-        "arguments": "wlan show interfaces",
+        "command": "{{requestedCommand}}",
+        "arguments": "",
         "workingDirectory": "",
-        "timeoutMs": 12000,
+        "timeoutMs": 15000,
         "captureOutput": true,
-        "failOnNonZeroExit": false
+        "failOnNonZeroExit": false,
+        "storeStdoutInVariable": "commandStdout",
+        "storeStderrInVariable": "commandStderr",
+        "storeExitCodeInVariable": "commandExitCode"
       }
     },
     {
-      "id": "draft-only-log",
-      "typeId": "action.logMessage",
-      "position": { "x": 1720, "y": 320 },
-      "properties": {
-        "message": "WhatsApp draft mode: mensagem montada, envio automatico NAO permitido. Usuario deve revisar e confirmar manualmente no WhatsApp Web.",
-        "level": "warning"
-      }
-    },
-    {
-      "id": "send-after-confirm-log",
-      "typeId": "action.logMessage",
-      "position": { "x": 1980, "y": 120 },
-      "properties": {
-        "message": "Send mode habilitado com consentimento explicito (sendAfterConfirm + allowSendSensitiveData=true). Ainda exige confirmacao humana antes do Enter final.",
-        "level": "info"
-      }
-    },
-    {
-      "id": "compose-lite",
+      "id": "compose-command-response",
       "typeId": "logic.textTemplate",
-      "position": { "x": 1420, "y": 320 },
+      "position": { "x": 1280, "y": 420 },
       "properties": {
-        "template": "Status Sidekick\\nData/Hora: {{var:now}}\\nMensagem customizada: {{customText}}\\nDados sensiveis bloqueados (allowSendSensitiveData=false).",
-        "storeInVariable": "whatsappDraftMessage"
+        "template": "Comando executado: {{requestedCommand}}\\nExit: {{commandExitCode}}\\nSaida:\\n{{commandStdout}}\\nErros:\\n{{commandStderr}}",
+        "storeInVariable": "whatsappResponseMessage"
+      }
+    },
+    {
+      "id": "system-info",
+      "typeId": "action.consoleCommand",
+      "position": { "x": 960, "y": 560 },
+      "properties": {
+        "shell": "powershell",
+        "command": "$os = Get-CimInstance Win32_OperatingSystem; $disks = Get-CimInstance Win32_LogicalDisk -Filter 'DriveType=3' | ForEach-Object { '{0}: livre {1:n1}GB de {2:n1}GB' -f $_.DeviceID, ($_.FreeSpace/1GB), ($_.Size/1GB) }; $uptime = (Get-Date) - $os.LastBootUpTime; 'OS: ' + $os.Caption; 'Uptime: ' + [int]$uptime.TotalHours + 'h'; $disks; 'Temperatura: indisponivel sem sensor WMI confiavel'",
+        "arguments": "",
+        "workingDirectory": "",
+        "timeoutMs": 15000,
+        "captureOutput": true,
+        "failOnNonZeroExit": false,
+        "storeStdoutInVariable": "systemInfoText",
+        "storeStderrInVariable": "systemInfoError",
+        "storeExitCodeInVariable": "systemInfoExitCode"
+      }
+    },
+    {
+      "id": "compose-system-response",
+      "typeId": "logic.textTemplate",
+      "position": { "x": 1280, "y": 560 },
+      "properties": {
+        "template": "Informacoes do sistema:\\n{{systemInfoText}}\\n{{systemInfoError}}",
+        "storeInVariable": "whatsappResponseMessage"
+      }
+    },
+    {
+      "id": "compose-list-response",
+      "typeId": "logic.textTemplate",
+      "position": { "x": 960, "y": 700 },
+      "properties": {
+        "template": "Flows permitidos agora:\\n{{runnableFlowsMenu}}",
+        "storeInVariable": "whatsappResponseMessage"
+      }
+    },
+    {
+      "id": "run-selected-flow",
+      "typeId": "action.runSavedFlow",
+      "position": { "x": 960, "y": 840 },
+      "properties": {
+        "flowId": "{{requestedFlowId}}",
+        "source": "whatsapp",
+        "requestedBy": "{{whatsappOwnerPhone}}",
+        "allowedFlowIds": "{{runnableFlowAllowlist}}",
+        "allowHighRisk": false,
+        "storeResultInVariable": "runFlowResult"
+      }
+    },
+    {
+      "id": "compose-flow-response",
+      "typeId": "logic.textTemplate",
+      "position": { "x": 1280, "y": 840 },
+      "properties": {
+        "template": "Pedido de flow: {{requestedFlowId}}\\nStatus: {{runFlowResult}}",
+        "storeInVariable": "whatsappResponseMessage"
+      }
+    },
+    {
+      "id": "compose-unknown-response",
+      "typeId": "logic.textTemplate",
+      "position": { "x": 960, "y": 980 },
+      "properties": {
+        "template": "Nao entendi ou o comando foi bloqueado. Motivo: {{chatRouteReason}}\\nEnvie 4 para ver o menu atualizado.",
+        "storeInVariable": "whatsappResponseMessage"
+      }
+    },
+    {
+      "id": "compose-stop-response",
+      "typeId": "logic.textTemplate",
+      "position": { "x": 960, "y": 1120 },
+      "properties": {
+        "template": "Para parar com seguranca, abra o Sidekick e use Stop/Kill Switch. Execucao remota de parada pelo WhatsApp fica bloqueada por politica local.",
+        "storeInVariable": "whatsappResponseMessage"
+      }
+    },
+    {
+      "id": "type-response",
+      "typeId": "action.browserType",
+      "position": { "x": 1600, "y": 700 },
+      "properties": {
+        "windowTitle": "WhatsApp",
+        "windowTitleMatch": "contains",
+        "automationId": "",
+        "elementName": "Type a message",
+        "controlType": "edit",
+        "text": "{{whatsappResponseMessage}}",
+        "clearExisting": false,
+        "timeoutMs": 10000
+      }
+    },
+    {
+      "id": "send-response",
+      "typeId": "action.keyboardPress",
+      "position": { "x": 1880, "y": 700 },
+      "properties": {
+        "key": "Return",
+        "modifiers": "None"
+      }
+    },
+    {
+      "id": "log-response",
+      "typeId": "action.logMessage",
+      "position": { "x": 2160, "y": 700 },
+      "properties": {
+        "message": "WhatsApp Assistant v2 respondeu ao comando {{chatIntent}}.",
+        "level": "info"
       }
     }
   ],
   "connections": [
-    {
-      "id": "c1",
-      "sourceNodeId": "start",
-      "sourcePort": "triggered",
-      "targetNodeId": "open-whatsapp",
-      "targetPort": "in"
-    },
-    {
-      "id": "c2",
-      "sourceNodeId": "open-whatsapp",
-      "sourcePort": "out",
-      "targetNodeId": "wait-login",
-      "targetPort": "in"
-    },
-    {
-      "id": "c3",
-      "sourceNodeId": "wait-login",
-      "sourcePort": "out",
-      "targetNodeId": "search-contact",
-      "targetPort": "in"
-    },
-    {
-      "id": "c4",
-      "sourceNodeId": "search-contact",
-      "sourcePort": "out",
-      "targetNodeId": "safety-gate",
-      "targetPort": "in"
-    },
-    {
-      "id": "c5",
-      "sourceNodeId": "safety-gate",
-      "sourcePort": "true",
-      "targetNodeId": "cpu-command",
-      "targetPort": "in"
-    },
-    {
-      "id": "c6",
-      "sourceNodeId": "cpu-command",
-      "sourcePort": "out",
-      "targetNodeId": "disk-command",
-      "targetPort": "in"
-    },
-    {
-      "id": "c7",
-      "sourceNodeId": "disk-command",
-      "sourcePort": "out",
-      "targetNodeId": "wifi-command",
-      "targetPort": "in"
-    },
-    {
-      "id": "c8",
-      "sourceNodeId": "wifi-command",
-      "sourcePort": "out",
-      "targetNodeId": "compose-message",
-      "targetPort": "in"
-    },
-    {
-      "id": "c9",
-      "sourceNodeId": "compose-message",
-      "sourcePort": "out",
-      "targetNodeId": "send-after-confirm-log",
-      "targetPort": "in"
-    },
-    {
-      "id": "c10",
-      "sourceNodeId": "safety-gate",
-      "sourcePort": "false",
-      "targetNodeId": "compose-lite",
-      "targetPort": "in"
-    },
-    {
-      "id": "c11",
-      "sourceNodeId": "compose-lite",
-      "sourcePort": "out",
-      "targetNodeId": "draft-only-log",
-      "targetPort": "in"
-    }
+    { "id": "c1", "sourceNodeId": "start", "sourcePort": "triggered", "targetNodeId": "open-whatsapp", "targetPort": "in" },
+    { "id": "c2", "sourceNodeId": "open-whatsapp", "sourcePort": "out", "targetNodeId": "wait-login", "targetPort": "in" },
+    { "id": "c3", "sourceNodeId": "wait-login", "sourcePort": "out", "targetNodeId": "open-self-chat", "targetPort": "in" },
+    { "id": "c4", "sourceNodeId": "open-self-chat", "sourcePort": "out", "targetNodeId": "wait-composer", "targetPort": "in" },
+    { "id": "c5", "sourceNodeId": "wait-composer", "sourcePort": "out", "targetNodeId": "list-flows-start", "targetPort": "in" },
+    { "id": "c6", "sourceNodeId": "list-flows-start", "sourcePort": "out", "targetNodeId": "compose-menu", "targetPort": "in" },
+    { "id": "c7", "sourceNodeId": "compose-menu", "sourcePort": "out", "targetNodeId": "type-menu", "targetPort": "in" },
+    { "id": "c8", "sourceNodeId": "type-menu", "sourcePort": "out", "targetNodeId": "send-menu", "targetPort": "in" },
+    { "id": "c9", "sourceNodeId": "watch-message", "sourcePort": "triggered", "targetNodeId": "list-flows-command", "targetPort": "in" },
+    { "id": "c10", "sourceNodeId": "list-flows-command", "sourcePort": "out", "targetNodeId": "route-command", "targetPort": "in" },
+    { "id": "c11", "sourceNodeId": "route-command", "sourcePort": "screenshot", "targetNodeId": "capture-screen", "targetPort": "in" },
+    { "id": "c12", "sourceNodeId": "capture-screen", "sourcePort": "out", "targetNodeId": "compose-screenshot-response", "targetPort": "in" },
+    { "id": "c13", "sourceNodeId": "route-command", "sourcePort": "command", "targetNodeId": "run-command", "targetPort": "in" },
+    { "id": "c14", "sourceNodeId": "run-command", "sourcePort": "out", "targetNodeId": "compose-command-response", "targetPort": "in" },
+    { "id": "c15", "sourceNodeId": "run-command", "sourcePort": "error", "targetNodeId": "compose-command-response", "targetPort": "in" },
+    { "id": "c16", "sourceNodeId": "route-command", "sourcePort": "systemInfo", "targetNodeId": "system-info", "targetPort": "in" },
+    { "id": "c17", "sourceNodeId": "system-info", "sourcePort": "out", "targetNodeId": "compose-system-response", "targetPort": "in" },
+    { "id": "c18", "sourceNodeId": "system-info", "sourcePort": "error", "targetNodeId": "compose-system-response", "targetPort": "in" },
+    { "id": "c19", "sourceNodeId": "route-command", "sourcePort": "listFlows", "targetNodeId": "compose-list-response", "targetPort": "in" },
+    { "id": "c20", "sourceNodeId": "route-command", "sourcePort": "runFlow", "targetNodeId": "run-selected-flow", "targetPort": "in" },
+    { "id": "c21", "sourceNodeId": "run-selected-flow", "sourcePort": "queued", "targetNodeId": "compose-flow-response", "targetPort": "in" },
+    { "id": "c22", "sourceNodeId": "run-selected-flow", "sourcePort": "blocked", "targetNodeId": "compose-flow-response", "targetPort": "in" },
+    { "id": "c23", "sourceNodeId": "run-selected-flow", "sourcePort": "needsConfiguration", "targetNodeId": "compose-flow-response", "targetPort": "in" },
+    { "id": "c24", "sourceNodeId": "run-selected-flow", "sourcePort": "requiresConfirmation", "targetNodeId": "compose-flow-response", "targetPort": "in" },
+    { "id": "c25", "sourceNodeId": "run-selected-flow", "sourcePort": "notFound", "targetNodeId": "compose-flow-response", "targetPort": "in" },
+    { "id": "c26", "sourceNodeId": "run-selected-flow", "sourcePort": "invalid", "targetNodeId": "compose-flow-response", "targetPort": "in" },
+    { "id": "c27", "sourceNodeId": "run-selected-flow", "sourcePort": "unavailable", "targetNodeId": "compose-flow-response", "targetPort": "in" },
+    { "id": "c28", "sourceNodeId": "route-command", "sourcePort": "unknown", "targetNodeId": "compose-unknown-response", "targetPort": "in" },
+    { "id": "c29", "sourceNodeId": "route-command", "sourcePort": "stop", "targetNodeId": "compose-stop-response", "targetPort": "in" },
+    { "id": "c30", "sourceNodeId": "compose-screenshot-response", "sourcePort": "out", "targetNodeId": "type-response", "targetPort": "in" },
+    { "id": "c31", "sourceNodeId": "compose-command-response", "sourcePort": "out", "targetNodeId": "type-response", "targetPort": "in" },
+    { "id": "c32", "sourceNodeId": "compose-system-response", "sourcePort": "out", "targetNodeId": "type-response", "targetPort": "in" },
+    { "id": "c33", "sourceNodeId": "compose-list-response", "sourcePort": "out", "targetNodeId": "type-response", "targetPort": "in" },
+    { "id": "c34", "sourceNodeId": "compose-flow-response", "sourcePort": "out", "targetNodeId": "type-response", "targetPort": "in" },
+    { "id": "c35", "sourceNodeId": "compose-unknown-response", "sourcePort": "out", "targetNodeId": "type-response", "targetPort": "in" },
+    { "id": "c36", "sourceNodeId": "compose-stop-response", "sourcePort": "out", "targetNodeId": "type-response", "targetPort": "in" },
+    { "id": "c37", "sourceNodeId": "type-response", "sourcePort": "out", "targetNodeId": "send-response", "targetPort": "in" },
+    { "id": "c38", "sourceNodeId": "send-response", "sourcePort": "out", "targetNodeId": "log-response", "targetPort": "in" }
   ],
-  "createdAt": "2026-04-30T00:00:00Z",
-  "modifiedAt": "2026-04-30T00:00:00Z"
+  "createdAt": "2026-05-10T00:00:00Z",
+  "modifiedAt": "2026-05-10T00:00:00Z"
 }

@@ -1,0 +1,182 @@
+[
+  {
+    "id": "recipe-roblox-playtime-limit",
+    "name": "Tempo de Jogo - ROBLOX",
+    "category": "parental-control",
+    "persona": "pais",
+    "risk": "medium",
+    "popularity": 95,
+    "tags": ["roblox", "tempo", "controle-parental"]
+  },
+  {
+    "id": "recipe-wait-text-then-click",
+    "name": "Wait Text Then Click",
+    "category": "productivity",
+    "persona": "office",
+    "risk": "low",
+    "popularity": 86,
+    "tags": ["wait", "click", "ui", "mira"]
+  },
+  {
+    "id": "recipe-popup-auto-confirm",
+    "name": "Popup Auto Confirm",
+    "category": "support",
+    "persona": "support",
+    "risk": "medium",
+    "popularity": 79,
+    "tags": ["popup", "confirm", "automation"]
+  },
+  {
+    "id": "recipe-visual-fallback-click",
+    "name": "Visual Fallback Click",
+    "category": "reliability",
+    "persona": "creator",
+    "risk": "low",
+    "popularity": 82,
+    "tags": ["fallback", "visual", "snip", "mira"]
+  },
+  {
+    "id": "recipe-mira-resilient-click",
+    "name": "Mira Resilient Click",
+    "category": "reliability",
+    "persona": "creator",
+    "risk": "low",
+    "popularity": 84,
+    "tags": ["mira", "selector", "fallback"]
+  },
+  {
+    "id": "recipe-console-pwd-command",
+    "name": "Console PWD Command",
+    "category": "developer",
+    "persona": "creator",
+    "risk": "medium",
+    "popularity": 73,
+    "tags": ["console", "command", "pwd"]
+  },
+  {
+    "id": "recipe-hardware-quick-controls",
+    "name": "Hardware Quick Controls",
+    "category": "system",
+    "persona": "support",
+    "risk": "medium",
+    "popularity": 71,
+    "tags": ["hardware", "audio", "system"]
+  },
+  {
+    "id": "recipe-screenshot-window-support",
+    "name": "Screenshot Window Support",
+    "category": "support",
+    "persona": "office",
+    "risk": "low",
+    "popularity": 76,
+    "tags": ["screenshot", "window", "support"]
+  },
+  {
+    "id": "recipe-camera-recording",
+    "name": "Camera Recording",
+    "category": "capture",
+    "persona": "office",
+    "risk": "medium",
+    "popularity": 65,
+    "tags": ["camera", "recording", "media"]
+  },
+  {
+    "id": "recipe-desktop-recording",
+    "name": "Desktop Recording",
+    "category": "capture",
+    "persona": "office",
+    "risk": "medium",
+    "popularity": 69,
+    "tags": ["desktop", "recording", "media"]
+  },
+  {
+    "id": "recipe-desktop-automation",
+    "name": "Desktop Automation Capture Apply",
+    "category": "desktop",
+    "persona": "creator",
+    "risk": "medium",
+    "popularity": 77,
+    "tags": ["desktop", "mira", "automation"]
+  },
+  {
+    "id": "recipe-whatsapp-status-assistant",
+    "name": "WhatsApp Assistant v2",
+    "category": "communication",
+    "persona": "office",
+    "risk": "medium",
+    "popularity": 90,
+    "tags": ["whatsapp", "concierge", "flows", "system-info"]
+  },
+  {
+    "id": "trae-auto-continue",
+    "name": "Trae Auto Continue",
+    "category": "developer",
+    "persona": "creator",
+    "risk": "medium",
+    "popularity": 88,
+    "tags": ["trae", "continue", "desktop"]
+  },
+  {
+    "id": "portfolio-browser-mira-demo",
+    "name": "Portfolio Browser Mira Demo",
+    "category": "browser",
+    "persona": "creator",
+    "risk": "low",
+    "popularity": 70,
+    "tags": ["browser", "mira", "portfolio"]
+  },
+  {
+    "id": "portfolio-browser-mira-text-demo",
+    "name": "Portfolio Browser Mira Text Demo",
+    "category": "browser",
+    "persona": "creator",
+    "risk": "low",
+    "popularity": 69,
+    "tags": ["browser", "mira", "text", "portfolio"]
+  },
+  {
+    "id": "portfolio-email-demo",
+    "name": "Portfolio Email Demo",
+    "category": "communication",
+    "persona": "office",
+    "risk": "high",
+    "popularity": 62,
+    "tags": ["email", "portfolio", "demo"]
+  },
+  {
+    "id": "portfolio-file-demo",
+    "name": "Portfolio File Demo",
+    "category": "files",
+    "persona": "office",
+    "risk": "low",
+    "popularity": 67,
+    "tags": ["file", "portfolio", "demo"]
+  },
+  {
+    "id": "portfolio-hotkey-runtime-demo",
+    "name": "Hotkey Runtime Demo",
+    "category": "runtime",
+    "persona": "creator",
+    "risk": "low",
+    "popularity": 64,
+    "tags": ["hotkey", "runtime", "portfolio"]
+  },
+  {
+    "id": "portfolio-notification-demo",
+    "name": "Portfolio Notification Demo",
+    "category": "notifications",
+    "persona": "support",
+    "risk": "low",
+    "popularity": 70,
+    "tags": ["notification", "portfolio", "demo"]
+  },
+  {
+    "id": "portfolio-snip-reuse-demo",
+    "name": "Snip Reuse Demo",
+    "category": "assets",
+    "persona": "creator",
+    "risk": "low",
+    "popularity": 68,
+    "tags": ["snip", "asset", "portfolio"]
+  }
+]

@@ -31,6 +31,7 @@ export interface BackendStickyNote {
   id: string;
   title: string;
   body: string;
+  contentFormat?: 'plain' | 'markdown';
   color: string;
   position: { x: number; y: number };
   width: number;
@@ -41,6 +42,7 @@ export interface StickyNoteData extends Record<string, unknown> {
   kind: 'sticky';
   title: string;
   body: string;
+  contentFormat?: 'plain' | 'markdown';
   color: string;
   width: number;
   height: number;
@@ -108,6 +110,7 @@ export function toBackendFlow(
       id: n.id,
       title: n.data.title ?? '',
       body: n.data.body ?? '',
+      contentFormat: n.data.contentFormat === 'markdown' ? 'markdown' : 'plain',
       color: n.data.color ?? 'yellow',
       position: { x: n.position.x, y: n.position.y },
       width: n.data.width ?? 240,
@@ -171,6 +174,7 @@ export function fromBackendFlow(
         kind: 'sticky',
         title: sticky.title ?? '',
         body: sticky.body ?? '',
+        contentFormat: sticky.contentFormat === 'markdown' ? 'markdown' : 'plain',
         color: sticky.color || 'yellow',
         width: sticky.width || 240,
         height: sticky.height || 160,

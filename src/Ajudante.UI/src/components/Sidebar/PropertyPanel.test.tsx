@@ -114,7 +114,7 @@ describe('PropertyPanel Mira selector binding', () => {
     });
 
     const browseButton = Array.from(container.querySelectorAll('button'))
-      .find((button) => button.textContent?.includes('Browse Mira'));
+      .find((button) => button.textContent?.includes('Procurar Mira'));
     expect(browseButton).toBeTruthy();
 
     await act(async () => {
@@ -269,6 +269,151 @@ describe('PropertyPanel dropdown rendering', () => {
     const warning = container.querySelector('.property-field__warning');
     expect(warning).toBeTruthy();
     expect(warning!.textContent).toContain('lef');
+
+    await act(async () => {
+      root.unmount();
+    });
+  }, 15_000);
+});
+
+describe('PropertyPanel file and folder browsing', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    sendCommandMock.mockReset();
+    document.body.innerHTML = '';
+    (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+  });
+
+  it('updates a FilePath property from the native browse dialog response', async () => {
+    sendCommandMock.mockResolvedValueOnce({ path: 'C:\\Tools\\app.exe' });
+
+    const React = await import('react');
+    const { default: PropertyPanel } = await import('./PropertyPanel');
+    const { useFlowStore } = await import('../../store/flowStore');
+
+    useFlowStore.setState({
+      flowId: 'flow-file',
+      flowName: 'File Flow',
+      isDirty: false,
+      nodes: [
+        {
+          id: 'n-file',
+          type: 'actionNode',
+          position: { x: 0, y: 0 },
+          data: {
+            typeId: 'action.openProgram',
+            displayName: 'Open Program',
+            category: 'Action',
+            color: '#22C55E',
+            inputPorts: [],
+            outputPorts: [],
+            properties: [
+              {
+                id: 'path',
+                name: 'Program Path',
+                type: 'FilePath',
+                defaultValue: '',
+              },
+            ],
+            propertyValues: { path: '' },
+          },
+        },
+      ],
+      edges: [],
+      selectedNodeId: 'n-file',
+      nodeDefinitions: [],
+    });
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(React.createElement(PropertyPanel));
+    });
+
+    const browseButton = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.getAttribute('aria-label') === 'Procurar arquivo');
+    expect(browseButton).toBeTruthy();
+
+    await act(async () => {
+      browseButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(sendCommandMock).toHaveBeenCalledWith('platform', 'browseFile', expect.objectContaining({
+      currentPath: '',
+      propertyId: 'path',
+      propertyName: 'Program Path',
+    }));
+    expect(useFlowStore.getState().nodes[0].data.propertyValues.path).toBe('C:\\Tools\\app.exe');
+
+    await act(async () => {
+      root.unmount();
+    });
+  }, 15_000);
+
+  it('does not change a FolderPath property when the native dialog is cancelled', async () => {
+    sendCommandMock.mockResolvedValueOnce({ cancelled: true });
+
+    const React = await import('react');
+    const { default: PropertyPanel } = await import('./PropertyPanel');
+    const { useFlowStore } = await import('../../store/flowStore');
+
+    useFlowStore.setState({
+      flowId: 'flow-folder',
+      flowName: 'Folder Flow',
+      isDirty: false,
+      nodes: [
+        {
+          id: 'n-folder',
+          type: 'triggerNode',
+          position: { x: 0, y: 0 },
+          data: {
+            typeId: 'trigger.filesystem',
+            displayName: 'File System',
+            category: 'Trigger',
+            color: '#EF4444',
+            inputPorts: [],
+            outputPorts: [],
+            properties: [
+              {
+                id: 'path',
+                name: 'Folder Path',
+                type: 'FolderPath',
+                defaultValue: 'C:\\Users',
+              },
+            ],
+            propertyValues: { path: 'C:\\Users' },
+          },
+        },
+      ],
+      edges: [],
+      selectedNodeId: 'n-folder',
+      nodeDefinitions: [],
+    });
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(React.createElement(PropertyPanel));
+    });
+
+    const browseButton = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.getAttribute('aria-label') === 'Procurar pasta');
+    expect(browseButton).toBeTruthy();
+
+    await act(async () => {
+      browseButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(sendCommandMock).toHaveBeenCalledWith('platform', 'browseFolder', expect.objectContaining({
+      currentPath: 'C:\\Users',
+      propertyId: 'path',
+      propertyName: 'Folder Path',
+    }));
+    expect(useFlowStore.getState().nodes[0].data.propertyValues.path).toBe('C:\\Users');
 
     await act(async () => {
       root.unmount();

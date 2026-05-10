@@ -39,6 +39,11 @@ public sealed class FlowRuntimeManager : IDisposable
     public event EventHandler<RuntimePhaseEvent>? RuntimePhaseChanged;
 
     public bool IsRunning => _executor.IsRunning;
+    public IFlowInvocationService? FlowInvocationService
+    {
+        get => _executor.FlowInvocationService;
+        set => _executor.FlowInvocationService = value;
+    }
 
     public FlowRuntimeManager(INodeRegistry registry, IExecutionHistoryStore? executionHistoryStore = null)
     {

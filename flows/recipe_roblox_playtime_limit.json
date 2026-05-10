@@ -9,6 +9,16 @@
       "default": 120000
     },
     {
+      "name": "duracaoAlertaFinalMs",
+      "type": "Integer",
+      "default": 5000
+    },
+    {
+      "name": "duracaoSilenciosaMs",
+      "type": "Integer",
+      "default": 115000
+    },
+    {
       "name": "bloqueioAte",
       "type": "String",
       "default": "00:00"
@@ -17,6 +27,26 @@
       "name": "robloxBlockKey",
       "type": "String",
       "default": "roblox-playtime-block"
+    },
+    {
+      "name": "robloxPlayerExePath",
+      "type": "String",
+      "default": ""
+    },
+    {
+      "name": "robloxLauncherExePath",
+      "type": "String",
+      "default": ""
+    },
+    {
+      "name": "robloxStudioExePath",
+      "type": "String",
+      "default": ""
+    },
+    {
+      "name": "gamingServicesUiExePath",
+      "type": "String",
+      "default": ""
     }
   ],
   "nodes": [
@@ -27,10 +57,10 @@
       "properties": {
         "eventType": "started",
         "processName": "RobloxPlayerBeta",
+        "processPath": "{{robloxPlayerExePath}}",
         "intervalMs": 1000,
-        "cooldownMs": 10000,
         "__ui.alias": "Quando Roblox Player abrir",
-        "__ui.comment": "Monitora o processo principal do Roblox. Duplique este gatilho para outros perfis se necessario."
+        "__ui.comment": "processPath opcional (variavel robloxPlayerExePath): filtra pelo exe real; vazio = so nome. Suporta %LOCALAPPDATA% apos armar. Duplique o gatilho se precisar de outro perfil."
       }
     },
     {
@@ -40,10 +70,10 @@
       "properties": {
         "eventType": "started",
         "processName": "RobloxPlayerLauncher",
+        "processPath": "{{robloxLauncherExePath}}",
         "intervalMs": 1000,
-        "cooldownMs": 10000,
         "__ui.alias": "Quando Roblox Launcher abrir",
-        "__ui.comment": "Cobre o launcher antes do player aparecer."
+        "__ui.comment": "processPath opcional via robloxLauncherExePath. vazio = nome apenas."
       }
     },
     {
@@ -53,10 +83,10 @@
       "properties": {
         "eventType": "started",
         "processName": "RobloxStudioBeta",
+        "processPath": "{{robloxStudioExePath}}",
         "intervalMs": 1000,
-        "cooldownMs": 10000,
         "__ui.alias": "Opcional: Roblox Studio",
-        "__ui.comment": "Mantenha ativo apenas se Studio tambem deve contar como jogo."
+        "__ui.comment": "processPath opcional via robloxStudioExePath. Desative o gatilho se Studio nao contar como jogo."
       }
     },
     {
@@ -113,6 +143,7 @@
       "typeId": "action.playSound",
       "position": { "x": 1580, "y": 60 },
       "properties": {
+        "soundFile": "",
         "systemSound": "hand",
         "__ui.alias": "Som de bloqueio",
         "__ui.comment": "Usa som do Windows por padrao, sem depender de arquivo externo."
@@ -133,8 +164,8 @@
       "typeId": "action.overlayText",
       "position": { "x": 980, "y": 320 },
       "properties": {
-        "text": "Tempo de jogo iniciado: 2 minutos",
-        "fontSize": 54,
+        "text": "Tempo iniciado: silencioso {{duracaoSilenciosaMs}} ms + alerta {{duracaoAlertaFinalMs}} ms (total {{tempoPermitidoMs}} ms).",
+        "fontSize": 48,
         "textColor": "#FFFFFF",
         "backgroundColor": "#163B45",
         "durationMs": 4000,
@@ -142,7 +173,7 @@
         "plane": "foreground",
         "motion": "slideUp",
         "__ui.alias": "Aviso inicial amigavel",
-        "__ui.comment": "Personalize texto, cores e tempo permitido antes de armar."
+        "__ui.comment": "Personalize texto e variaveis de tempo antes de armar."
       }
     },
     {
@@ -150,9 +181,9 @@
       "typeId": "logic.delay",
       "position": { "x": 1280, "y": 320 },
       "properties": {
-        "milliseconds": 115000,
-        "__ui.alias": "Timer principal",
-        "__ui.comment": "Aguarda 1m55s. Os ultimos 5 segundos aparecem como alerta intenso."
+        "milliseconds": "{{duracaoSilenciosaMs}}",
+        "__ui.alias": "Timer principal (silencioso)",
+        "__ui.comment": "Usa variavel duracaoSilenciosaMs (tipicamente tempoPermitidoMs - duracaoAlertaFinalMs). Suporta {{variaveis}} no Delay."
       }
     },
     {
@@ -160,17 +191,17 @@
       "typeId": "action.overlayText",
       "position": { "x": 1580, "y": 320 },
       "properties": {
-        "text": "Ultimos 5 segundos!",
+        "text": "Faltam {{duracaoAlertaFinalMs}} ms!",
         "fontSize": 72,
         "textColor": "#FFFFFF",
         "backgroundColor": "#7C2D12",
-        "durationMs": 5000,
+        "durationMs": "{{duracaoAlertaFinalMs}}",
         "fullScreen": true,
         "plane": "foreground",
         "motion": "slideRight",
         "effect": "outline",
         "__ui.alias": "Alerta final piscante",
-        "__ui.comment": "Visualmente intenso no final. Para piscar em ciclos, duplique overlay+delay."
+        "__ui.comment": "durationMs e texto usam duracaoAlertaFinalMs; altere a variavel no flow para mudar alerta e overlay juntos."
       }
     },
     {
@@ -178,9 +209,10 @@
       "typeId": "action.playSound",
       "position": { "x": 1880, "y": 320 },
       "properties": {
+        "soundFile": "",
         "systemSound": "exclamation",
         "__ui.alias": "Som dos ultimos segundos",
-        "__ui.comment": "Toca alerta nos ultimos 5 segundos usando som do Windows."
+        "__ui.comment": "Toca alerta nos ultimos segundos usando som do Windows."
       }
     },
     {
@@ -191,27 +223,44 @@
         "windowTitle": "Roblox",
         "windowTitleMatch": "contains",
         "processName": "RobloxPlayerBeta",
+        "processPath": "{{robloxPlayerExePath}}",
         "controlType": "Window",
-        "timeoutMs": 1500,
+        "timeoutMs": 3500,
         "operation": "close",
-        "__ui.alias": "Tentar fechar com seguranca",
-        "__ui.comment": "Primeiro tenta WM_CLOSE na janela antes de matar processo."
+        "__ui.alias": "Fechar janela do RobloxPlayerBeta",
+        "__ui.comment": "WM_CLOSE: titulo Roblox + processo RobloxPlayerBeta. processPath opcional (robloxPlayerExePath) restringe ao exe; vazio = so processo+titulo. timeoutMs 3500 ms. Se notFound, tenta GamingServicesUI."
+      }
+    },
+    {
+      "id": "close-gaming-host",
+      "typeId": "action.windowControl",
+      "position": { "x": 2330, "y": 320 },
+      "properties": {
+        "windowTitle": "Roblox",
+        "windowTitleMatch": "contains",
+        "processName": "GamingServicesUI",
+        "processPath": "{{gamingServicesUiExePath}}",
+        "controlType": "Window",
+        "timeoutMs": 4000,
+        "operation": "close",
+        "__ui.alias": "Fechar hospedeiro Gaming Services (fallback)",
+        "__ui.comment": "Fallback: titulo Roblox + GamingServicesUI. gamingServicesUiExePath opcional (caminho em WindowsApps muda entre versoes — prefira vazio ou variavel preenchida na sua maquina)."
       }
     },
     {
       "id": "kill-player",
       "typeId": "action.killProcess",
-      "position": { "x": 2480, "y": 320 },
+      "position": { "x": 2630, "y": 320 },
       "properties": {
         "processName": "RobloxPlayerBeta",
         "__ui.alias": "Forcar fechamento se preciso",
-        "__ui.comment": "Fallback quando o fechamento gracioso nao encerra o player."
+        "__ui.comment": "Fallback final: encerra RobloxPlayerBeta apos tentativas de fechamento gracioso."
       }
     },
     {
       "id": "persist-block",
       "typeId": "action.persistState",
-      "position": { "x": 2780, "y": 320 },
+      "position": { "x": 2960, "y": 320 },
       "properties": {
         "key": "{{robloxBlockKey}}",
         "value": "blocked",
@@ -223,7 +272,7 @@
     {
       "id": "overlay-ended",
       "typeId": "action.overlayText",
-      "position": { "x": 3080, "y": 320 },
+      "position": { "x": 3260, "y": 320 },
       "properties": {
         "text": "Seu tempo acabou!",
         "fontSize": 92,
@@ -241,11 +290,12 @@
     {
       "id": "play-ended",
       "typeId": "action.playSound",
-      "position": { "x": 3380, "y": 320 },
+      "position": { "x": 3560, "y": 320 },
       "properties": {
-        "systemSound": "asterisk",
+        "soundFile": "",
+        "systemSound": "question",
         "__ui.alias": "Som final",
-        "__ui.comment": "Som diferente para marcar o encerramento."
+        "__ui.comment": "Som distinto de bloqueio (hand) e alerta (exclamation): question marca o encerramento. Alternativas: asterisk, beep."
       }
     }
   ],
@@ -265,7 +315,9 @@
     { "id": "c-warning-sound", "sourceNodeId": "overlay-warning", "sourcePort": "out", "targetNodeId": "play-warning", "targetPort": "in" },
     { "id": "c-warning-close", "sourceNodeId": "play-warning", "sourcePort": "out", "targetNodeId": "close-window", "targetPort": "in" },
     { "id": "c-close-kill", "sourceNodeId": "close-window", "sourcePort": "out", "targetNodeId": "kill-player", "targetPort": "in" },
-    { "id": "c-close-notfound-kill", "sourceNodeId": "close-window", "sourcePort": "notFound", "targetNodeId": "kill-player", "targetPort": "in" },
+    { "id": "c-close-notfound-gaming", "sourceNodeId": "close-window", "sourcePort": "notFound", "targetNodeId": "close-gaming-host", "targetPort": "in" },
+    { "id": "c-gaming-kill", "sourceNodeId": "close-gaming-host", "sourcePort": "out", "targetNodeId": "kill-player", "targetPort": "in" },
+    { "id": "c-gaming-notfound-kill", "sourceNodeId": "close-gaming-host", "sourcePort": "notFound", "targetNodeId": "kill-player", "targetPort": "in" },
     { "id": "c-kill-persist", "sourceNodeId": "kill-player", "sourcePort": "out", "targetNodeId": "persist-block", "targetPort": "in" },
     { "id": "c-persist-ended", "sourceNodeId": "persist-block", "sourcePort": "out", "targetNodeId": "overlay-ended", "targetPort": "in" },
     { "id": "c-ended-sound", "sourceNodeId": "overlay-ended", "sourcePort": "out", "targetNodeId": "play-ended", "targetPort": "in" }
@@ -274,13 +326,58 @@
     {
       "id": "sticky-overview",
       "title": "Como usar",
-      "body": "Ajuste tempoPermitidoMs/delays, personalize textos e sons, depois arme o flow. Validacao tecnica do fluxo; teste real depende do Roblox instalado.",
+      "body": "1) Arme apos revisar variaveis. 2) tempoPermitidoMs = duracaoSilenciosaMs + duracaoAlertaFinalMs (ex. 120000 = 115000 + 5000). 3) Caminhos exe opcionais (robloxPlayerExePath, etc.): vazio = filtro so por nome; preencha com exe real se tiver colisao. Use %LOCALAPPDATA%\\Roblox\\Versions\\...\\RobloxPlayerBeta.exe como exemplo — nao commite caminho fixo de WindowsApps. 4) Ao armar, gatilhos resolvem {{variaveis}} dos defaults do flow. 5) Tres gatilhos de processo; Studio opcional.",
       "color": "yellow",
-      "position": { "x": 660, "y": -140 },
+      "position": { "x": 620, "y": -200 },
+      "width": 480,
+      "height": 220
+    },
+    {
+      "id": "sticky-mira-inspector",
+      "title": "Mira / Inspector (exemplo real)",
+      "body": "No Inspector pode aparecer: titulo com segmentos Window • Roblox • Roblox • media • relativePositionFallback; processo gamingservicesui (PID exemplo 21660); exe em WindowsApps\\Microsoft.GamingServices_*\\GamingServicesUI.exe (versao muda); bounds exemplo 1296x729; classe GAMINGSERVICESUI_HOSTING_WINDOW_CLASS. Isso explica o segundo Window Control: fechar pela janela com titulo Roblox mas processo GamingServicesUI. Media/relative/fallback na Mira ensinam captura resiliente — aqui usamos UIA + fallback de processo.",
+      "color": "blue",
+      "position": { "x": 2060, "y": 520 },
       "width": 420,
-      "height": 180
+      "height": 260
+    },
+    {
+      "id": "sticky-close-vs-kill",
+      "title": "Por que WM_CLOSE antes do Kill?",
+      "body": "Fechar com Window Control envia WM_CLOSE (encerramento gracioso). Kill Process encerra o executavel: use depois das tentativas de janela para garantir que o Roblox pare mesmo se o seletor nao achar o HWND ou o usuario travar o dialogo.",
+      "color": "green",
+      "position": { "x": 2180, "y": -120 },
+      "width": 380,
+      "height": 160
+    },
+    {
+      "id": "sticky-timing",
+      "title": "Temporizacao do fluxo",
+      "body": "Overlay inicial (~4s) -> Delay com {{duracaoSilenciosaMs}} -> overlay de alerta (texto + durationMs ligados a duracaoAlertaFinalMs) -> sons e fechamentos -> persistState ate bloqueioAte -> overlay final. O bloqueio do dia reutiliza readState/untilDateTime na entrada.",
+      "color": "yellow",
+      "position": { "x": 1180, "y": 520 },
+      "width": 400,
+      "height": 200
+    },
+    {
+      "id": "sticky-exe-paths",
+      "title": "Caminhos exe opcionais",
+      "body": "robloxPlayerExePath / robloxLauncherExePath / robloxStudioExePath / gamingServicesUiExePath: deixe vazio para o fluxo usar so o nome do processo (portavel). Preencha se precisar distinguir exes homonimos. Exemplo tipico do player: %LOCALAPPDATA%\\Roblox\\Versions\\<pasta>\\RobloxPlayerBeta.exe — a pasta hash muda quando o Roblox atualiza. Gaming Services em WindowsApps muda de versao; use variavel local, nao fixe no repositorio.",
+      "color": "purple",
+      "position": { "x": 40, "y": 520 },
+      "width": 440,
+      "height": 220
+    },
+    {
+      "id": "sticky-sounds",
+      "title": "Sons (Play Sound)",
+      "body": "soundFile vazio = so systemSound. Valores: exclamation, asterisk, beep, hand, question. Receita: hand / exclamation / question. WAV opcional: %WINDIR%\\Media\\Windows Notify.wav",
+      "color": "pink",
+      "position": { "x": 3180, "y": -120 },
+      "width": 420,
+      "height": 200
     }
   ],
   "createdAt": "2026-05-02T00:00:00Z",
-  "modifiedAt": "2026-05-02T00:00:00Z"
+  "modifiedAt": "2026-05-05T00:00:00Z"
 }

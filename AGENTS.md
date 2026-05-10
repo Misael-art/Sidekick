@@ -218,7 +218,7 @@ Ajudante.App           ← referencia Core + Platform + Nodes
 | flow      | saveFlow, loadFlow, listFlows, newFlow, deleteFlow  | JS → C#      |
 | engine    | runFlow, stopFlow, activateFlow, deactivateFlow, getStatus, getRuntimeStatus | JS → C# |
 | engine    | nodeStatusChanged, logMessage, flowCompleted, flowError, runtimeStatusChanged, flowArmed, flowDisarmed, triggerFired, flowQueued, flowQueueCoalesced, runtimeError | C# → JS |
-| platform  | startMira, startSnip, cancelInspector               | JS → C#      |
+| platform  | startMira, startSnip, cancelInspector, browseFile, browseFolder | JS → C# |
 | inspector | elementCaptured, regionCaptured                     | C# → JS      |
 | registry  | getNodeDefinitions                                  | JS → C#      |
 | registry  | nodeDefinitions (auto-push on NavigationCompleted)  | C# → JS      |
@@ -372,7 +372,7 @@ Ajudante.App           ← referencia Core + Platform + Nodes
 |---------|------|--------|
 | `Bridge/BridgeMessage.cs` | `class BridgeMessage` | DTO do protocolo. Props: Type, Channel, Action, RequestId, Payload (JsonElement?), Error. Classes internas: Types, Channels (constantes) |
 | `Bridge/WebBridge.cs` | `class WebBridge : IDisposable` | Inicializa WebView2, mapeia `app.local` → wwwroot, recebe/envia mensagens. Metodos: InitializeAsync, SetRouter, SendEventAsync, SendResponseAsync, SendErrorResponseAsync |
-| `Bridge/BridgeRouter.cs` | `class BridgeRouter` | Despacha mensagens por canal. Handlers: save/load/list/new/deleteFlow, run/stop/activate/deactivate/getStatus/getRuntimeStatus, startMira/startSnip, getNodeDefinitions. Encaminha eventos do `FlowRuntimeManager` para o frontend via bridge. Gerencia overlays Mira/Snip. Evento: LogMessage |
+| `Bridge/BridgeRouter.cs` | `class BridgeRouter` | Despacha mensagens por canal. Handlers: save/load/list/new/deleteFlow, run/stop/activate/deactivate/getStatus/getRuntimeStatus, startMira/startSnip/browseFile/browseFolder, getNodeDefinitions. Encaminha eventos do `FlowRuntimeManager` para o frontend via bridge. Gerencia overlays Mira/Snip e dialogs nativos. Evento: LogMessage |
 | `TrayIcon/SystemTrayManager.cs` | `class SystemTrayManager : IDisposable` | Icone no system tray. Props: IsFlowRunning. Eventos: ShowWindowRequested, QuitRequested, StartFlowRequested, StopFlowRequested. Metodos: Initialize, ShowBalloon |
 | `Overlays/MiraWindow.xaml(.cs)` | `class MiraWindow : Window` | Overlay transparente fullscreen para inspecao de elementos. Evento: `Action<ElementInfo>? ElementCaptured`. Usa ElementInspector.GetElementUnderCursor() a cada 50ms |
 | `Overlays/SnipWindow.xaml(.cs)` | `class SnipWindow : Window` | Overlay transparente para captura de regiao. Evento: `Action<byte[], Rectangle>? RegionCaptured`. Usa ScreenCapture.CaptureRegion() |

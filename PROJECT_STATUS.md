@@ -21,6 +21,61 @@ Nenhum agente deve iniciar mudancas relevantes sem ler:
 
 - Ultima consolidacao manual: `2026-05-02`
 
+Atualizacao de CX em `2026-05-04`:
+
+- Fase 1 (debug visual): novo estado de depuracao no frontend com toggle `Debug Visual`, pulso curto em `Running` e replay simplificado no `ExecutionStatus`.
+- Fase 2 (sticky seguro): sticky agora suporta `contentFormat` (`plain|markdown`) com render markdown seguro (sem HTML livre, bloqueio de `javascript:` e restricao de imagem para caminho local controlado).
+- Fase 3 (runner autonomo): `exportRunnerPackage` gera `security-manifest.json` e `integrity-manifest.json`, adiciona `preflight.ps1` e exige preflight + consentimento antes do launcher.
+- Fase 4 (security lint): novo `FlowSecurityAnalyzer` no backend, endpoint `engine/securityLint` e gate de seguranca aplicado antes de `runFlow`, `activateFlow` e export.
+- Fase 5 (catalogo popular): adicionado `flows/recipes.catalog.json`, endpoint `flow/listRecipeCatalog` e uso no Marketplace para priorizar receitas populares com metadados de risco/categoria/persona.
+
+Atualizacao de estabilidade/CX em `2026-05-09`:
+
+- `FlowSerializer.LoadAllAsync` agora ignora JSONs auxiliares que nao tem formato de flow, evitando que catalogos como `recipes.catalog.json` quebrem a listagem de automacoes.
+- Os testes de sample flows e do conversor frontend filtram apenas arquivos com schema de flow (`nodes`/`connections`), preservando o catalogo local no mesmo diretorio sem falsos negativos.
+- `PropertyPanel` implementa os botoes de procurar arquivo/pasta via bridge `platform/browseFile` e `platform/browseFolder`; o clique deixou de ser placeholder silencioso.
+- A toolbar recebeu labels PT-BR nos comandos principais e CSS responsivo que oculta labels em larguras menores, mantendo tooltips.
+- O status bar anuncia mensagens de usuario com `role=status|alert` e `aria-live`; o CSS global passou a ter foco visivel e `prefers-reduced-motion`.
+- Validado nesta rodada: `dotnet build Ajudante.sln --no-restore`, `dotnet test Ajudante.sln --no-build`, `npm run test` e `npm run build`. O build Vite ainda emite aviso conhecido de chunk principal acima de 500 kB.
+
+Atualizacao de jornada guiada/resiliencia em `2026-05-09`:
+
+- Entregue primeira vertical local/offline do roadmap de criacao resiliente:
+  - `flow/analyzeFlowExperience` expõe Flow Health com score, problemas e sugestoes acionaveis.
+  - `engine/dryRunFlow` cria um plano sem executar nodes, marcando bloqueios, checkpoints e pausas para acoes destrutivas.
+  - `engine/killSwitch` cancela runtime, limpa fila e desarma monitoramentos.
+  - `platform/startMacroRecorder` e `platform/stopMacroRecorder` geram rascunho desarmado para revisao.
+  - `assets/diagnoseSelector` e `assets/diagnoseInspectionAsset` atuam como Selector Doctor local, indicando forca, motivo, fallback e reparo com ultima captura.
+  - `assets/updateSnipAsset` preserva texto editavel/OCR manual, notas e tags em ativos Snip.
+- Frontend atualizado com empty state guiado no canvas, recomendacoes contextuais no menu Adicionar passo, botoes Saude/Dry-run/Parar Tudo, painel de dry-run, Flow Health no status bar, Selector Doctor no PropertyPanel, redaction de logs visiveis e edicao de texto em Snip vinculado.
+- Testes adicionados para Flow Health, dry-run, redaction e jornada guiada. `vite.config.ts` limita workers do Vitest para estabilizar `npm run test` no Windows.
+- Validado nesta rodada: `dotnet build Ajudante.sln --no-restore`, `dotnet test Ajudante.sln --no-build`, `npm run test` e `npm run build`. O build Vite segue com o aviso conhecido de bundle inicial acima de 500 kB, deixando code splitting como proxima melhoria tecnica natural.
+
+Atualizacao de recorder maduro/hardening em `2026-05-09`:
+
+- O Macro Recorder deixou de ser snapshot ao parar e passou a usar `MacroRecorderService` em `Ajudante.Platform/Input`, com hooks globais seguros `WH_MOUSE_LL` e `WH_KEYBOARD_LL` enquanto a sessao esta armada.
+- Novos contratos locais/offline em `Ajudante.Core.Recorder`: `MacroRecorderOptions`, `MacroRecordingSession`, `RecorderEvent`, payloads de mouse/teclado/texto/privacidade e `GuidedAutomationDraft`.
+- Coalescencia deterministica no Core:
+  - teclas imprimiveis viram `textInput`;
+  - campos/conteudos sensiveis viram `redactedInput` por padrao;
+  - cliques proximos viram `mouseDoubleClick`;
+  - `mouseDown/move/up` vira `mouseDrag`;
+  - pausas longas viram eventos `pause`.
+- `MacroDraftBuilder` gera rascunho desarmado com nodes sugeridos: seletores UIA fortes viram `action.desktopClickElement`/`action.desktopWaitElement`; fallback sem seletor vira `action.mouseClick` com warning de coordenada absoluta; texto redigido entra vazio para revisao.
+- Bridge ampliada:
+  - `platform/startMacroRecorder`
+  - `platform/getMacroRecorderStatus`
+  - `platform/stopMacroRecorder`
+  - `platform/cancelMacroRecorder`
+  - `platform/convertMacroDraftToFlow`
+  - evento `platform/macroRecorderStopRequested`
+  - `assets/diagnoseSelectorBatch`
+- Frontend ganhou painel `Revisar gravacao` com timeline removivel, avisos de baixa resiliencia, conversao antes de aplicar, botao `Aplicar rascunho desarmado`, diagnostico em lote de seletores e reparo com a ultima captura Mira quando compativel.
+- Toolbar ganhou botao `Recorder`; empty state continua oferecendo `Gravar passos`, mas agora abre a mesma revisao obrigatoria.
+- Flow Health agora penaliza macros frageis: excesso de coordenadas absolutas, falta de escopo de janela/processo, texto sensivel em claro, waits implicitos demais e passos redundantes.
+- Dry-run passou a descrever passos de macro em linguagem de usuario: aguardar elemento/janela, clicar alvo, digitar texto redigido/pendente, arrastar por coordenadas e pausas fixas.
+- Validado nesta rodada: `dotnet build Ajudante.sln --no-restore`, `dotnet test Ajudante.sln --no-build`, `npm run test` e `npm run build`. O build Vite segue com o aviso conhecido de chunk principal acima de 500 kB.
+
 ## Estagio Atual Do Produto
 
 O produto esta em um estagio de `release candidate tecnico com validacao manual final pendente`.
