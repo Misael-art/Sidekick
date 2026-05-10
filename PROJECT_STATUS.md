@@ -95,6 +95,13 @@ Atualizacao WhatsApp v5 em `2026-05-10`:
 - Publicacao padrao em `src/Ajudante.App/bin/publish` pode falhar se houver uma instancia do Sidekick segurando DLLs de `bin/Release`; nesta rodada foi gerado publish isolado em `src/Ajudante.App/bin/publish-whatsapp-v5/Sidekick.exe`.
 - Validado nesta rodada: `dotnet build Ajudante.sln --no-restore`, `dotnet test Ajudante.sln --no-build`, `npm run test`, `npm run build` e `dotnet publish .\src\Ajudante.App\Ajudante.App.csproj -c Release -o .\src\Ajudante.App\bin\publish-whatsapp-v5 --no-restore -p:BaseOutputPath=F:\Projects\Sidekick\.artifacts\release-build\`. O build Vite segue com o aviso conhecido de chunk principal acima de 500 kB.
 
+Atualizacao WhatsApp v6 em `2026-05-10`:
+
+- A recipe oficial `Recipe - WhatsApp Status Assistant (Draft Safe)` foi promovida para `version: 6` para cobrir testes apos reinicio do Windows/Edge.
+- Antes de interagir com o WhatsApp Web, o fluxo agora prepara o navegador: aguarda a abertura quando necessario, maximiza a janela do Edge/WhatsApp e envia `Escape` para dispensar o card do Edge `Restaurar paginas`; isso evita que o resultado da busca fique parcialmente oculto e bloqueie a abertura do chat.
+- O fallback ancorado no campo de busca foi recalibrado para clicar no primeiro resultado com a janela maximizada, ainda sem depender de coordenada absoluta de tela.
+- Para composicao de automacoes por blocos maiores, o node ponte ja disponivel e `action.runSavedFlow`; ele chama outro flow salvo via `IFlowInvocationService`, respeitando validacao, security lint, allowlist, bloqueio de auto-recursao e confirmacao local para alto risco. `action.listRunnableFlows` complementa a experiencia montando menus de flows invocaveis.
+
 ## Estagio Atual Do Produto
 
 O produto esta em um estagio de `release candidate tecnico com validacao manual final pendente`.

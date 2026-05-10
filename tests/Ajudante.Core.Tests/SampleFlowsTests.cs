@@ -172,7 +172,7 @@ public class SampleFlowsTests
         Assert.NotNull(flow);
 
         Assert.Equal("Recipe - WhatsApp Status Assistant (Draft Safe)", flow.Name);
-        Assert.True(flow.Version >= 4, "WhatsApp recipe must be versioned above stale v3 AppData copies.");
+        Assert.True(flow.Version >= 6, "WhatsApp recipe must be versioned above stale v5 AppData copies.");
 
         var searchNode = flow.Nodes.Single(node => node.Id == "type-owner-phone");
         Assert.Equal("{{whatsappSearchPlaceholder}}", Assert.IsType<JsonElement>(searchNode.Properties["elementName"]).GetString());
@@ -232,6 +232,44 @@ public class SampleFlowsTests
             connection.SourceNodeId == "open-selected-chat" &&
             connection.TargetNodeId == "wait-composer");
         Assert.DoesNotContain(flow.Nodes, node => node.Id == "select-chat-by-enter");
+    }
+
+    [Fact]
+    public void SampleFlows_WhatsAppRecipePreparesEdgeWindowBeforeSearching()
+    {
+        var sampleFlowPath = Path.Combine(GetSampleFlowsDirectory(), "recipe_whatsapp_status_assistant.json");
+        Assert.True(File.Exists(sampleFlowPath), $"Expected WhatsApp recipe flow was not found: {sampleFlowPath}");
+
+        var flow = FlowSerializer.Deserialize(File.ReadAllText(sampleFlowPath));
+        Assert.NotNull(flow);
+
+        var maximizeNode = flow.Nodes.Single(node => node.Id == "maximize-whatsapp-window");
+        Assert.Equal("action.windowControl", maximizeNode.TypeId);
+        Assert.Equal("maximize", Assert.IsType<JsonElement>(maximizeNode.Properties["operation"]).GetString());
+        Assert.Equal("{{whatsappWindowTitle}}", Assert.IsType<JsonElement>(maximizeNode.Properties["windowTitle"]).GetString());
+        Assert.Equal("contains", Assert.IsType<JsonElement>(maximizeNode.Properties["windowTitleMatch"]).GetString());
+
+        var dismissRestorePrompt = flow.Nodes.Single(node => node.Id == "dismiss-edge-restore-prompt");
+        Assert.Equal("action.keyboardPress", dismissRestorePrompt.TypeId);
+        Assert.Equal("Escape", Assert.IsType<JsonElement>(dismissRestorePrompt.Properties["key"]).GetString());
+
+        Assert.Contains(flow.Connections, connection =>
+            connection.SourceNodeId == "focus-existing-whatsapp" &&
+            connection.SourcePort == "out" &&
+            connection.TargetNodeId == "maximize-whatsapp-window");
+        Assert.Contains(flow.Connections, connection =>
+            connection.SourceNodeId == "open-whatsapp" &&
+            connection.TargetNodeId == "delay-after-open-whatsapp");
+        Assert.Contains(flow.Connections, connection =>
+            connection.SourceNodeId == "delay-after-open-whatsapp" &&
+            connection.TargetNodeId == "maximize-whatsapp-window");
+        Assert.Contains(flow.Connections, connection =>
+            connection.SourceNodeId == "maximize-whatsapp-window" &&
+            connection.SourcePort == "out" &&
+            connection.TargetNodeId == "dismiss-edge-restore-prompt");
+        Assert.Contains(flow.Connections, connection =>
+            connection.SourceNodeId == "dismiss-edge-restore-prompt" &&
+            connection.TargetNodeId == "wait-login");
     }
 
     private static string[] GetSampleFlowPaths()

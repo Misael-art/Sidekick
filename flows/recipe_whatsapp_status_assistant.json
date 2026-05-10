@@ -1,7 +1,7 @@
 {
   "id": "recipe-whatsapp-status-assistant",
   "name": "Recipe - WhatsApp Status Assistant (Draft Safe)",
-  "version": 5,
+  "version": 6,
   "variables": [
     {
       "name": "whatsappOwnerPhone",
@@ -112,9 +112,43 @@
       }
     },
     {
+      "id": "delay-after-open-whatsapp",
+      "typeId": "logic.delay",
+      "position": { "x": 520, "y": 300 },
+      "properties": {
+        "milliseconds": 1500
+      }
+    },
+    {
+      "id": "maximize-whatsapp-window",
+      "typeId": "action.windowControl",
+      "position": { "x": 600, "y": 120 },
+      "properties": {
+        "windowTitle": "{{whatsappWindowTitle}}",
+        "windowTitleMatch": "contains",
+        "processName": "{{whatsappProcessName}}",
+        "processPath": "{{whatsappProcessPath}}",
+        "automationId": "",
+        "elementName": "",
+        "elementNameMatch": "contains",
+        "controlType": "Window",
+        "timeoutMs": 10000,
+        "operation": "maximize"
+      }
+    },
+    {
+      "id": "dismiss-edge-restore-prompt",
+      "typeId": "action.keyboardPress",
+      "position": { "x": 740, "y": 120 },
+      "properties": {
+        "key": "Escape",
+        "modifiers": "None"
+      }
+    },
+    {
       "id": "wait-login",
       "typeId": "action.browserWaitElement",
-      "position": { "x": 600, "y": 120 },
+      "position": { "x": 880, "y": 120 },
       "properties": {
         "windowTitle": "{{whatsappWindowTitle}}",
         "windowTitleMatch": "contains",
@@ -166,7 +200,7 @@
     {
       "id": "type-owner-phone",
       "typeId": "action.browserType",
-      "position": { "x": 880, "y": 120 },
+      "position": { "x": 1160, "y": 120 },
       "properties": {
         "windowTitle": "{{whatsappWindowTitle}}",
         "windowTitleMatch": "contains",
@@ -184,7 +218,7 @@
     {
       "id": "delay-search-results",
       "typeId": "logic.delay",
-      "position": { "x": 1160, "y": 120 },
+      "position": { "x": 1440, "y": 120 },
       "properties": {
         "milliseconds": 1000
       }
@@ -192,7 +226,7 @@
     {
       "id": "select-first-result",
       "typeId": "action.keyboardPress",
-      "position": { "x": 1440, "y": 120 },
+      "position": { "x": 1720, "y": 120 },
       "properties": {
         "key": "Down",
         "modifiers": "None"
@@ -201,7 +235,7 @@
     {
       "id": "delay-after-result-selection",
       "typeId": "logic.delay",
-      "position": { "x": 1580, "y": 120 },
+      "position": { "x": 1860, "y": 120 },
       "properties": {
         "milliseconds": 250
       }
@@ -209,7 +243,7 @@
     {
       "id": "open-selected-chat",
       "typeId": "action.keyboardPress",
-      "position": { "x": 1720, "y": 120 },
+      "position": { "x": 2000, "y": 120 },
       "properties": {
         "key": "Return",
         "modifiers": "None"
@@ -218,7 +252,7 @@
     {
       "id": "wait-composer",
       "typeId": "action.browserWaitElement",
-      "position": { "x": 2000, "y": 120 },
+      "position": { "x": 2280, "y": 120 },
       "properties": {
         "windowTitle": "{{whatsappWindowTitle}}",
         "windowTitleMatch": "contains",
@@ -235,7 +269,7 @@
     {
       "id": "click-contact-result",
       "typeId": "action.desktopClickElement",
-      "position": { "x": 2000, "y": 300 },
+      "position": { "x": 2280, "y": 300 },
       "properties": {
         "windowTitle": "{{whatsappWindowTitle}}",
         "windowTitleMatch": "contains",
@@ -255,7 +289,7 @@
         "fallbackAnchorElementName": "{{whatsappSearchPlaceholder}}",
         "fallbackAnchorElementNameMatch": "contains",
         "fallbackAnchorControlType": "Edit",
-        "fallbackAnchorOffsetX": 170,
+        "fallbackAnchorOffsetX": 220,
         "fallbackAnchorOffsetY": 145,
         "relativeX": 604,
         "relativeY": 383,
@@ -301,7 +335,7 @@
     {
       "id": "list-flows-start",
       "typeId": "action.listRunnableFlows",
-      "position": { "x": 2000, "y": 120 },
+      "position": { "x": 2560, "y": 120 },
       "properties": {
         "allowedFlowIds": "{{runnableFlowAllowlist}}",
         "includeHighRisk": true,
@@ -565,9 +599,13 @@
   ],
   "connections": [
     { "id": "c1", "sourceNodeId": "start", "sourcePort": "triggered", "targetNodeId": "focus-existing-whatsapp", "targetPort": "in" },
-    { "id": "c2", "sourceNodeId": "focus-existing-whatsapp", "sourcePort": "out", "targetNodeId": "wait-login", "targetPort": "in" },
+    { "id": "c2", "sourceNodeId": "focus-existing-whatsapp", "sourcePort": "out", "targetNodeId": "maximize-whatsapp-window", "targetPort": "in" },
     { "id": "c3", "sourceNodeId": "focus-existing-whatsapp", "sourcePort": "notFound", "targetNodeId": "open-whatsapp", "targetPort": "in" },
-    { "id": "c4", "sourceNodeId": "open-whatsapp", "sourcePort": "out", "targetNodeId": "wait-login", "targetPort": "in" },
+    { "id": "c4", "sourceNodeId": "open-whatsapp", "sourcePort": "out", "targetNodeId": "delay-after-open-whatsapp", "targetPort": "in" },
+    { "id": "c4b", "sourceNodeId": "delay-after-open-whatsapp", "sourcePort": "out", "targetNodeId": "maximize-whatsapp-window", "targetPort": "in" },
+    { "id": "c4c", "sourceNodeId": "maximize-whatsapp-window", "sourcePort": "out", "targetNodeId": "dismiss-edge-restore-prompt", "targetPort": "in" },
+    { "id": "c4d", "sourceNodeId": "maximize-whatsapp-window", "sourcePort": "notFound", "targetNodeId": "wait-login", "targetPort": "in" },
+    { "id": "c4e", "sourceNodeId": "dismiss-edge-restore-prompt", "sourcePort": "out", "targetNodeId": "wait-login", "targetPort": "in" },
     { "id": "c5", "sourceNodeId": "wait-login", "sourcePort": "out", "targetNodeId": "type-owner-phone", "targetPort": "in" },
     { "id": "c6", "sourceNodeId": "wait-login", "sourcePort": "notFound", "targetNodeId": "log-login-required", "targetPort": "in" },
     { "id": "c7", "sourceNodeId": "log-login-required", "sourcePort": "out", "targetNodeId": "wait-login-after-qr", "targetPort": "in" },
