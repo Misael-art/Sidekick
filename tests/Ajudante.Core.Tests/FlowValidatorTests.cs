@@ -75,6 +75,27 @@ public class FlowValidatorTests
 
         registry.RegisterDefinition(new NodeDefinition
         {
+            TypeId = "logic.retryFlow",
+            DisplayName = "Retry Flow",
+            Category = NodeCategory.Logic,
+            InputPorts = new List<PortDefinition>
+            {
+                new() { Id = "in", Name = "In" }
+            },
+            OutputPorts = new List<PortDefinition>
+            {
+                new() { Id = "retry", Name = "Retry" },
+                new() { Id = "giveUp", Name = "Give Up" }
+            },
+            Properties = new List<PropertyDefinition>
+            {
+                new() { Id = "counterVariable", Name = "Counter Variable", Type = PropertyType.String, DefaultValue = "retryCount" },
+                new() { Id = "maxAttempts", Name = "Max Attempts", Type = PropertyType.Integer, DefaultValue = 3 }
+            }
+        });
+
+        registry.RegisterDefinition(new NodeDefinition
+        {
             TypeId = "logic.ifElse",
             DisplayName = "If/Else",
             Category = NodeCategory.Logic,
@@ -451,6 +472,43 @@ public class FlowValidatorTests
         var result = validator.Validate(flow);
 
         Assert.Contains(result.Warnings, w => w.Contains("cycle"));
+    }
+
+    [Fact]
+    public void Validate_BoundedRetryFlowCycle_DoesNotProduceCycleWarning()
+    {
+        var registry = CreateRegistryWithStandardTypes();
+        var validator = new FlowValidator(registry);
+        var flow = new Flow
+        {
+            Nodes = new List<NodeInstance>
+            {
+                new() { Id = "start", TypeId = "trigger.hotkey" },
+                new()
+                {
+                    Id = "retry",
+                    TypeId = "logic.retryFlow",
+                    Properties = new Dictionary<string, object?>
+                    {
+                        ["counterVariable"] = "refreshAttempts",
+                        ["maxAttempts"] = 3
+                    }
+                },
+                new() { Id = "refresh", TypeId = "action.mouseClick" },
+                new() { Id = "give-up", TypeId = "action.logMessage", Properties = new Dictionary<string, object?> { ["message"] = "done" } }
+            },
+            Connections = new List<Connection>
+            {
+                new() { Id = "c1", SourceNodeId = "start", SourcePort = "triggered", TargetNodeId = "retry", TargetPort = "in" },
+                new() { Id = "c2", SourceNodeId = "retry", SourcePort = "retry", TargetNodeId = "refresh", TargetPort = "in" },
+                new() { Id = "c3", SourceNodeId = "refresh", SourcePort = "out", TargetNodeId = "retry", TargetPort = "in" },
+                new() { Id = "c4", SourceNodeId = "retry", SourcePort = "giveUp", TargetNodeId = "give-up", TargetPort = "in" }
+            }
+        };
+
+        var result = validator.Validate(flow);
+
+        Assert.DoesNotContain(result.Warnings, w => w.Contains("cycle"));
     }
 
     [Fact]

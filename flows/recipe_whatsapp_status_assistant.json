@@ -1,7 +1,7 @@
 {
   "id": "recipe-whatsapp-status-assistant",
   "name": "Recipe - WhatsApp Status Assistant (Draft Safe)",
-  "version": 6,
+  "version": 8,
   "variables": [
     {
       "name": "whatsappOwnerPhone",
@@ -49,9 +49,19 @@
       "default": "Digite uma mensagem"
     },
     {
+      "name": "whatsappOwnerComposerHint",
+      "type": "String",
+      "default": "Digite uma mensagem para Papai Oliveira Novo"
+    },
+    {
+      "name": "whatsappChatHeaderHint",
+      "type": "String",
+      "default": "Papai Oliveira Novo (voc\u00ea) Mensagens para mim"
+    },
+    {
       "name": "whatsappChatAreaHint",
       "type": "String",
-      "default": "Clique neste aviso"
+      "default": "Hoje"
     },
     {
       "name": "allowedCommands",
@@ -77,6 +87,11 @@
       "name": "whatsappResponseMessage",
       "type": "String",
       "default": ""
+    },
+    {
+      "name": "whatsappRefreshAttempts",
+      "type": "Integer",
+      "default": 0
     }
   ],
   "nodes": [
@@ -167,7 +182,7 @@
       "typeId": "action.logMessage",
       "position": { "x": 600, "y": 300 },
       "properties": {
-        "message": "WhatsApp Web ainda nao esta logado ou a busca nao apareceu. Escaneie o QR code no Edge; o Sidekick vai aguardar antes de continuar.",
+        "message": "WhatsApp Web nao carregou apos 3 tentativas de Ctrl+R. Pode estar offline ou precisando de novo login. Escaneie o QR code no Edge se aparecer; o Sidekick vai aguardar ate 5 minutos antes de desistir.",
         "level": "warning"
       }
     },
@@ -195,6 +210,76 @@
       "properties": {
         "message": "Tempo de login do WhatsApp esgotado. Abra https://web.whatsapp.com/ no Edge, confirme o QR code e execute o fluxo novamente.",
         "level": "error"
+      }
+    },
+    {
+      "id": "refresh-whatsapp-attempt",
+      "typeId": "logic.retryFlow",
+      "position": { "x": 880, "y": 460 },
+      "properties": {
+        "counterVariable": "whatsappRefreshAttempts",
+        "maxAttempts": 3,
+        "delayMs": 0
+      }
+    },
+    {
+      "id": "log-refresh-whatsapp",
+      "typeId": "action.logMessage",
+      "position": { "x": 1040, "y": 460 },
+      "properties": {
+        "message": "WhatsApp Web nao carregou. Atualizando a pagina (Ctrl+R) - tentativa {{whatsappRefreshAttempts}}/3.",
+        "level": "warning"
+      }
+    },
+    {
+      "id": "focus-whatsapp-before-refresh",
+      "typeId": "action.windowControl",
+      "position": { "x": 1200, "y": 460 },
+      "properties": {
+        "windowTitle": "{{whatsappWindowTitle}}",
+        "windowTitleMatch": "contains",
+        "processName": "{{whatsappProcessName}}",
+        "processPath": "{{whatsappProcessPath}}",
+        "automationId": "",
+        "elementName": "",
+        "elementNameMatch": "contains",
+        "controlType": "Window",
+        "timeoutMs": 3000,
+        "operation": "bringToFront"
+      }
+    },
+    {
+      "id": "refresh-whatsapp-key",
+      "typeId": "action.keyboardPress",
+      "position": { "x": 1360, "y": 460 },
+      "properties": {
+        "key": "R",
+        "modifiers": "Ctrl"
+      }
+    },
+    {
+      "id": "delay-after-refresh",
+      "typeId": "logic.delay",
+      "position": { "x": 1520, "y": 460 },
+      "properties": {
+        "milliseconds": 3000
+      }
+    },
+    {
+      "id": "wait-login-retry",
+      "typeId": "action.browserWaitElement",
+      "position": { "x": 1680, "y": 460 },
+      "properties": {
+        "windowTitle": "{{whatsappWindowTitle}}",
+        "windowTitleMatch": "contains",
+        "processName": "{{whatsappProcessName}}",
+        "processPath": "{{whatsappProcessPath}}",
+        "automationId": "",
+        "elementName": "{{whatsappSearchPlaceholder}}",
+        "elementNameMatch": "contains",
+        "controlType": "Edit",
+        "timeoutMs": 15000,
+        "storeInVariable": "whatsappLoggedIn"
       }
     },
     {
@@ -259,7 +344,7 @@
         "processName": "{{whatsappProcessName}}",
         "processPath": "{{whatsappProcessPath}}",
         "automationId": "",
-        "elementName": "{{whatsappComposerHint}}",
+        "elementName": "{{whatsappOwnerComposerHint}}",
         "elementNameMatch": "contains",
         "controlType": "Edit",
         "timeoutMs": 12000,
@@ -278,23 +363,57 @@
         "automationId": "",
         "elementName": "{{whatsappOwnerContactName}}",
         "elementNameMatch": "contains",
-        "controlType": "Text",
+        "controlType": "DataItem",
         "timeoutMs": 5000,
         "clickType": "single",
         "useRelativeFallback": false,
         "useScaledFallback": false,
         "useAbsoluteFallback": false,
-        "restoreWindowBeforeFallback": true,
+        "restoreWindowBeforeFallback": false,
         "fallbackAnchorAutomationId": "",
         "fallbackAnchorElementName": "{{whatsappSearchPlaceholder}}",
         "fallbackAnchorElementNameMatch": "contains",
         "fallbackAnchorControlType": "Edit",
         "fallbackAnchorOffsetX": 220,
-        "fallbackAnchorOffsetY": 145,
+        "fallbackAnchorOffsetY": 190,
         "relativeX": 604,
         "relativeY": 383,
         "absoluteX": 553,
         "absoluteY": 401
+      }
+    },
+    {
+      "id": "wait-owner-chat-header-after-click",
+      "typeId": "action.browserWaitElement",
+      "position": { "x": 2420, "y": 300 },
+      "properties": {
+        "windowTitle": "{{whatsappWindowTitle}}",
+        "windowTitleMatch": "contains",
+        "processName": "{{whatsappProcessName}}",
+        "processPath": "{{whatsappProcessPath}}",
+        "automationId": "",
+        "elementName": "{{whatsappChatHeaderHint}}",
+        "elementNameMatch": "contains",
+        "controlType": "Button",
+        "timeoutMs": 8000,
+        "storeInVariable": "whatsappOwnerChatReady"
+      }
+    },
+    {
+      "id": "wait-owner-chat-header",
+      "typeId": "action.browserWaitElement",
+      "position": { "x": 2140, "y": 120 },
+      "properties": {
+        "windowTitle": "{{whatsappWindowTitle}}",
+        "windowTitleMatch": "contains",
+        "processName": "{{whatsappProcessName}}",
+        "processPath": "{{whatsappProcessPath}}",
+        "automationId": "",
+        "elementName": "{{whatsappChatHeaderHint}}",
+        "elementNameMatch": "contains",
+        "controlType": "Button",
+        "timeoutMs": 8000,
+        "storeInVariable": "whatsappOwnerChatReady"
       }
     },
     {
@@ -307,7 +426,7 @@
         "processName": "{{whatsappProcessName}}",
         "processPath": "{{whatsappProcessPath}}",
         "automationId": "",
-        "elementName": "{{whatsappComposerHint}}",
+        "elementName": "{{whatsappOwnerComposerHint}}",
         "elementNameMatch": "contains",
         "controlType": "Edit",
         "timeoutMs": 12000,
@@ -319,7 +438,7 @@
       "typeId": "action.logMessage",
       "position": { "x": 2280, "y": 300 },
       "properties": {
-        "message": "Nao consegui abrir o chat do proprio usuario. Confira o campo whatsappOwnerPhoneSearch ou ajuste whatsappOwnerContactName no fluxo.",
+        "message": "Nao consegui validar o chat correto de '{{whatsappOwnerContactName}}'. O Sidekick so envia o menu depois de encontrar o cabecalho '{{whatsappChatHeaderHint}}' e o campo '{{whatsappOwnerComposerHint}}'. Verifique se o resultado da busca por '{{whatsappOwnerPhoneSearch}}' esta no topo e ajuste essas variaveis se o nome exibido no WhatsApp mudou.",
         "level": "error"
       }
     },
@@ -363,7 +482,7 @@
         "processName": "{{whatsappProcessName}}",
         "processPath": "{{whatsappProcessPath}}",
         "automationId": "",
-        "elementName": "{{whatsappComposerHint}}",
+        "elementName": "{{whatsappOwnerComposerHint}}",
         "elementNameMatch": "contains",
         "controlType": "Edit",
         "text": "{{whatsappResponseMessage}}",
@@ -561,7 +680,7 @@
         "processName": "{{whatsappProcessName}}",
         "processPath": "{{whatsappProcessPath}}",
         "automationId": "",
-        "elementName": "{{whatsappComposerHint}}",
+        "elementName": "{{whatsappOwnerComposerHint}}",
         "elementNameMatch": "contains",
         "controlType": "Edit",
         "text": "{{whatsappResponseMessage}}",
@@ -607,22 +726,35 @@
     { "id": "c4d", "sourceNodeId": "maximize-whatsapp-window", "sourcePort": "notFound", "targetNodeId": "wait-login", "targetPort": "in" },
     { "id": "c4e", "sourceNodeId": "dismiss-edge-restore-prompt", "sourcePort": "out", "targetNodeId": "wait-login", "targetPort": "in" },
     { "id": "c5", "sourceNodeId": "wait-login", "sourcePort": "out", "targetNodeId": "type-owner-phone", "targetPort": "in" },
-    { "id": "c6", "sourceNodeId": "wait-login", "sourcePort": "notFound", "targetNodeId": "log-login-required", "targetPort": "in" },
+    { "id": "c6", "sourceNodeId": "wait-login", "sourcePort": "notFound", "targetNodeId": "refresh-whatsapp-attempt", "targetPort": "in" },
+    { "id": "c6a", "sourceNodeId": "refresh-whatsapp-attempt", "sourcePort": "retry", "targetNodeId": "log-refresh-whatsapp", "targetPort": "in" },
+    { "id": "c6b", "sourceNodeId": "log-refresh-whatsapp", "sourcePort": "out", "targetNodeId": "focus-whatsapp-before-refresh", "targetPort": "in" },
+    { "id": "c6c", "sourceNodeId": "focus-whatsapp-before-refresh", "sourcePort": "out", "targetNodeId": "refresh-whatsapp-key", "targetPort": "in" },
+    { "id": "c6d", "sourceNodeId": "focus-whatsapp-before-refresh", "sourcePort": "notFound", "targetNodeId": "refresh-whatsapp-key", "targetPort": "in" },
+    { "id": "c6e", "sourceNodeId": "refresh-whatsapp-key", "sourcePort": "out", "targetNodeId": "delay-after-refresh", "targetPort": "in" },
+    { "id": "c6f", "sourceNodeId": "delay-after-refresh", "sourcePort": "out", "targetNodeId": "wait-login-retry", "targetPort": "in" },
+    { "id": "c6g", "sourceNodeId": "wait-login-retry", "sourcePort": "out", "targetNodeId": "type-owner-phone", "targetPort": "in" },
+    { "id": "c6h", "sourceNodeId": "wait-login-retry", "sourcePort": "notFound", "targetNodeId": "refresh-whatsapp-attempt", "targetPort": "in" },
+    { "id": "c6i", "sourceNodeId": "refresh-whatsapp-attempt", "sourcePort": "giveUp", "targetNodeId": "log-login-required", "targetPort": "in" },
     { "id": "c7", "sourceNodeId": "log-login-required", "sourcePort": "out", "targetNodeId": "wait-login-after-qr", "targetPort": "in" },
     { "id": "c8", "sourceNodeId": "wait-login-after-qr", "sourcePort": "out", "targetNodeId": "type-owner-phone", "targetPort": "in" },
     { "id": "c9", "sourceNodeId": "wait-login-after-qr", "sourcePort": "notFound", "targetNodeId": "log-login-timeout", "targetPort": "in" },
     { "id": "c10", "sourceNodeId": "type-owner-phone", "sourcePort": "out", "targetNodeId": "delay-search-results", "targetPort": "in" },
     { "id": "c11", "sourceNodeId": "type-owner-phone", "sourcePort": "notFound", "targetNodeId": "log-search-field-not-found", "targetPort": "in" },
-    { "id": "c12", "sourceNodeId": "delay-search-results", "sourcePort": "out", "targetNodeId": "select-first-result", "targetPort": "in" },
+    { "id": "c12", "sourceNodeId": "delay-search-results", "sourcePort": "out", "targetNodeId": "click-contact-result", "targetPort": "in" },
+    { "id": "c12b", "sourceNodeId": "click-contact-result", "sourcePort": "out", "targetNodeId": "wait-owner-chat-header-after-click", "targetPort": "in" },
+    { "id": "c12c", "sourceNodeId": "click-contact-result", "sourcePort": "notFound", "targetNodeId": "select-first-result", "targetPort": "in" },
+    { "id": "c12d", "sourceNodeId": "wait-owner-chat-header-after-click", "sourcePort": "out", "targetNodeId": "wait-composer-after-click", "targetPort": "in" },
+    { "id": "c12e", "sourceNodeId": "wait-owner-chat-header-after-click", "sourcePort": "notFound", "targetNodeId": "select-first-result", "targetPort": "in" },
+    { "id": "c12f", "sourceNodeId": "wait-composer-after-click", "sourcePort": "out", "targetNodeId": "list-flows-start", "targetPort": "in" },
+    { "id": "c12g", "sourceNodeId": "wait-composer-after-click", "sourcePort": "notFound", "targetNodeId": "log-composer-not-found", "targetPort": "in" },
     { "id": "c13", "sourceNodeId": "select-first-result", "sourcePort": "out", "targetNodeId": "delay-after-result-selection", "targetPort": "in" },
     { "id": "c13b", "sourceNodeId": "delay-after-result-selection", "sourcePort": "out", "targetNodeId": "open-selected-chat", "targetPort": "in" },
-    { "id": "c13c", "sourceNodeId": "open-selected-chat", "sourcePort": "out", "targetNodeId": "wait-composer", "targetPort": "in" },
+    { "id": "c13c", "sourceNodeId": "open-selected-chat", "sourcePort": "out", "targetNodeId": "wait-owner-chat-header", "targetPort": "in" },
+    { "id": "c13d", "sourceNodeId": "wait-owner-chat-header", "sourcePort": "out", "targetNodeId": "wait-composer", "targetPort": "in" },
+    { "id": "c13e", "sourceNodeId": "wait-owner-chat-header", "sourcePort": "notFound", "targetNodeId": "log-contact-not-found", "targetPort": "in" },
     { "id": "c14", "sourceNodeId": "wait-composer", "sourcePort": "out", "targetNodeId": "list-flows-start", "targetPort": "in" },
-    { "id": "c15", "sourceNodeId": "wait-composer", "sourcePort": "notFound", "targetNodeId": "click-contact-result", "targetPort": "in" },
-    { "id": "c16", "sourceNodeId": "click-contact-result", "sourcePort": "out", "targetNodeId": "wait-composer-after-click", "targetPort": "in" },
-    { "id": "c17", "sourceNodeId": "click-contact-result", "sourcePort": "notFound", "targetNodeId": "log-contact-not-found", "targetPort": "in" },
-    { "id": "c18", "sourceNodeId": "wait-composer-after-click", "sourcePort": "out", "targetNodeId": "list-flows-start", "targetPort": "in" },
-    { "id": "c19", "sourceNodeId": "wait-composer-after-click", "sourcePort": "notFound", "targetNodeId": "log-contact-not-found", "targetPort": "in" },
+    { "id": "c15", "sourceNodeId": "wait-composer", "sourcePort": "notFound", "targetNodeId": "log-composer-not-found", "targetPort": "in" },
     { "id": "c20", "sourceNodeId": "list-flows-start", "sourcePort": "out", "targetNodeId": "compose-menu", "targetPort": "in" },
     { "id": "c21", "sourceNodeId": "list-flows-start", "sourcePort": "unavailable", "targetNodeId": "compose-menu", "targetPort": "in" },
     { "id": "c22", "sourceNodeId": "compose-menu", "sourcePort": "out", "targetNodeId": "type-menu", "targetPort": "in" },
@@ -662,5 +794,5 @@
     { "id": "c56", "sourceNodeId": "send-response", "sourcePort": "out", "targetNodeId": "log-response", "targetPort": "in" }
   ],
   "createdAt": "2026-05-10T00:00:00Z",
-  "modifiedAt": "2026-05-10T00:00:00Z"
+  "modifiedAt": "2026-05-11T00:00:00Z"
 }

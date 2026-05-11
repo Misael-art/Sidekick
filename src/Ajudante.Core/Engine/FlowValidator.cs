@@ -119,7 +119,7 @@ public class FlowValidator
                 issues.Add(ValidationIssue.Warning("node.disconnected", $"Node '{node.Id}' ({node.TypeId}) is disconnected.", nodeId: node.Id));
         }
 
-        if (HasCycle(flow))
+        if (HasUnguardedCycle(flow))
             issues.Add(ValidationIssue.Warning("flow.cycle", "Flow contains a cycle. Ensure loop nodes handle termination."));
 
         var errors = issues
@@ -585,7 +585,7 @@ public class FlowValidator
         return null;
     }
 
-    private static bool HasCycle(Flow flow)
+    private static bool HasUnguardedCycle(Flow flow)
     {
         var adjacency = new Dictionary<string, List<string>>();
         foreach (var conn in flow.Connections)
@@ -595,24 +595,40 @@ public class FlowValidator
             adjacency[conn.SourceNodeId].Add(conn.TargetNodeId);
         }
 
+        var nodesById = flow.Nodes.ToDictionary(node => node.Id, StringComparer.OrdinalIgnoreCase);
         var visited = new HashSet<string>();
-        var stack = new HashSet<string>();
+        var stack = new List<string>();
+        var stackSet = new HashSet<string>();
 
         bool Dfs(string nodeId)
         {
             visited.Add(nodeId);
             stack.Add(nodeId);
+            stackSet.Add(nodeId);
 
             if (adjacency.TryGetValue(nodeId, out var neighbors))
             {
                 foreach (var neighbor in neighbors)
                 {
-                    if (stack.Contains(neighbor)) return true;
+                    if (stackSet.Contains(neighbor))
+                    {
+                        var cycleStart = stack.FindIndex(id => string.Equals(id, neighbor, StringComparison.OrdinalIgnoreCase));
+                        var cycleNodeIds = cycleStart >= 0
+                            ? stack.Skip(cycleStart).ToList()
+                            : new List<string> { neighbor };
+
+                        if (!IsGuardedRetryCycle(cycleNodeIds, flow, nodesById))
+                            return true;
+
+                        continue;
+                    }
+
                     if (!visited.Contains(neighbor) && Dfs(neighbor)) return true;
                 }
             }
 
-            stack.Remove(nodeId);
+            stackSet.Remove(nodeId);
+            stack.RemoveAt(stack.Count - 1);
             return false;
         }
 
@@ -623,6 +639,42 @@ public class FlowValidator
         }
 
         return false;
+    }
+
+    private static bool IsGuardedRetryCycle(
+        IReadOnlyCollection<string> cycleNodeIds,
+        Flow flow,
+        IReadOnlyDictionary<string, NodeInstance> nodesById)
+    {
+        var cycleNodeSet = new HashSet<string>(cycleNodeIds, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var nodeId in cycleNodeSet)
+        {
+            if (!nodesById.TryGetValue(nodeId, out var node) ||
+                !string.Equals(node.TypeId, "logic.retryFlow", StringComparison.OrdinalIgnoreCase) ||
+                !RetryNodeHasFiniteAttempts(node))
+            {
+                continue;
+            }
+
+            var hasGiveUpExit = flow.Connections.Any(connection =>
+                string.Equals(connection.SourceNodeId, nodeId, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(connection.SourcePort, "giveUp", StringComparison.OrdinalIgnoreCase) &&
+                !cycleNodeSet.Contains(connection.TargetNodeId));
+
+            if (hasGiveUpExit)
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool RetryNodeHasFiniteAttempts(NodeInstance node)
+    {
+        if (!node.Properties.TryGetValue("maxAttempts", out var maxAttempts))
+            return true;
+
+        return !TryGetIntValue(maxAttempts, out var parsedAttempts) || parsedAttempts > 0;
     }
 }
 

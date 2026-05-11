@@ -40,7 +40,7 @@ public class OfficialRecipesValidationTests
     }
 
     [Fact]
-    public void WhatsAppRecipe_DoesNotReportCycleWarning()
+    public void WhatsAppRecipe_ValidatesSuccessfullyWithoutUnguardedCycleWarning()
     {
         var registry = new NodeRegistry();
         registry.ScanAssembly(typeof(TextTemplateNode).Assembly);

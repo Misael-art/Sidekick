@@ -110,6 +110,15 @@ Atualizacao runtime/fila em `2026-05-10`:
 - `AutomationElementLocator` passou a respeitar `CancellationToken` durante waits UIAutomation, e os nodes browser/desktop usam esse token para que `Stop`, `Parar Tudo` e restart nao fiquem presos ate o timeout de seletor expirar.
 - Validado nesta rodada: `dotnet build Ajudante.sln --no-restore`, `dotnet test Ajudante.sln --no-build`, `npm run test` e `npm run build`. O build Vite segue com o aviso conhecido de chunk principal acima de 500 kB.
 
+Atualizacao WhatsApp v8 em `2026-05-11`:
+
+- A recipe oficial `Recipe - WhatsApp Status Assistant (Draft Safe)` foi promovida para `version: 8` para substituir copias locais v7 em `%AppData%/Sidekick/flows`.
+- O fluxo agora valida o chat correto antes de enviar qualquer menu: primeiro confirma o cabecalho configuravel `Papai Oliveira Novo (voce) Mensagens para mim`, depois confirma o composer especifico `Digite uma mensagem para Papai Oliveira Novo`.
+- O clique no contato usa o `DataItem` capturado pelo Mira como seletor principal, com fallback ancorado no campo de busca recalibrado e sem restaurar a janela maximizada antes do clique.
+- A leitura de mensagens ficou mais flexivel: `AutomationElementLocator` aceita novos control types capturados pelo Mira (`DataItem`, `Header`, `Image`, etc.) e usa texto descendente como fallback para grupos sem `Name`, melhorando seletores como a area de transcript do WhatsApp.
+- O aviso de ciclo nao aparece mais para ciclos guardados por `logic.retryFlow` com `giveUp` externo; ciclos sem guarda continuam gerando warning.
+- Validado nesta rodada: `dotnet build Ajudante.sln --no-restore`, `dotnet test Ajudante.sln --no-build` (`359/359`), `npm run test` (`80/80`), `npm run build` e `dotnet publish .\src\Ajudante.App\Ajudante.App.csproj -c Release -o .\src\Ajudante.App\bin\publish --no-restore`. O executavel publicado esta em `src/Ajudante.App/bin/publish/Sidekick.exe`.
+
 ## Estagio Atual Do Produto
 
 O produto esta em um estagio de `release candidate tecnico com validacao manual final pendente`.

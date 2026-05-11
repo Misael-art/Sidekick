@@ -274,4 +274,24 @@ public class DesktopAutomationNodeTests
     {
         Assert.Equal(expected, AutomationElementLocator.TitleMatches(candidate, pattern, mode));
     }
+
+    [Theory]
+    [InlineData("DataItem")]
+    [InlineData("data item")]
+    [InlineData("header")]
+    [InlineData("image")]
+    public void ControlTypeParser_AcceptsMiraCapturedTypes(string input)
+    {
+        Assert.True(AutomationElementLocator.IsSupportedControlTypeName(input));
+    }
+
+    [Fact]
+    public void TextMatchesAnyReadableText_UsesDescendantFallbackForUnnamedGroups()
+    {
+        Assert.True(AutomationElementLocator.TextMatchesAnyReadableText(
+            primaryText: "",
+            fallbackText: "Papai Oliveira Novo (voce)\nMensagens para mim\nHoje\nNova mensagem teste",
+            pattern: "Mensagens para mim",
+            AutomationElementLocator.TitleMatch.Contains));
+    }
 }

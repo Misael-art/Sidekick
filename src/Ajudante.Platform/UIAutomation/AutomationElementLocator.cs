@@ -106,6 +106,32 @@ public static class AutomationElementLocator
         };
     }
 
+    public static bool TextMatchesAnyReadableText(
+        string? primaryText,
+        string? fallbackText,
+        string? pattern,
+        TitleMatch mode)
+    {
+        if (string.IsNullOrWhiteSpace(pattern))
+            return true;
+
+        if (TitleMatches(primaryText, pattern, mode))
+            return true;
+
+        if (string.IsNullOrWhiteSpace(fallbackText))
+            return false;
+
+        if (string.Equals(primaryText ?? string.Empty, fallbackText, StringComparison.Ordinal))
+            return false;
+
+        return TitleMatches(fallbackText, pattern, mode);
+    }
+
+    public static bool IsSupportedControlTypeName(string? value)
+    {
+        return !string.IsNullOrWhiteSpace(value) && TryParseControlType(value, out _);
+    }
+
     public static string ExtractText(AutomationElement element)
     {
         var name = string.Empty;
@@ -369,7 +395,12 @@ public static class AutomationElementLocator
 
         try
         {
-            return TitleMatches(element.Current.Name ?? string.Empty, name, nameMatch);
+            var currentName = element.Current.Name ?? string.Empty;
+            if (TitleMatches(currentName, name, nameMatch))
+                return true;
+
+            var readableText = ExtractText(element);
+            return TextMatchesAnyReadableText(currentName, readableText, name, nameMatch);
         }
         catch
         {
@@ -430,7 +461,10 @@ public static class AutomationElementLocator
 
     private static bool TryParseControlType(string value, out ControlType controlType)
     {
-        var normalized = value.Trim().ToLowerInvariant();
+        var normalized = value.Trim().ToLowerInvariant()
+            .Replace(" ", string.Empty)
+            .Replace("-", string.Empty)
+            .Replace("_", string.Empty);
         controlType = normalized switch
         {
             "button" => ControlType.Button,
@@ -439,15 +473,23 @@ public static class AutomationElementLocator
             "document" => ControlType.Document,
             "hyperlink" => ControlType.Hyperlink,
             "pane" => ControlType.Pane,
+            "dataitem" => ControlType.DataItem,
             "listitem" => ControlType.ListItem,
             "list" => ControlType.List,
             "combobox" => ControlType.ComboBox,
             "checkbox" => ControlType.CheckBox,
             "group" => ControlType.Group,
+            "header" => ControlType.Header,
+            "headeritem" => ControlType.HeaderItem,
+            "image" => ControlType.Image,
             "tabitem" => ControlType.TabItem,
             "tab" => ControlType.TabItem,
             "menuitem" => ControlType.MenuItem,
             "window" => ControlType.Window,
+            "tree" => ControlType.Tree,
+            "treeitem" => ControlType.TreeItem,
+            "table" => ControlType.Table,
+            "datagrid" => ControlType.DataGrid,
             _ => ControlType.Custom
         };
 
