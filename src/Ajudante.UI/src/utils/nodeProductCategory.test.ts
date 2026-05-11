@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getNodeProductCategory, getProductCategoryOrder } from './nodeProductCategory';
+import { getNodeCapabilityTier, getNodeProductCategory, getProductCategoryOrder } from './nodeProductCategory';
 import type { NodeDefinition } from '../bridge/types';
 
 function definition(typeId: string, displayName: string, description = ''): NodeDefinition {
@@ -40,5 +40,17 @@ describe('nodeProductCategory', () => {
       'Data',
       'Utility',
     ]);
+  });
+
+  it('separates everyday automation nodes from advanced labs capabilities', () => {
+    expect(getNodeCapabilityTier(definition('trigger.hotkey', 'Hotkey Trigger'))).toBe('Core');
+    expect(getNodeCapabilityTier(definition('trigger.interval', 'Interval'))).toBe('Core');
+    expect(getNodeCapabilityTier(definition('action.desktopClickElement', 'Desktop Click Element'))).toBe('Core');
+    expect(getNodeCapabilityTier(definition('action.showNotification', 'Show Notification'))).toBe('Core');
+    expect(getNodeCapabilityTier(definition('action.systemPower', 'System Power'))).toBe('Labs');
+    expect(getNodeCapabilityTier(definition('action.installApp', 'Install App'))).toBe('Labs');
+    expect(getNodeCapabilityTier(definition('action.consoleCommand', 'Console Command'))).toBe('Labs');
+    expect(getNodeCapabilityTier(definition('action.pdfMerge', 'PDF Merge'))).toBe('Labs');
+    expect(getNodeCapabilityTier(definition('action.killProcess', 'Kill Process'))).toBe('Labs');
   });
 });

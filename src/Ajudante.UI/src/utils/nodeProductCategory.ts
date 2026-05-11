@@ -11,6 +11,8 @@ export type ProductNodeCategory =
   | 'Data'
   | 'Utility';
 
+export type ProductCapabilityTier = 'Core' | 'Labs';
+
 const productCategoryOrder: ProductNodeCategory[] = [
   'Trigger',
   'Desktop',
@@ -57,6 +59,63 @@ export function getProductCategoryColor(category: ProductNodeCategory): string {
 
 export function getProductCategoryIcon(category: ProductNodeCategory): string {
   return productCategoryIcons[category];
+}
+
+export function getNodeCapabilityTier(definition: NodeDefinition): ProductCapabilityTier {
+  const typeId = definition.typeId.toLocaleLowerCase('en-US');
+  const haystack = `${definition.typeId} ${definition.displayName} ${definition.description}`.toLocaleLowerCase('en-US');
+
+  if (
+    typeId.includes('console')
+    || typeId.includes('command')
+    || typeId.includes('runsavedflow')
+    || typeId.includes('listrunnableflows')
+    || typeId.includes('systempower')
+    || typeId.includes('hardware')
+    || typeId.includes('systemaudio')
+    || typeId.includes('displaysettings')
+    || typeId.includes('restorepoint')
+    || typeId.includes('requireadmin')
+    || typeId.includes('restartasadmin')
+    || typeId.includes('install')
+    || typeId.includes('download')
+    || typeId.includes('checksum')
+    || typeId.includes('deletefile')
+    || typeId.includes('killprocess')
+    || typeId.includes('cleanfolder')
+    || typeId.includes('organizefolder')
+    || typeId.includes('batchrename')
+    || typeId.includes('archive')
+    || typeId.includes('pdf')
+    || typeId.includes('documentconvert')
+    || typeId.includes('imageconvert')
+    || typeId.includes('imageresize')
+    || typeId.includes('imagecompress')
+    || typeId.includes('videoconvert')
+    || typeId.includes('videoextractaudio')
+    || typeId.includes('audioconvert')
+    || typeId.includes('audionormalize')
+    || typeId.includes('recorddesktop')
+    || typeId.includes('recordcamera')
+    || typeId.includes('taskbar')
+    || typeId.includes('wallpaper')
+    || typeId.includes('desktopicons')
+    || typeId.includes('explorerrestart')
+    || typeId.includes('windowstheme')
+    || typeId.includes('windowsaccent')
+    || typeId.includes('highcontrast')
+    || typeId.includes('http')
+    || haystack.includes('powershell')
+    || haystack.includes('shutdown')
+    || haystack.includes('destructive')
+    || haystack.includes('installer')
+    || haystack.includes('ffmpeg')
+    || haystack.includes('libreoffice')
+  ) {
+    return 'Labs';
+  }
+
+  return 'Core';
 }
 
 export function getNodeProductCategory(definition: NodeDefinition): ProductNodeCategory {

@@ -1,6 +1,6 @@
 # Sidekick - Guia do Usuario
 
-> Automacao visual para Windows. Monte flows conectando blocos, sem escrever codigo.
+> Sidekick é automação local, visual e segura para pequenas tarefas repetitivas do Windows real.
 
 ---
 
@@ -17,8 +17,8 @@
 3. O icone do Sidekick aparecera na bandeja do sistema.
 
 ### 1.3 Estrutura da interface
-- **Toolbar:** novo flow, salvar, carregar, Marketplace, Export Runner, Run Now, Arm/Disarm, Stop, Mira, Mira Lib, Snip, Sticky, nome do flow e seletor de idioma `PT-BR`/`English`.
-- **Palette:** coluna retratil com nodes agrupados por categoria.
+- **Toolbar:** novo flow, salvar, carregar, Receitas, Saude, Dry-run, Executar, Monitorar/Desarmar, Stop, Recorder, Mira, Snip, nome do flow e menu **Avancado** para runner, fila, risco, Mira Lib, notas, debug e idioma.
+- **Palette:** coluna retratil com **Core** primeiro e **Labs / Avancado** recolhido por padrao. A busca encontra todos os nodes, inclusive Labs.
 - **Canvas:** area onde o flow e montado. Clique com o botao direito para abrir o menu rapido, ou arraste um fio de saida e solte em area vazia para escolher o proximo node ja conectado.
 - **Property Panel:** configuracoes do node selecionado. Campos de escolha fechada, como `Button`, `Click Type`, `Format`, `Mode` e `Operation`, aparecem como listas para evitar erro de digitacao.
 - **Status Bar:** estado do runtime, fila, flows armados e logs.
@@ -31,7 +31,14 @@
 Um flow e uma automacao completa formada por nodes conectados por fios.
 
 ### 2.2 Categorias de nodes
-O palette organiza nodes por area de uso, nao apenas por tipo tecnico:
+O palette separa capacidades por foco de produto antes de listar categorias:
+
+| Tier | Uso |
+|------|-----|
+| Core | Caminho recomendado para o dia a dia: Recorder, Mira, Snip, hotkey, schedule/interval, trigger de arquivo basico, automacao desktop essencial, janelas/processos essenciais, logs/notificacoes, Flow Health, Dry-run e receitas oficiais seguras. |
+| Labs / Avancado | Capacidades sensiveis, destrutivas ou de nicho: hardware, energia/sistema, instaladores, console avancado, conversao PDF/midia/archive/imagem/audio/video, runner avancado e qualquer recurso futuro de marketplace remoto. |
+
+Dentro de cada tier, os nodes continuam organizados por area de uso, nao apenas por tipo tecnico:
 
 | Categoria | Funcao |
 |-----------|--------|
@@ -81,6 +88,15 @@ Regra pratica:
 ---
 
 ## 3. Seu primeiro flow
+
+Ao abrir um canvas vazio, o Sidekick oferece quatro caminhos curtos:
+
+- **Gravar uma automacao:** inicia o Recorder local. Nada e aplicado nem executado automaticamente; voce revisa a timeline antes de criar nodes.
+- **Usar receita:** abre Receitas locais oficiais. A receita entra como copia editavel e desarmada.
+- **Capturar com Mira:** captura um alvo real da tela para preencher selectors de nodes desktop.
+- **Criar manualmente:** adiciona um primeiro node no canvas e deixa voce montar o flow passo a passo.
+
+Antes de executar, use **Saude** e **Dry-run** para entender problemas, riscos e checkpoints sem clicar, digitar ou alterar o Windows.
 
 ### Exemplo 1: hotkey que digita um texto
 1. Arraste `Hotkey Trigger` para o canvas.
@@ -292,14 +308,14 @@ Use os nodes de Windows quando precisar controlar o ambiente do usuario:
 Nunca desligue `dryRun` ou ligue `Allow System Changes` sem revisar origem, argumentos e impacto da acao.
 
 ### 5.8 Export Runner
-O botao **Export Runner** gera um pacote semi-autonomo com:
+No menu **Avancado**, **Export Runner** gera um pacote semi-autonomo com:
 
 - `Sidekick.exe` e dependencias copiadas do app atual
 - `flow.json`
 - `run-sidekick-flow.cmd`
 - `README.txt`
 
-Execute o `.cmd` para rodar aquele flow fora do editor visual. Limite atual: se uma instancia do Sidekick ja estiver aberta, o bloqueio de instancia unica pode impedir o runner.
+Execute o `.cmd` para rodar aquele flow fora do editor visual. Limite atual: isso ainda nao e um runner single EXE; se uma instancia do Sidekick ja estiver aberta, o bloqueio de instancia unica pode impedir o runner.
 
 ### 5.9 Sample flows uteis
 Os exemplos abaixo mostram o uso de ativos reutilizaveis no editor:
@@ -324,7 +340,7 @@ Os exemplos abaixo mostram o uso de ativos reutilizaveis no editor:
 - `recipe_roblox_playtime_limit.json`: **Tempo de Jogo - ROBLOX**, controla 2 minutos de jogo com overlay, sons, fechamento e bloqueio ate 00:00.
 
 ### 5.10 Case oficial: Tempo de Jogo - ROBLOX
-No Marketplace, abra **Tempo de Jogo - ROBLOX**.
+Em **Receitas**, abra **Tempo de Jogo - ROBLOX**.
 
 O flow monitora `RobloxPlayerBeta`, `RobloxPlayerLauncher` e opcionalmente `RobloxStudioBeta`; inicia timer de 2 minutos; mostra overlays; toca sons do Windows; tenta fechar a janela com `Window Control / close`; usa `Kill Process` como fallback; salva estado local para bloquear novas aberturas ate `00:00`.
 
@@ -337,14 +353,14 @@ Antes de armar:
 
 Validacao atual: estrutura, nodes e protecoes do flow sao testadas automaticamente. A validacao real com Roblox instalado deve ser feita no ambiente do usuario.
 
-### 5.8 Marketplace
-Use o botao **Marketplace** na toolbar para abrir recipes oficiais locais e procurar por automacoes prontas incluidas no produto.
+### 5.11 Receitas locais
+Use o botao **Receitas** na toolbar para abrir recipes oficiais locais e procurar por automacoes prontas incluidas no produto.
 
 No executavel publicado, esses recipes sao copiados para `seed-flows/`. A pasta raiz `flows/` continua sendo a fonte editavel no repositorio.
 
 Marketplace remoto e viavel, mas esta bloqueado como recurso publico ate existir manifesto seguro, hash/assinatura, validacao de schema, aviso de nodes sensiveis e importacao sempre desarmada.
 
-Nesta versao, o Marketplace carrega apenas recipes oficiais locais. A avaliacao tecnica esta em `MARKETPLACE_EVALUATION.md`.
+Nesta versao, **Receitas** carrega apenas recipes oficiais locais, com risco sinalizado quando disponivel. A avaliacao tecnica esta em `MARKETPLACE_EVALUATION.md`.
 
 Sobre o recipe WhatsApp:
 

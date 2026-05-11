@@ -2,16 +2,18 @@
 
 # ⚡ Sidekick
 
-### Visual Automation for Windows
+### Local Visual Automation for Windows
 
 [![.NET 8](https://img.shields.io/badge/.NET-8.0-512BD4?style=for-the-badge&logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
 [![React](https://img.shields.io/badge/React-18-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev/)
 [![WPF](https://img.shields.io/badge/WPF-WebView2-0078D7?style=for-the-badge&logo=windows&logoColor=white)](https://learn.microsoft.com/en-us/microsoft-edge/webview2/)
 [![License](https://img.shields.io/badge/License-MIT-22C55E?style=for-the-badge)](LICENSE)
 
-**Build powerful Windows automations visually — no coding required.**
+**Create small, repetitive Windows automations visually, with local safety checks and no coding required.**
 
-Sidekick is a modern, node-based automation tool that lets you create macros, workflows, and automated tasks through an intuitive drag-and-drop interface. Powered by .NET 8, React, and Windows UIAutomation.
+Sidekick é automação local, visual e segura para pequenas tarefas repetitivas do Windows real.
+
+Sidekick is a node-based desktop automation tool for recording, inspecting, testing, and running practical local flows. It focuses on quick first success with Recorder, safe local recipes, Mira, Snip, Flow Health, and Dry-run. Advanced or sensitive capabilities remain available, but are presented as Labs instead of being pushed as the default path.
 
 ---
 
@@ -35,6 +37,9 @@ Sidekick is a modern, node-based automation tool that lets you create macros, wo
 ### 🎨 Visual Node Editor
 Drag-and-drop nodes, connect ports, drop a wire on empty canvas to create the next step, right-click nodes/edges for focused actions, insert a node into an existing wire, reconnect edges, disable steps, and run basic auto layout.
 
+### ✅ First Success Path
+The empty canvas leads with four safe starts: record an automation, import a local recipe copy, capture a target with Mira, or create manually on the canvas. Imported recipes stay disarmed until the user explicitly runs or arms them.
+
 ### ⌨️ Global Hotkeys
 Trigger any flow with system-wide keyboard shortcuts — even when Sidekick is minimized to tray.
 
@@ -46,6 +51,9 @@ Simulate clicks, drags, key presses, and typed text at pixel-perfect coordinates
 
 ### 🌐 Safer Forms & Language
 Closed-choice properties render as dropdowns, and the toolbar exposes an explicit `PT-BR` / `English` language selector.
+
+### 🧭 Core vs Labs Palette
+Core nodes appear first for everyday desktop automation. Labs/advanced nodes, such as installers, power/system operations, console commands, media conversion, archive/PDF tooling, and runner-oriented capabilities, remain searchable but are collapsed by default.
 
 </td>
 <td width="50%">
@@ -74,8 +82,8 @@ Control audio volume, microphone mute, camera/microphone/Wi-Fi devices, power op
 ### 🪟 Windows Automation Pack
 Automate taskbar visibility/alignment, light/dark mode, wallpaper, Explorer paths, desktop refresh/shortcuts, restore-point workflows, admin checks, and guarded app installation through `winget`, MSI, EXE, or direct URL with dry-run and checksum support.
 
-### 🛒 Local Recipe Marketplace
-Open official built-in recipes from the toolbar Marketplace with search and safe local loading, including **Tempo de Jogo - ROBLOX** for a parental playtime limit flow. Remote downloads are intentionally gated until package signing and capability warnings are implemented.
+### 🛒 Local Recipes
+Open official built-in recipes from the toolbar with search, risk badges, and safe local loading, including **Tempo de Jogo - ROBLOX** for a parental playtime limit flow. Remote downloads are intentionally gated until package signing, hashes, schema validation, and capability warnings are implemented.
 
 ### 📦 Export Runner
 Export a flow to a semi-autonomous runner package with `flow.json`, app files, local logs, and `run-sidekick-flow.cmd`. This is not a single embedded EXE yet, and the single-instance mutex still blocks running a package while the main Sidekick window is already open.
@@ -373,6 +381,8 @@ Known release caveats:
 
 - OCR is not yet a product feature; visual fallback currently means image template matching.
 - Desktop/camera recording currently does not include audio capture.
+- Remote marketplace execution is not enabled; current recipes are local, official, and imported as editable disarmed copies.
+- Export Runner is not a single-file runner yet.
 - Re-publishing to `bin/publish` requires closing any running `Sidekick.exe` from that folder first, otherwise Windows keeps DLLs locked.
 
 ### Create an Installer

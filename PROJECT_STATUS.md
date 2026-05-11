@@ -119,9 +119,19 @@ Atualizacao WhatsApp v8 em `2026-05-11`:
 - O aviso de ciclo nao aparece mais para ciclos guardados por `logic.retryFlow` com `giveUp` externo; ciclos sem guarda continuam gerando warning.
 - Validado nesta rodada: `dotnet build Ajudante.sln --no-restore`, `dotnet test Ajudante.sln --no-build` (`359/359`), `npm run test` (`80/80`), `npm run build` e `dotnet publish .\src\Ajudante.App\Ajudante.App.csproj -c Release -o .\src\Ajudante.App\bin\publish --no-restore`. O executavel publicado esta em `src/Ajudante.App/bin/publish/Sidekick.exe`.
 
+Atualizacao Core vs Labs em `2026-05-11`:
+
+- O produto foi reposicionado explicitamente como: "Sidekick é automação local, visual e segura para pequenas tarefas repetitivas do Windows real."
+- A primeira experiencia do canvas agora prioriza quatro caminhos claros: gravar uma automacao, usar uma receita local, capturar com Mira e criar manualmente no canvas.
+- O palette agora separa capacidades em **Core** e **Labs / Avancado**: Core aparece primeiro; Labs fica recolhido por padrao, mas continua acessivel e buscavel. Nodes sensiveis/de nicho como console, energia/sistema, instaladores, runner avancado, conversoes de midia/PDF/archive/imagem/audio/video e acoes destrutivas ficam em Labs sem serem removidos.
+- A toolbar foi enxugada: Receitas, Saude, Dry-run, Executar/Monitorar, Recorder, Mira e Snip permanecem como comandos primarios; fila, risco, Export Runner, Mira Lib, nota e outros comandos avancados ficam no menu **Avancado**.
+- Receitas locais continuam importadas como copia editavel/desarmada, com risco sinalizado quando o catalogo fornece metadados; marketplace remoto segue bloqueado ate existir governanca segura.
+- Documentacao atualizada em `README.md`, `USER_GUIDE.md` e `ROADMAP_EXECUTION.md` para nao prometer OCR como produto pronto, marketplace remoto irrestrito nem runner single EXE.
+- Validado nesta rodada: `dotnet build Ajudante.sln --no-restore` (`0` erros, `0` avisos), `dotnet test Ajudante.sln --no-build` (`359/359`), `npm run test` (`83/83`), `npm run build`, verificacao visual em `http://127.0.0.1:5173` e `dotnet publish .\src\Ajudante.App\Ajudante.App.csproj -c Release -o .\src\Ajudante.App\bin\publish --no-restore`. O publish emitiu apenas o aviso conhecido de chunk Vite acima de 500 kB. O executavel publicado esta em `src/Ajudante.App/bin/publish/Sidekick.exe`.
+
 ## Estagio Atual Do Produto
 
-O produto esta em um estagio de `release candidate tecnico com validacao manual final pendente`.
+O produto esta em um estagio de `release candidate tecnico com foco de produto Core vs Labs validado automaticamente e por inspecao visual local`.
 
 Traduzindo isso para o estado real:
 

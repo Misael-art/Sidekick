@@ -681,27 +681,27 @@ export default function FlowCanvas() {
       </ReactFlow>
       {nodes.length === 0 && stickyNotes.length === 0 && (
         <div className="flow-empty-state" role="region" aria-label="Assistente de Automacao">
-          <div className="flow-empty-state__eyebrow">Assistente de Automacao</div>
-          <h2 className="flow-empty-state__title">Crie o primeiro passo sem decorar nodes</h2>
+          <div className="flow-empty-state__eyebrow">Primeiro sucesso</div>
+          <h2 className="flow-empty-state__title">Escolha um caminho seguro para comecar</h2>
           <p className="flow-empty-state__copy">
-            Capture um alvo, use uma receita ou comece por um gatilho manual. O flow nasce desarmado e pode passar por dry-run antes de executar.
+            Grave uma tarefa real, importe uma receita desarmada, capture com Mira ou monte no canvas. Revise a Saude e rode Dry-run antes de executar.
           </p>
           <div className="flow-empty-state__actions">
+            <button type="button" className="flow-empty-state__btn flow-empty-state__btn--primary" onClick={() => { void toggleMacroRecorder(); }}>
+              {macroRecorderActive ? 'Parar gravacao' : 'Gravar uma automacao'}
+            </button>
             <button
               type="button"
               className="flow-empty-state__btn"
-              onClick={() => setUserMessage({ type: 'info', text: 'Abra o Marketplace na toolbar para escolher uma receita local segura.' })}
+              onClick={() => setUserMessage({ type: 'info', text: 'Abra Receitas na toolbar para importar uma copia desarmada.' })}
             >
               Usar receita
             </button>
             <button type="button" className="flow-empty-state__btn" onClick={startMiraFromEmptyState}>
-              Capturar elemento
+              Capturar com Mira
             </button>
-            <button type="button" className="flow-empty-state__btn" onClick={() => { void toggleMacroRecorder(); }}>
-              {macroRecorderActive ? 'Parar gravacao' : 'Gravar passos'}
-            </button>
-            <button type="button" className="flow-empty-state__btn flow-empty-state__btn--primary" onClick={startFromScratch}>
-              Comecar do zero
+            <button type="button" className="flow-empty-state__btn" onClick={startFromScratch}>
+              Criar manualmente
             </button>
           </div>
           {guidedDraft && (

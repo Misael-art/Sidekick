@@ -70,5 +70,5 @@ Cada entrega deve melhorar pelo menos um destes pontos:
 
 ## Status Atual
 
-- Em andamento: documentacao do roadmap e primeira entrega de validacao pre-run.
-- Proxima integracao apos estabilizar os testes: bridge/UI para exibir resultados ricos de validacao.
+- Entregue nesta frente de produto: apresentacao Core vs Labs no palette, primeira jornada guiada com Recorder/Receitas/Mira/canvas manual, Receitas locais com importacao desarmada favorecida, Flow Health e Dry-run como caminho recomendado antes de executar.
+- Proxima integracao apos estabilizar os testes: aprofundar historico de execucoes e manutencao guiada sem prometer marketplace remoto ou OCR como recursos prontos.

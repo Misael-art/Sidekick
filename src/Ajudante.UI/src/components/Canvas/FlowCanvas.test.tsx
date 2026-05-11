@@ -229,11 +229,12 @@ describe('FlowCanvas context menu', () => {
       root.render(React.createElement(FlowCanvas));
     });
 
-    expect(container.textContent).toContain('Assistente de Automacao');
+    expect(container.textContent).toContain('Primeiro sucesso');
+    expect(container.textContent).toContain('Gravar uma automacao');
     expect(container.textContent).toContain('Usar receita');
-    expect(container.textContent).toContain('Capturar elemento');
-    expect(container.textContent).toContain('Gravar passos');
-    expect(container.textContent).toContain('Comecar do zero');
+    expect(container.textContent).toContain('Capturar com Mira');
+    expect(container.textContent).toContain('Criar manualmente');
+    expect(container.textContent).toContain('Dry-run');
 
     act(() => {
       root.unmount();

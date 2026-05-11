@@ -1337,22 +1337,12 @@ export default function Toolbar() {
           <button
             className={`toolbar__btn ${isLoadingFlowList ? 'toolbar__btn--disabled' : ''}`}
             onClick={() => { void handleOpenMarketplace(); }}
-            title="Marketplace de receitas prontas"
+            title="Receitas oficiais locais"
             disabled={isLoadingFlowList}
             type="button"
           >
             <span className="toolbar__btn-icon">&#x1F6D2;</span>
-            <span className="toolbar__btn-label">Marketplace</span>
-          </button>
-          <button
-            className={`toolbar__btn ${isExportingRunner ? 'toolbar__btn--disabled' : ''}`}
-            onClick={() => { void exportRunnerPackage(); }}
-            title="Exportar pacote runner executavel"
-            disabled={isExportingRunner}
-            type="button"
-          >
-            <span className="toolbar__btn-icon">&#x1F4E6;</span>
-            <span className="toolbar__btn-label">{isExportingRunner ? 'Exportando...' : 'Exportar Runner'}</span>
+            <span className="toolbar__btn-label">Receitas</span>
           </button>
         </div>
 
@@ -1389,16 +1379,6 @@ export default function Toolbar() {
         <div className="toolbar__group">
           <button
             type="button"
-            className={`toolbar__btn ${allowHighRiskExecution ? 'toolbar__btn--active' : ''}`}
-            onClick={() => { void handleToggleHighRiskPermission(); }}
-            title="Quando ativo, permite abrir o modal de confirmacao para executar, armar ou exportar fluxos com bloqueio de seguranca (exige securityAck)."
-            aria-pressed={allowHighRiskExecution}
-          >
-            <span className="toolbar__btn-icon">&#9888;</span>
-            <span className="toolbar__btn-label">{allowHighRiskExecution ? 'Risco: on' : 'Risco: off'}</span>
-          </button>
-          <button
-            type="button"
             className={`toolbar__btn ${isAnalyzingHealth ? 'toolbar__btn--disabled' : ''}`}
             onClick={() => { void analyzeFlowExperience(); }}
             title="Analisar saude do flow sem executar"
@@ -1428,16 +1408,6 @@ export default function Toolbar() {
             <span className="toolbar__btn-label">Executar</span>
           </button>
           <button
-            className={`toolbar__btn ${!canRestartCurrentFlow || isRestartingFlow ? 'toolbar__btn--disabled' : ''}`}
-            onClick={() => { void handleRestart(); }}
-            disabled={!canRestartCurrentFlow || isRestartingFlow}
-            title="Cancela a execucao atual deste flow, remove pendencias dele e enfileira uma nova execucao"
-            type="button"
-          >
-            <span className="toolbar__btn-icon">&#8635;</span>
-            <span className="toolbar__btn-label">{isRestartingFlow ? 'Reiniciando...' : 'Reiniciar'}</span>
-          </button>
-          <button
             className={`toolbar__btn ${!canArmCurrentFlow || isCurrentFlowArmed ? 'toolbar__btn--disabled' : ''}`}
             onClick={handleArm}
             disabled={!canArmCurrentFlow || isCurrentFlowArmed}
@@ -1464,39 +1434,11 @@ export default function Toolbar() {
             <span className="toolbar__btn-icon">&#9632;</span>
             <span className="toolbar__btn-label">Parar</span>
           </button>
-          <button
-            className={`toolbar__btn toolbar__btn--stop ${!canClearQueue || isClearingQueue ? 'toolbar__btn--disabled' : ''}`}
-            onClick={() => { void handleClearQueue(); }}
-            disabled={!canClearQueue || isClearingQueue}
-            title="Remove apenas itens pendentes da fila, sem cancelar a execucao atual"
-            type="button"
-          >
-            <span className="toolbar__btn-icon">&#8999;</span>
-            <span className="toolbar__btn-label">{isClearingQueue ? 'Limpando...' : 'Limpar fila'}</span>
-          </button>
-          <button
-            className={`toolbar__btn toolbar__btn--stop ${!canKillSwitch || isKillSwitching ? 'toolbar__btn--disabled' : ''}`}
-            onClick={() => { void handleKillSwitch(); }}
-            disabled={!canKillSwitch || isKillSwitching}
-            title="Parar tudo: cancela runtime, limpa fila e desarma monitoramentos"
-            type="button"
-          >
-            <span className="toolbar__btn-icon">&#x26D4;</span>
-            <span className="toolbar__btn-label">{isKillSwitching ? 'Parando...' : 'Parar Tudo'}</span>
-          </button>
         </div>
 
         <div className="toolbar__divider" />
 
         <div className="toolbar__group">
-          <button
-            className={`toolbar__btn ${inspectorMode === 'mira' ? 'toolbar__btn--active' : ''}`}
-            onClick={toggleMira}
-            title="Mira - capturar elemento da tela"
-          >
-            <span className="toolbar__btn-icon">&#x1F441;</span>
-            <span className="toolbar__btn-label">Mira</span>
-          </button>
           <button
             className={`toolbar__btn ${macroRecorderActive ? 'toolbar__btn--active' : ''} ${isMacroRecorderBusy ? 'toolbar__btn--disabled' : ''}`}
             onClick={() => { void toggleMacroRecorder(); }}
@@ -1508,13 +1450,12 @@ export default function Toolbar() {
             <span className="toolbar__btn-label">{macroRecorderActive ? 'Parar rec' : 'Recorder'}</span>
           </button>
           <button
-            className="toolbar__btn"
-            onClick={openInspectionLibrary}
-            title="Abrir biblioteca de capturas Mira"
-            type="button"
+            className={`toolbar__btn ${inspectorMode === 'mira' ? 'toolbar__btn--active' : ''}`}
+            onClick={toggleMira}
+            title="Mira - capturar elemento da tela"
           >
-            <span className="toolbar__btn-icon">&#x1F5C2;</span>
-            <span className="toolbar__btn-label">Mira Lib ({inspectionAssets.length})</span>
+            <span className="toolbar__btn-icon">&#x1F441;</span>
+            <span className="toolbar__btn-label">Mira</span>
           </button>
           <button
             className={`toolbar__btn ${inspectorMode === 'snip' ? 'toolbar__btn--active' : ''}`}
@@ -1524,20 +1465,87 @@ export default function Toolbar() {
             <span className="toolbar__btn-icon">&#x2702;</span>
             <span className="toolbar__btn-label">Snip</span>
           </button>
-          <button
-            className="toolbar__btn"
-            onClick={handleAddSticky}
-            title="Adicionar nota ao canvas"
-            aria-label="Adicionar nota adesiva"
-          >
-            <span className="toolbar__btn-icon">&#x1F4DD;</span>
-            <span className="toolbar__btn-label">Nota</span>
-          </button>
         </div>
 
         <div className="toolbar__divider" />
 
         <div className="toolbar__group">
+          <details className="toolbar__more">
+            <summary className="toolbar__more-summary" title="Comandos avancados">
+              <span className="toolbar__btn-icon">&#8942;</span>
+              <span className="toolbar__btn-label">Avancado</span>
+            </summary>
+            <div className="toolbar__more-panel">
+              <button
+                type="button"
+                className={`toolbar__btn ${allowHighRiskExecution ? 'toolbar__btn--active' : ''}`}
+                onClick={() => { void handleToggleHighRiskPermission(); }}
+                title="Quando ativo, permite abrir o modal de confirmacao para executar, armar ou exportar fluxos com bloqueio de seguranca (exige securityAck)."
+                aria-pressed={allowHighRiskExecution}
+              >
+                <span className="toolbar__btn-icon">&#9888;</span>
+                <span className="toolbar__btn-label">{allowHighRiskExecution ? 'Risco: on' : 'Risco: off'}</span>
+              </button>
+              <button
+                className={`toolbar__btn ${!canRestartCurrentFlow || isRestartingFlow ? 'toolbar__btn--disabled' : ''}`}
+                onClick={() => { void handleRestart(); }}
+                disabled={!canRestartCurrentFlow || isRestartingFlow}
+                title="Cancela a execucao atual deste flow, remove pendencias dele e enfileira uma nova execucao"
+                type="button"
+              >
+                <span className="toolbar__btn-icon">&#8635;</span>
+                <span className="toolbar__btn-label">{isRestartingFlow ? 'Reiniciando...' : 'Reiniciar'}</span>
+              </button>
+              <button
+                className={`toolbar__btn toolbar__btn--stop ${!canClearQueue || isClearingQueue ? 'toolbar__btn--disabled' : ''}`}
+                onClick={() => { void handleClearQueue(); }}
+                disabled={!canClearQueue || isClearingQueue}
+                title="Remove apenas itens pendentes da fila, sem cancelar a execucao atual"
+                type="button"
+              >
+                <span className="toolbar__btn-icon">&#8999;</span>
+                <span className="toolbar__btn-label">{isClearingQueue ? 'Limpando...' : 'Limpar fila'}</span>
+              </button>
+              <button
+                className={`toolbar__btn toolbar__btn--stop ${!canKillSwitch || isKillSwitching ? 'toolbar__btn--disabled' : ''}`}
+                onClick={() => { void handleKillSwitch(); }}
+                disabled={!canKillSwitch || isKillSwitching}
+                title="Parar tudo: cancela runtime, limpa fila e desarma monitoramentos"
+                type="button"
+              >
+                <span className="toolbar__btn-icon">&#x26D4;</span>
+                <span className="toolbar__btn-label">{isKillSwitching ? 'Parando...' : 'Parar Tudo'}</span>
+              </button>
+              <button
+                className={`toolbar__btn ${isExportingRunner ? 'toolbar__btn--disabled' : ''}`}
+                onClick={() => { void exportRunnerPackage(); }}
+                title="Exportar pacote runner executavel"
+                disabled={isExportingRunner}
+                type="button"
+              >
+                <span className="toolbar__btn-icon">&#x1F4E6;</span>
+                <span className="toolbar__btn-label">{isExportingRunner ? 'Exportando...' : 'Exportar Runner'}</span>
+              </button>
+              <button
+                className="toolbar__btn"
+                onClick={openInspectionLibrary}
+                title="Abrir biblioteca de capturas Mira"
+                type="button"
+              >
+                <span className="toolbar__btn-icon">&#x1F5C2;</span>
+                <span className="toolbar__btn-label">Mira Lib ({inspectionAssets.length})</span>
+              </button>
+              <button
+                className="toolbar__btn"
+                onClick={handleAddSticky}
+                title="Adicionar nota ao canvas"
+                aria-label="Adicionar nota adesiva"
+              >
+                <span className="toolbar__btn-icon">&#x1F4DD;</span>
+                <span className="toolbar__btn-label">Nota</span>
+              </button>
+            </div>
+          </details>
           <button
             className={`toolbar__btn ${debugVisualEnabled ? 'toolbar__btn--active' : ''}`}
             onClick={() => setDebugVisualEnabled(!debugVisualEnabled)}
@@ -1699,9 +1707,9 @@ export default function Toolbar() {
           >
             <div className="toolbar__dialog-header">
               <div>
-                <h2 id="marketplace-dialog-title" className="toolbar__dialog-title">Marketplace</h2>
+                <h2 id="marketplace-dialog-title" className="toolbar__dialog-title">Receitas</h2>
                 <p className="toolbar__dialog-subtitle">
-                  Receitas locais oficiais. Marketplace remoto fica bloqueado ate existir validacao, hash/assinatura e avisos de seguranca.
+                  Receitas locais oficiais. Remoto fica bloqueado ate existir validacao, hash/assinatura e avisos de seguranca.
                 </p>
               </div>
               <button
@@ -1717,10 +1725,10 @@ export default function Toolbar() {
             <div className="toolbar__asset-summary">
               <div className="toolbar__asset-summary-title">Receitas prontas para importar</div>
               <div className="toolbar__asset-summary-copy">
-                Abra uma receita como copia editavel, revise os nodes e rode manualmente antes de armar qualquer automacao.
+                Importe uma copia desarmada, revise os nodes, rode Saude/Dry-run e so depois execute ou monitore.
               </div>
               <div className="toolbar__asset-summary-copy toolbar__asset-summary-copy--warning">
-                Downloads da internet ainda nao sao executados automaticamente por seguranca.
+                Downloads da internet nao executam automaticamente nesta versao.
               </div>
             </div>
 
@@ -1732,7 +1740,7 @@ export default function Toolbar() {
                 value={marketplaceFilter}
                 onChange={(event) => setMarketplaceFilter(event.target.value)}
                 placeholder="Buscar receita, Trae, overlay, console..."
-                aria-label="Buscar marketplace"
+                aria-label="Buscar receitas"
               />
               <span className="toolbar__dialog-search-count">
                 {marketplaceFlows.length} receita(s)
@@ -1744,7 +1752,7 @@ export default function Toolbar() {
                 Nenhuma receita local encontrada. Reinicie o Sidekick para semear os flows oficiais se esta lista estiver vazia.
               </div>
             ) : (
-              <div className="toolbar__dialog-list" role="listbox" aria-label="Receitas do marketplace">
+              <div className="toolbar__dialog-list" role="listbox" aria-label="Receitas locais">
                 {marketplaceFlows.map((flow) => {
                   const recipeInfo = recipeCatalog.find((entry) => entry.id === flow.id);
                   return (
@@ -1811,7 +1819,7 @@ export default function Toolbar() {
                 disabled={!selectedMarketplaceFlowId || isApplyingLoadedFlow || marketplaceFlows.length === 0}
                 type="button"
               >
-                {isApplyingLoadedFlow ? 'Abrindo...' : 'Abrir receita'}
+                {isApplyingLoadedFlow ? 'Importando...' : 'Importar copia desarmada'}
               </button>
             </div>
           </div>

@@ -437,7 +437,7 @@ describe('Toolbar runtime controls', () => {
     });
   });
 
-  it('opens a visible marketplace with local recipes', async () => {
+  it('opens a visible recipes catalog with safe local recipes', async () => {
     const React = await import('react');
     const { default: Toolbar } = await import('./Toolbar');
     const { useFlowStore } = await import('../../store/flowStore');
@@ -459,6 +459,28 @@ describe('Toolbar runtime controls', () => {
           { id: 'custom-flow', name: 'Meu Fluxo', isNative: false, nodeCount: 2 },
         ];
       }
+      if (action === 'listRecipeCatalog') {
+        return [
+          {
+            id: 'recipe-overlay-visual-message',
+            name: 'Recipe - Overlay Visual Message',
+            category: 'Visual',
+            persona: 'iniciante',
+            risk: 'low',
+            popularity: 30,
+            tags: ['safe', 'overlay'],
+          },
+          {
+            id: 'recipe-roblox-playtime-limit',
+            name: 'Tempo de Jogo - ROBLOX',
+            category: 'Sistema',
+            persona: 'responsavel',
+            risk: 'high',
+            popularity: 80,
+            tags: ['processo', 'tempo'],
+          },
+        ];
+      }
       return null;
     });
 
@@ -470,17 +492,20 @@ describe('Toolbar runtime controls', () => {
       root.render(React.createElement(Toolbar));
     });
 
-    const marketplaceButton = Array.from(container.querySelectorAll('button'))
-      .find((button) => button.textContent?.includes('Marketplace'));
-    expect(marketplaceButton).toBeTruthy();
+    const recipesButton = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Receitas'));
+    expect(recipesButton).toBeTruthy();
+    expect(container.querySelector('.toolbar__more-summary')?.textContent).toContain('Avancado');
 
     await act(async () => {
-      marketplaceButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      recipesButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
     expect(container.textContent).toContain('Receitas prontas');
+    expect(container.textContent).toContain('Importar copia desarmada');
     expect(container.textContent).toContain('Recipe - Overlay Visual Message');
     expect(container.textContent).toContain('Tempo de Jogo - ROBLOX');
+    expect(container.textContent).toContain('high');
     expect(container.textContent).not.toContain('Meu Fluxo');
 
     await act(async () => {
