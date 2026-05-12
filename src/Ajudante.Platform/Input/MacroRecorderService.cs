@@ -455,12 +455,20 @@ public sealed class MacroRecorderService : IDisposable
             RelativeX = element.WindowBounds.Width > 0 ? cursorX - element.WindowBounds.X : element.RelativePointX,
             RelativeY = element.WindowBounds.Height > 0 ? cursorY - element.WindowBounds.Y : element.RelativePointY,
             NormalizedX = element.NormalizedWindowX,
-            NormalizedY = element.NormalizedWindowY,
-            AbsoluteX = cursorX,
-            AbsoluteY = cursorY,
-            SelectorStrength = element.CaptureQuality,
-            SelectorStrategy = string.IsNullOrWhiteSpace(element.AutomationId) ? "relativePositionFallback" : "selectorPreferred"
-        };
+                NormalizedY = element.NormalizedWindowY,
+                AbsoluteX = cursorX,
+                AbsoluteY = cursorY,
+                CursorPixelColor = element.CursorPixelColor,
+                DetectedText = element.DetectedText,
+                CurrentText = element.CurrentText,
+                PlaceholderText = element.PlaceholderText,
+                SelectorStrength = element.CaptureQuality,
+                SelectorStrategy = string.IsNullOrWhiteSpace(element.AutomationId) ? "relativePositionFallback" : "selectorPreferred",
+                IsBrowserSurface = element.IsBrowserSurface,
+                BrowserUrl = element.BrowserUrl,
+                BrowserOrigin = element.BrowserOrigin,
+                BrowserDocumentTitle = element.BrowserDocumentTitle
+            };
     }
 
     private static MacroRecorderOptions NormalizeOptions(MacroRecorderOptions? options)
@@ -649,8 +657,16 @@ public sealed class MacroRecorderService : IDisposable
                 NormalizedY = source.Element.NormalizedY,
                 AbsoluteX = source.Element.AbsoluteX,
                 AbsoluteY = source.Element.AbsoluteY,
+                CursorPixelColor = source.Element.CursorPixelColor,
+                DetectedText = source.Element.DetectedText,
+                CurrentText = source.Element.CurrentText,
+                PlaceholderText = source.Element.PlaceholderText,
                 SelectorStrength = source.Element.SelectorStrength,
-                SelectorStrategy = source.Element.SelectorStrategy
+                SelectorStrategy = source.Element.SelectorStrategy,
+                IsBrowserSurface = source.Element.IsBrowserSurface,
+                BrowserUrl = source.Element.BrowserUrl,
+                BrowserOrigin = source.Element.BrowserOrigin,
+                BrowserDocumentTitle = source.Element.BrowserDocumentTitle
             },
             Mouse = source.Mouse is null ? null : new RecorderMousePayload
             {

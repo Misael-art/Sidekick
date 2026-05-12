@@ -133,6 +133,21 @@ public sealed class ElementInfo
     /// <summary>Normalized vertical point in virtual desktop bounds (0..1).</summary>
     public double NormalizedScreenY { get; init; }
 
+    /// <summary>Whether the element appears to be part of a browser surface.</summary>
+    public bool IsBrowserSurface { get; init; }
+
+    /// <summary>Best-effort browser URL or internal browser URL exposed by UIAutomation.</summary>
+    public string BrowserUrl { get; init; } = "";
+
+    /// <summary>Best-effort origin/host for the browser surface.</summary>
+    public string BrowserOrigin { get; init; } = "";
+
+    /// <summary>Best-effort document/page title for the browser surface.</summary>
+    public string BrowserDocumentTitle { get; init; } = "";
+
+    /// <summary>Honest guidance about browser capture limits and recommended nodes.</summary>
+    public string BrowserCaptureHint { get; init; } = "";
+
     /// <summary>Element bounds relative to the containing top-level window.</summary>
     public Rectangle RelativeBoundingRect
     {

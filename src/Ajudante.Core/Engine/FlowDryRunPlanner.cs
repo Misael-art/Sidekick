@@ -175,6 +175,10 @@ public sealed class FlowDryRunPlanner
             "action.desktopWaitElement" => $"Aguardar janela ou elemento '{target}' aparecer.",
             "action.desktopClickElement" => $"Clicar no elemento '{target}' usando seletor Mira antes de fallback.",
             "action.desktopReadElementText" => $"Ler texto do elemento '{target}' e salvar saida.",
+            "action.browserWaitElement" => $"Aguardar elemento do navegador '{target}' aparecer no escopo capturado pela Mira.",
+            "action.browserClick" => $"Clicar no elemento do navegador '{target}' usando seletor/fallback Mira.",
+            "action.browserExtractText" => $"Ler texto do navegador em '{target}' para validar estado antes de seguir.",
+            "action.browserType" => $"Digitar no elemento do navegador '{target}' apos localizar o alvo.",
             "action.mouseClick" => $"Clicar coordenada absoluta ({GetStringValue(node, "x")}, {GetStringValue(node, "y")}); revisar resiliencia.",
             "action.mouseDrag" => $"Arrastar por coordenadas de ({GetStringValue(node, "fromX")}, {GetStringValue(node, "fromY")}) ate ({GetStringValue(node, "toX")}, {GetStringValue(node, "toY")}).",
             "action.keyboardType" => string.IsNullOrWhiteSpace(GetStringValue(node, "text"))

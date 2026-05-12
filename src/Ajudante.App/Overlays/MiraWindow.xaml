@@ -103,6 +103,17 @@
                                TextTrimming="CharacterEllipsis" />
                 </StackPanel>
 
+                <StackPanel x:Name="BrowserContextRow" Orientation="Horizontal" Margin="0,1" Visibility="Collapsed">
+                    <TextBlock Text="Browser: "
+                               FontSize="11"
+                               Foreground="#FF6C7086" />
+                    <TextBlock x:Name="BrowserContextText"
+                               FontSize="11"
+                               Foreground="#FF94E2D5"
+                               MaxWidth="320"
+                               TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+
                 <TextBlock x:Name="OcrWarningText"
                            FontSize="10"
                            Foreground="#FFF9E2AF"

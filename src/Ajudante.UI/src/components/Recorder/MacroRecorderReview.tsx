@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
 import { sendCommand } from '../../bridge/bridge';
 import type {
   CapturedElement,
@@ -62,6 +62,82 @@ function eventWarnings(event: RecorderEvent): string[] {
   return warnings;
 }
 
+function collectReviewSignals(events: RecorderEvent[], draftWarnings: string[] = []): string[] {
+  const signals = new Set<string>();
+  const allWarnings = [...draftWarnings, ...events.flatMap(eventWarnings)].join(' ').toLocaleLowerCase('pt-BR');
+
+  if (allWarnings.includes('coordenada') || events.some((event) => event.mouse?.x != null && !hasEventSelector(event))) {
+    signals.add('Coordenada absoluta');
+  }
+
+  if (allWarnings.includes('redig') || events.some((event) => event.privacy?.isRedacted || event.kind === 'redactedInput')) {
+    signals.add('Texto redigido');
+  }
+
+  if (allWarnings.includes('seletor fraco') || events.some((event) => (event.confidence ?? 1) < 0.6)) {
+    signals.add('Seletor fraco');
+  }
+
+  return Array.from(signals);
+}
+
+interface TimelineItem {
+  id: string;
+  kind: 'event' | 'pauseGroup';
+  events: RecorderEvent[];
+  totalPauseMs: number;
+}
+
+function buildTimelineItems(events: RecorderEvent[]): TimelineItem[] {
+  const items: TimelineItem[] = [];
+  let pauseGroup: RecorderEvent[] = [];
+
+  const flushPauseGroup = () => {
+    if (pauseGroup.length === 0) {
+      return;
+    }
+
+    items.push({
+      id: `pause-group-${pauseGroup.map((event) => event.id).join('-')}`,
+      kind: 'pauseGroup',
+      events: pauseGroup,
+      totalPauseMs: pauseGroup.reduce((sum, event) => sum + (event.text?.length ?? 0), 0),
+    });
+    pauseGroup = [];
+  };
+
+  for (const event of events) {
+    if (event.kind === 'pause') {
+      pauseGroup.push(event);
+      continue;
+    }
+
+    flushPauseGroup();
+    items.push({ id: event.id, kind: 'event', events: [event], totalPauseMs: 0 });
+  }
+
+  flushPauseGroup();
+  return items;
+}
+
+function describeTimelineItem(item: TimelineItem): string {
+  if (item.kind === 'pauseGroup') {
+    const count = item.events.length;
+    return `${count} pausa${count === 1 ? '' : 's'} - ${item.totalPauseMs} ms`;
+  }
+
+  return describeEvent(item.events[0]);
+}
+
+function timelineItemWarnings(item: TimelineItem): string[] {
+  return item.events.flatMap(eventWarnings)
+    .filter((value, index, all) => value && all.indexOf(value) === index);
+}
+
+function timelineItemTitle(item: TimelineItem): string {
+  return item.kind === 'pauseGroup' ? 'Time lapse' : item.events[0].kind;
+}
+
 function hasEventSelector(event: RecorderEvent): boolean {
   return Boolean(
     event.element?.automationId
@@ -105,8 +181,16 @@ function toRecorderElement(capture: CapturedElement): RecorderElementContext {
     normalizedY: capture.normalizedWindowY,
     absoluteX: capture.cursorScreen?.x,
     absoluteY: capture.cursorScreen?.y,
+    cursorPixelColor: capture.cursorPixelColor,
+    detectedText: capture.detectedText,
+    currentText: capture.currentText,
+    placeholderText: capture.placeholderText,
     selectorStrength: capture.selectorStrength,
     selectorStrategy: capture.selectorStrategy,
+    isBrowserSurface: capture.isBrowserSurface,
+    browserUrl: capture.browserUrl,
+    browserOrigin: capture.browserOrigin,
+    browserDocumentTitle: capture.browserDocumentTitle,
   };
 }
 
@@ -133,12 +217,19 @@ export default function MacroRecorderReview() {
   const [isDiagnosing, setIsDiagnosing] = useState(false);
   const [diagnostics, setDiagnostics] = useState<Record<string, SelectorDiagnosticResult>>({});
   const [error, setError] = useState('');
+  const [removedEvents, setRemovedEvents] = useState<RecorderEvent[]>([]);
+  const shellRef = useRef<HTMLDivElement | null>(null);
+  const stopDragRef = useRef<(() => void) | null>(null);
+  const [dialogPosition, setDialogPosition] = useState<{ left: number; top: number } | null>(null);
 
   useEffect(() => {
+    // Review-local edits must reset when a new guided draft is selected.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setEvents(guidedDraft?.events ?? []);
     setDiagnostics({});
+    setRemovedEvents([]);
     setError('');
-  }, [guidedDraft?.id]);
+  }, [guidedDraft?.events, guidedDraft?.id]);
 
   const warnings = useMemo(() => {
     const eventWarningList = events.flatMap(eventWarnings);
@@ -146,17 +237,115 @@ export default function MacroRecorderReview() {
       .filter((value, index, all) => value && all.indexOf(value) === index);
   }, [events, guidedDraft?.warnings]);
 
+  const timelineItems = useMemo(() => buildTimelineItems(events), [events]);
+  const reviewSignals = useMemo(() => collectReviewSignals(events, guidedDraft?.warnings), [events, guidedDraft?.warnings]);
+  const safetySignals = useMemo(() => {
+    const hasSelector = events.some((event) => hasEventSelector(event));
+    const hasRelative = events.some((event) => {
+      const element = event.element as (RecorderElementContext & Partial<CapturedElement>) | null | undefined;
+      return element?.relativeX != null
+        || element?.normalizedX != null
+        || element?.relativePointX != null
+        || element?.normalizedWindowX != null;
+    });
+    const hasFixed = events.some((event) => {
+      const element = event.element as (RecorderElementContext & { absoluteX?: number }) | null | undefined;
+      return event.mouse?.x != null || element?.absoluteX != null;
+    });
+    const hasPixel = events.some((event) => Boolean(event.element?.cursorPixelColor));
+    const hasText = events.some((event) => Boolean(event.element?.detectedText || event.element?.name || event.text?.value));
+    const hasProcess = events.some((event) => Boolean(event.window?.processName || event.element?.processName));
+    const hasBrowser = events.some((event) => Boolean(event.element?.isBrowserSurface || event.element?.browserUrl));
+    return [
+      hasSelector ? 'Seletor Mira' : '',
+      hasRelative ? 'Posicao relativa' : '',
+      hasFixed ? 'Posicao fixa' : '',
+      hasPixel ? 'Cor do pixel' : '',
+      hasText ? 'Texto/elemento' : '',
+      hasProcess ? 'Janela/processo' : '',
+      hasBrowser ? 'Navegador' : '',
+    ].filter(Boolean);
+  }, [events]);
+
+  useEffect(() => () => stopDragRef.current?.(), []);
+
   if (!guidedDraft) {
     return null;
   }
 
   const removeEvent = (eventId: string) => {
+    const removed = events.find((event) => event.id === eventId);
+    if (removed) {
+      setRemovedEvents((current) => [...current, removed]);
+    }
     setEvents((current) => current.filter((event) => event.id !== eventId));
     setDiagnostics((current) => {
       const next = { ...current };
       delete next[eventId];
       return next;
     });
+  };
+
+  const removeTimelineItem = (item: TimelineItem) => {
+    const ids = new Set(item.events.map((event) => event.id));
+    setRemovedEvents((current) => [...current, ...item.events]);
+    setEvents((current) => current.filter((event) => !ids.has(event.id)));
+    setDiagnostics((current) => {
+      const next = { ...current };
+      ids.forEach((id) => {
+        delete next[id];
+      });
+      return next;
+    });
+  };
+
+  const restoreEvent = (eventId: string) => {
+    const eventToRestore = removedEvents.find((event) => event.id === eventId);
+    if (!eventToRestore) {
+      return;
+    }
+
+    setRemovedEvents((current) => current.filter((event) => event.id !== eventId));
+    setEvents((current) => [...current, eventToRestore]
+      .sort((left, right) => left.timestamp.localeCompare(right.timestamp)));
+  };
+
+  const startDrag = (event: MouseEvent<HTMLElement>) => {
+    if ((event.target as HTMLElement).closest('button')) {
+      return;
+    }
+
+    const rect = shellRef.current?.getBoundingClientRect();
+    const left = dialogPosition?.left ?? rect?.left ?? event.clientX;
+    const top = dialogPosition?.top ?? rect?.top ?? event.clientY;
+    const usePointerOffset = Boolean(rect && (rect.width > 0 || rect.height > 0));
+    const offset = {
+      x: usePointerOffset ? event.clientX - left : 0,
+      y: usePointerOffset ? event.clientY - top : 0,
+    };
+
+    const moveTo = (clientX: number, clientY: number) => {
+      const maxLeft = Math.max(8, window.innerWidth - 120);
+      const maxTop = Math.max(8, window.innerHeight - 80);
+      setDialogPosition({
+        left: Math.min(Math.max(8, clientX - offset.x), maxLeft),
+        top: Math.min(Math.max(8, clientY - offset.y), maxTop),
+      });
+    };
+
+    stopDragRef.current?.();
+    const handleMove = (moveEvent: globalThis.MouseEvent) => moveTo(moveEvent.clientX, moveEvent.clientY);
+    const handleUp = () => {
+      window.removeEventListener('mousemove', handleMove);
+      window.removeEventListener('mouseup', handleUp);
+      stopDragRef.current = null;
+    };
+
+    setDialogPosition({ left, top });
+    window.addEventListener('mousemove', handleMove);
+    window.addEventListener('mouseup', handleUp);
+    stopDragRef.current = handleUp;
+    event.preventDefault();
   };
 
   const diagnoseSelectors = async () => {
@@ -279,14 +468,21 @@ export default function MacroRecorderReview() {
   };
 
   return (
-    <div className="macro-review" role="dialog" aria-modal="false" aria-labelledby="macro-review-title">
+    <div
+      ref={shellRef}
+      className={`macro-review ${dialogPosition ? 'macro-review--free' : ''}`}
+      role="dialog"
+      aria-modal="false"
+      aria-labelledby="macro-review-title"
+      style={dialogPosition ? { left: `${dialogPosition.left}px`, top: `${dialogPosition.top}px`, right: 'auto', bottom: 'auto' } : undefined}
+    >
       <div className="macro-review__panel">
-        <header className="macro-review__header">
+        <header className="macro-review__header" onMouseDown={startDrag} title="Arraste para mover">
           <div>
             <span className="macro-review__eyebrow">Recorder</span>
             <h2 id="macro-review-title" className="macro-review__title">Revisar gravacao</h2>
             <p className="macro-review__subtitle">
-              {guidedDraft.displayName} - {events.length} evento(s) - score {guidedDraft.score ?? 'n/d'}
+              {guidedDraft.displayName} - {events.length} evento(s)
             </p>
           </div>
           <button
@@ -298,6 +494,20 @@ export default function MacroRecorderReview() {
             x
           </button>
         </header>
+
+        <section className="macro-review__scoreboard" aria-label="Robustez da gravacao">
+          <div className="macro-review__score">
+            <strong>Robustez {guidedDraft.score ?? 'n/d'}/100</strong>
+            <span>Nada sera armado ou executado sem sua revisao.</span>
+          </div>
+          {reviewSignals.length > 0 && (
+            <div className="macro-review__signals" aria-label="Sinais frageis detectados">
+              {reviewSignals.map((signal) => (
+                <span key={signal}>{signal}</span>
+              ))}
+            </div>
+          )}
+        </section>
 
         {warnings.length > 0 && (
           <section className="macro-review__warnings" aria-label="Avisos da gravacao">
@@ -311,17 +521,19 @@ export default function MacroRecorderReview() {
           <section className="macro-review__timeline" aria-label="Timeline gravada">
             {events.length === 0 ? (
               <div className="macro-review__empty">Todos os eventos foram removidos.</div>
-            ) : events.map((event, index) => (
-              <article key={event.id} className="macro-review__event">
+            ) : timelineItems.map((item, index) => {
+              const event = item.events[0];
+              return (
+              <article key={item.id} className="macro-review__event">
                 <div className="macro-review__event-index">{index + 1}</div>
                 <div className="macro-review__event-copy">
-                  <strong>{event.kind}</strong>
-                  <span>{describeEvent(event)}</span>
+                  <strong>{timelineItemTitle(item)}</strong>
+                  <span>{describeTimelineItem(item)}</span>
                   <small>
                     {formatTimestamp(event.timestamp)}
                     {event.window?.windowTitle ? ` - ${event.window.windowTitle}` : ''}
                   </small>
-                  {eventWarnings(event).map((warning) => (
+                  {timelineItemWarnings(item).map((warning) => (
                     <em key={warning}>{warning}</em>
                   ))}
                   {diagnostics[event.id] && (
@@ -333,12 +545,13 @@ export default function MacroRecorderReview() {
                 <button
                   type="button"
                   className="macro-review__remove"
-                  onClick={() => removeEvent(event.id)}
+                  onClick={() => item.kind === 'pauseGroup' ? removeTimelineItem(item) : removeEvent(event.id)}
                 >
                   Remover
                 </button>
               </article>
-            ))}
+              );
+            })}
           </section>
 
           <aside className="macro-review__preview" aria-label="Previa de nodes sugeridos">
@@ -346,6 +559,14 @@ export default function MacroRecorderReview() {
             <span>{guidedDraft.suggestedNodes?.length ?? 0} node(s) sugerido(s)</span>
             <span>{guidedDraft.suggestedConnections?.length ?? 0} conexao(oes)</span>
             <span>{guidedDraft.limitations?.[0] ?? 'Importacao sempre desarmada.'}</span>
+            <div className="macro-review__safety" aria-label="Pontos de seguranca sugeridos">
+              <strong>Pontos de seguranca</strong>
+              {safetySignals.length === 0 ? (
+                <span>Nenhum contexto forte capturado.</span>
+              ) : safetySignals.map((signal) => (
+                <span key={signal} className="macro-review__chip">{signal}</span>
+              ))}
+            </div>
             <button
               type="button"
               className="macro-review__btn macro-review__btn--secondary"
@@ -362,6 +583,25 @@ export default function MacroRecorderReview() {
             >
               Reparar com Mira
             </button>
+            {removedEvents.length > 0 && (
+              <div className="macro-review__removed" aria-label="Passos removidos">
+                <strong>
+                  {removedEvents.length}
+                  {' '}
+                  {removedEvents.length === 1 ? 'passo removido' : 'passos removidos'}
+                </strong>
+                {removedEvents.slice(-3).map((event) => (
+                  <button
+                    key={event.id}
+                    type="button"
+                    className="macro-review__btn macro-review__btn--secondary"
+                    onClick={() => restoreEvent(event.id)}
+                  >
+                    Restaurar passo
+                  </button>
+                ))}
+              </div>
+            )}
           </aside>
         </div>
 

@@ -429,6 +429,14 @@ export interface InspectionAsset {
   source: InspectionAssetSourceInfo;
   locator: InspectionAssetLocator;
   content: InspectionAssetContent;
+  browser?: {
+    isBrowserSurface?: boolean;
+    url?: string | null;
+    origin?: string | null;
+    documentTitle?: string | null;
+    captureHint?: string | null;
+    recommendedNodes?: string[];
+  } | null;
 }
 
 export interface CapturedElement {
@@ -475,6 +483,11 @@ export interface CapturedElement {
   normalizedWindowY?: number;
   normalizedScreenX?: number;
   normalizedScreenY?: number;
+  isBrowserSurface?: boolean;
+  browserUrl?: string;
+  browserOrigin?: string;
+  browserDocumentTitle?: string;
+  browserCaptureHint?: string;
   selectorStrength?: string;
   selectorStrategy?: string;
   asset?: InspectionAsset | null;
@@ -561,8 +574,16 @@ export interface RecorderElementContext {
   normalizedY?: number;
   absoluteX?: number;
   absoluteY?: number;
+  cursorPixelColor?: string | null;
+  detectedText?: string | null;
+  currentText?: string | null;
+  placeholderText?: string | null;
   selectorStrength?: string;
   selectorStrategy?: string;
+  isBrowserSurface?: boolean;
+  browserUrl?: string | null;
+  browserOrigin?: string | null;
+  browserDocumentTitle?: string | null;
 }
 
 export interface RecorderMousePayload {

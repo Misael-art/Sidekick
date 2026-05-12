@@ -5,7 +5,7 @@ public sealed class MiraInspectionManifest
     public string Id { get; set; } = "";
     public string Kind { get; set; } = "inspection";
     public int SchemaVersion { get; set; } = 1;
-    public int Version { get; set; } = 2;
+    public int Version { get; set; } = 3;
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
     public string DisplayName { get; set; } = "";
@@ -14,6 +14,7 @@ public sealed class MiraInspectionManifest
     public MiraInspectionSourceInfo Source { get; set; } = new();
     public MiraInspectionLocator Locator { get; set; } = new();
     public MiraInspectionContent Content { get; set; } = new();
+    public MiraInspectionBrowserContext? Browser { get; set; }
 }
 
 public sealed class MiraInspectionSourceInfo
@@ -108,4 +109,14 @@ public sealed class MiraInspectionFallback
     public double NormalizedY { get; set; }
     public int AbsoluteX { get; set; }
     public int AbsoluteY { get; set; }
+}
+
+public sealed class MiraInspectionBrowserContext
+{
+    public bool IsBrowserSurface { get; set; }
+    public string? Url { get; set; }
+    public string? Origin { get; set; }
+    public string? DocumentTitle { get; set; }
+    public string? CaptureHint { get; set; }
+    public string[] RecommendedNodes { get; set; } = [];
 }

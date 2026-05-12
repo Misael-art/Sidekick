@@ -120,8 +120,12 @@ function StickyNoteImpl({ id, data, selected }: NodeProps) {
   const titleRef = useRef<HTMLInputElement>(null);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
 
+  // Local edit drafts intentionally resync when a different sticky note payload is loaded.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => setDraftTitle(sticky.title), [sticky.title]);
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => setDraftBody(sticky.body), [sticky.body]);
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => setDraftFormat(sticky.contentFormat === 'markdown' ? 'markdown' : 'plain'), [sticky.contentFormat]);
 
   useEffect(() => {

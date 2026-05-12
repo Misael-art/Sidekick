@@ -22,6 +22,7 @@
 - **Canvas:** area onde o flow e montado. Clique com o botao direito para abrir o menu rapido, ou arraste um fio de saida e solte em area vazia para escolher o proximo node ja conectado.
 - **Property Panel:** configuracoes do node selecionado. Campos de escolha fechada, como `Button`, `Click Type`, `Format`, `Mode` e `Operation`, aparecem como listas para evitar erro de digitacao.
 - **Status Bar:** estado do runtime, fila, flows armados e logs.
+- **Debug visual:** no menu avancado, projeta um overlay em primeiro plano com node/fase atual e mantem historico curto no status para identificar gargalos.
 
 ---
 
@@ -91,7 +92,7 @@ Regra pratica:
 
 Ao abrir um canvas vazio, o Sidekick oferece quatro caminhos curtos:
 
-- **Gravar uma automacao:** inicia o Recorder local. Nada e aplicado nem executado automaticamente; voce revisa a timeline antes de criar nodes.
+- **Gravar uma automacao:** inicia o Recorder local. Nada e aplicado nem executado automaticamente; voce revisa a timeline antes de criar nodes. Pausas podem virar esperas por alvo Mira quando houver contexto suficiente.
 - **Usar receita:** abre Receitas locais oficiais. A receita entra como copia editavel e desarmada.
 - **Capturar com Mira:** captura um alvo real da tela para preencher selectors de nodes desktop.
 - **Criar manualmente:** adiciona um primeiro node no canvas e deixa voce montar o flow passo a passo.
@@ -216,6 +217,7 @@ O Mira mostra dados pensados para automacao:
 - nome do elemento, janela, processo e caminho do executavel
 - class name, automation id, control type e bounds absolutos/relativos
 - cursor, cor sob o cursor, foco, enabled e visible
+- quando a captura vem de navegador, contexto web exposto pela acessibilidade: URL/origem/titulo quando disponiveis e sugestao de nodes browser
 - estrategia sugerida e robustez do seletor (`forte`, `media` ou `fraca`)
 - preview do ativo salvo e acao **Test Selector**
 
@@ -225,6 +227,16 @@ Dicas:
 - Use **Use Latest** quando estiver ajustando um flow rapidamente logo apos a inspecao.
 - Se necessario, clique em **Clear** para limpar o binding e editar os campos manualmente.
 - Na **Mira Lib**, cada captura salva aparece com thumbnail, nome, notas e tags. Voce pode buscar por nome, texto detectado, processo, janela, robustez ou tag; tambem pode duplicar, apagar, editar metadata e rodar **Test Selector**.
+
+### 5.1.1 Recorder
+Use **Recorder** para capturar um rascunho de macro local/offline.
+
+- A revisao e obrigatoria: o rascunho e aplicado desarmado e nunca roda automaticamente.
+- A janela **Revisar gravacao** pode ser arrastada para liberar o canvas durante a montagem.
+- Pausas consecutivas aparecem como **Time lapse** para reduzir ruido.
+- Quando o evento seguinte tem contexto Mira forte, uma pausa fixa pode virar espera por elemento/janela/browser em vez de `Delay`.
+- O painel destaca pontos de seguranca capturados: posicao fixa, posicao relativa, cor sob o cursor, texto/elemento, janela/processo e navegador.
+- Se o passo ainda cair em coordenada absoluta, recapture com Mira ou Snip antes de executar.
 
 ### 5.2 Snip
 Use **Snip** para capturar uma regiao da tela e reutilizar a imagem como template.

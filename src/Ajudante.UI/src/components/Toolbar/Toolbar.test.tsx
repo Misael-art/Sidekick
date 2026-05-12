@@ -513,6 +513,79 @@ describe('Toolbar runtime controls', () => {
     });
   });
 
+  it('keeps the top-level toolbar focused on product commands and moves file controls to Arquivo', async () => {
+    const React = await import('react');
+    const { default: Toolbar } = await import('./Toolbar');
+    const { useFlowStore } = await import('../../store/flowStore');
+    const { useAppStore } = await import('../../store/appStore');
+
+    useFlowStore.setState({
+      flowId: 'flow-toolbar-focus',
+      flowName: 'Toolbar Focus Flow',
+      isDirty: false,
+      nodes: [
+        {
+          id: 'trigger-1',
+          type: 'triggerNode',
+          position: { x: 0, y: 0 },
+          data: {
+            typeId: 'trigger.filesystem',
+            displayName: 'Arquivo criado',
+            nodeAlias: '',
+            nodeComment: '',
+            category: 'Trigger',
+            color: '#EF4444',
+            inputPorts: [],
+            outputPorts: [{ id: 'triggered', name: 'Triggered', dataType: 'Flow' }],
+            properties: [],
+            propertyValues: {},
+          },
+        },
+      ],
+      edges: [],
+      selectedNodeId: null,
+    });
+    useAppStore.setState({
+      isRunning: false,
+      queueLength: 0,
+      flowRuntimes: {},
+      currentRun: null,
+    });
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(React.createElement(Toolbar));
+    });
+
+    const topLevelButtons = Array.from(container.querySelectorAll<HTMLButtonElement>('.toolbar > .toolbar__group > button'))
+      .map((button) => button.textContent ?? '');
+
+    expect(topLevelButtons.join('|')).toContain('Receitas');
+    expect(topLevelButtons.join('|')).toContain('Saude');
+    expect(topLevelButtons.join('|')).toContain('Dry-run');
+    expect(topLevelButtons.join('|')).toContain('Executar');
+    expect(topLevelButtons.join('|')).toContain('Monitorar');
+    expect(topLevelButtons.join('|')).toContain('Recorder');
+    expect(topLevelButtons.join('|')).toContain('Mira');
+    expect(topLevelButtons.join('|')).toContain('Snip');
+    expect(topLevelButtons.join('|')).not.toContain('Novo');
+    expect(topLevelButtons.join('|')).not.toContain('Salvar');
+    expect(topLevelButtons.join('|')).not.toContain('Carregar');
+
+    const fileMenu = container.querySelector('.toolbar__file-menu');
+    expect(fileMenu?.textContent).toContain('Arquivo');
+    expect(fileMenu?.textContent).toContain('Novo');
+    expect(fileMenu?.textContent).toContain('Salvar');
+    expect(fileMenu?.textContent).toContain('Carregar');
+
+    await act(async () => {
+      root.unmount();
+    });
+  }, 15_000);
+
   it('lets the user choose PT-BR or English explicitly', async () => {
     const React = await import('react');
     const { default: Toolbar } = await import('./Toolbar');

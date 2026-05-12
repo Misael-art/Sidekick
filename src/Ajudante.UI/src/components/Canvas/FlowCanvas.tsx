@@ -37,10 +37,69 @@ type CanvasPointerEvent = ReactMouseEvent<Element> | globalThis.MouseEvent;
 type CanvasPointerLikeEvent = CanvasPointerEvent | globalThis.TouchEvent;
 const CONTEXT_MENU_WIDTH = 320;
 const CONTEXT_MENU_MAX_HEIGHT = 620;
+const NODE_COMMAND_USAGE_KEY = 'sidekick.nodeCommandUsage';
+const productCategoryOrder = { Trigger: 0, Desktop: 1, Window: 2, Hardware: 3, Media: 4, Console: 5, Logic: 6, Data: 7, Utility: 8 };
 
 interface PendingConnection {
   sourceNodeId: string;
   sourcePortId: string;
+}
+
+interface NodeCommandUsage {
+  count: number;
+  lastUsedAt: number;
+}
+
+function readNodeCommandUsage(): Record<string, NodeCommandUsage> {
+  if (typeof window === 'undefined') {
+    return {};
+  }
+
+  try {
+    const raw = window.localStorage.getItem(NODE_COMMAND_USAGE_KEY);
+    if (!raw) {
+      return {};
+    }
+
+    const parsed = JSON.parse(raw) as Record<string, Partial<NodeCommandUsage>>;
+    return Object.entries(parsed).reduce<Record<string, NodeCommandUsage>>((acc, [typeId, usage]) => {
+      acc[typeId] = {
+        count: Number.isFinite(usage.count) ? Number(usage.count) : 0,
+        lastUsedAt: Number.isFinite(usage.lastUsedAt) ? Number(usage.lastUsedAt) : 0,
+      };
+      return acc;
+    }, {});
+  } catch {
+    return {};
+  }
+}
+
+function writeNodeCommandUsage(usage: Record<string, NodeCommandUsage>) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(NODE_COMMAND_USAGE_KEY, JSON.stringify(usage));
+  } catch {
+    // Command history is a convenience only; quota/privacy errors should not block creation.
+  }
+}
+
+function recordNodeCommandUse(
+  usage: Record<string, NodeCommandUsage>,
+  typeId: string,
+): Record<string, NodeCommandUsage> {
+  const previous = usage[typeId] ?? { count: 0, lastUsedAt: 0 };
+  const next = {
+    ...usage,
+    [typeId]: {
+      count: previous.count + 1,
+      lastUsedAt: Date.now(),
+    },
+  };
+  writeNodeCommandUsage(next);
+  return next;
 }
 
 export default function FlowCanvas() {
@@ -90,6 +149,8 @@ export default function FlowCanvas() {
   const toggleNodeDisabled = useFlowStore((s) => s.toggleNodeDisabled);
   const setUserMessage = useAppStore((s) => s.setUserMessage);
   const addLog = useAppStore((s) => s.addLog);
+  const nodeStatuses = useAppStore((s) => s.nodeStatuses);
+  const debugVisualEnabled = useAppStore((s) => s.debugVisualEnabled);
   const setInspectorMode = useAppStore((s) => s.setInspectorMode);
   const capturedElement = useAppStore((s) => s.capturedElement);
   const capturedRegion = useAppStore((s) => s.capturedRegion);
@@ -99,6 +160,7 @@ export default function FlowCanvas() {
   const guidedDraft = useAppStore((s) => s.guidedDraft);
   const setGuidedDraft = useAppStore((s) => s.setGuidedDraft);
   const [pendingConnection, setPendingConnection] = useState<PendingConnection | null>(null);
+  const [commandUsage, setCommandUsage] = useState<Record<string, NodeCommandUsage>>(() => readNodeCommandUsage());
   const selectedNode = nodes.find((node) => node.id === selectedNodeId) ?? null;
   const selectedStickyNote = stickyNotes.find((sticky) => sticky.id === selectedNodeId) ?? null;
 
@@ -106,6 +168,32 @@ export default function FlowCanvas() {
     () => [...nodes, ...stickyNotes] as Node<FlowNodeData | StickyNoteData>[],
     [nodes, stickyNotes],
   );
+
+  const renderedEdges = useMemo<Edge[]>(() => edges.map((edge): Edge => {
+    const sourceStatus = nodeStatuses[edge.source] ?? 'Idle';
+    const targetStatus = nodeStatuses[edge.target] ?? 'Idle';
+    const isErrorPath = sourceStatus === 'Error' || targetStatus === 'Error';
+    const isActivePath = sourceStatus === 'Running'
+      || targetStatus === 'Running'
+      || (sourceStatus === 'Completed' && targetStatus === 'Completed')
+      || (sourceStatus === 'Completed' && targetStatus !== 'Idle');
+    const classes = [
+      edge.className,
+      isActivePath ? 'flow-edge--active' : '',
+      isErrorPath ? 'flow-edge--error' : '',
+    ].filter(Boolean).join(' ');
+
+    return {
+      ...edge,
+      animated: debugVisualEnabled && isActivePath && !isErrorPath,
+      className: classes || undefined,
+      style: {
+        ...(edge.style ?? {}),
+        strokeWidth: isActivePath ? 3 : 2,
+        stroke: isErrorPath ? '#ef4444' : isActivePath ? '#58a6ff' : (edge.style?.stroke ?? '#6b7280'),
+      },
+    } as Edge;
+  }), [debugVisualEnabled, edges, nodeStatuses]);
 
   const stickyIdSet = useMemo(() => new Set(stickyNotes.map((s) => s.id)), [stickyNotes]);
 
@@ -229,6 +317,48 @@ export default function FlowCanvas() {
       || sourcePort.dataType === targetPort.dataType) ?? null;
   }, [nodeDefinitions, nodes]);
 
+  const isDefinitionCompatibleWithContext = useCallback((typeId: string) => {
+    if (!contextMenu) {
+      return true;
+    }
+
+    if (contextMenu.pendingConnection) {
+      return Boolean(resolveCompatibleTargetPort(
+        typeId,
+        contextMenu.pendingConnection.sourcePortId,
+        contextMenu.pendingConnection.sourceNodeId,
+      ));
+    }
+
+    if (contextMenu.insertEdgeId) {
+      const edge = edges.find((candidate) => candidate.id === contextMenu.insertEdgeId);
+      const definition = nodeDefinitions.find((candidate) => candidate.typeId === typeId);
+      const sourceNode = nodes.find((node) => node.id === edge?.source);
+      const targetNode = nodes.find((node) => node.id === edge?.target);
+      const sourcePort = sourceNode?.data.outputPorts.find((port) => port.id === (edge?.sourceHandle ?? 'out'));
+      const targetPort = targetNode?.data.inputPorts.find((port) => port.id === (edge?.targetHandle ?? 'in'));
+      if (!edge || !definition || !sourcePort || !targetPort) {
+        return false;
+      }
+
+      const hasCompatibleInput = definition.inputPorts.some((port) =>
+        sourcePort.dataType === 'Any'
+        || port.dataType === 'Any'
+        || sourcePort.dataType === port.dataType);
+      const hasCompatibleOutput = definition.outputPorts.some((port) =>
+        port.dataType === 'Any'
+        || targetPort.dataType === 'Any'
+        || port.dataType === targetPort.dataType);
+      return hasCompatibleInput && hasCompatibleOutput;
+    }
+
+    return true;
+  }, [contextMenu, edges, nodeDefinitions, nodes, resolveCompatibleTargetPort]);
+
+  const rememberNodeCommand = useCallback((typeId: string) => {
+    setCommandUsage((current) => recordNodeCommandUse(current, typeId));
+  }, []);
+
   const addNodeFromContext = useCallback((typeId: string, propertyOverrides?: Record<string, unknown>) => {
     if (!contextMenu) {
       return;
@@ -240,12 +370,17 @@ export default function FlowCanvas() {
         const message = 'Node nao inserido no fio: portas incompatíveis com a conexão existente.';
         addLog({ timestamp: new Date().toISOString(), level: 'warning', message });
         setUserMessage({ type: 'info', text: message });
+      } else {
+        rememberNodeCommand(typeId);
       }
       setContextMenu(null);
       return;
     }
 
     const newNodeId = addNode(typeId, contextMenu.position, propertyOverrides);
+    if (newNodeId) {
+      rememberNodeCommand(typeId);
+    }
     if (newNodeId && contextMenu.pendingConnection) {
       const targetPort = resolveCompatibleTargetPort(
         typeId,
@@ -271,7 +406,7 @@ export default function FlowCanvas() {
       }
     }
     setContextMenu(null);
-  }, [addLog, addNode, connectNodes, contextMenu, insertNodeOnEdge, resolveCompatibleTargetPort, setUserMessage]);
+  }, [addLog, addNode, connectNodes, contextMenu, insertNodeOnEdge, rememberNodeCommand, resolveCompatibleTargetPort, setUserMessage]);
 
   const filteredDefinitions = useMemo(() => {
     const filter = contextMenu?.filter.trim().toLocaleLowerCase('en-US') ?? '';
@@ -284,17 +419,49 @@ export default function FlowCanvas() {
       ].join(' ').toLocaleLowerCase('en-US').includes(filter))
       : nodeDefinitions;
 
-    return definitions.sort((left, right) => {
+    return definitions
+      .filter((definition) => isDefinitionCompatibleWithContext(definition.typeId))
+      .sort((left, right) => {
+      const leftUsage = commandUsage[left.typeId];
+      const rightUsage = commandUsage[right.typeId];
+      const leftScore = (leftUsage?.count ?? 0) * 1000 + (leftUsage?.lastUsedAt ?? 0) / 1_000_000_000;
+      const rightScore = (rightUsage?.count ?? 0) * 1000 + (rightUsage?.lastUsedAt ?? 0) / 1_000_000_000;
+      if (leftScore !== rightScore) {
+        return rightScore - leftScore;
+      }
+
       const leftCategory = getNodeProductCategory(left);
       const rightCategory = getNodeProductCategory(right);
       if (leftCategory !== rightCategory) {
-        const order = { Trigger: 0, Desktop: 1, Window: 2, Hardware: 3, Media: 4, Console: 5, Logic: 6, Data: 7, Utility: 8 };
-        return order[leftCategory] - order[rightCategory];
+        return productCategoryOrder[leftCategory] - productCategoryOrder[rightCategory];
       }
 
       return left.displayName.localeCompare(right.displayName);
     });
-  }, [contextMenu?.filter, nodeDefinitions]);
+  }, [commandUsage, contextMenu?.filter, isDefinitionCompatibleWithContext, nodeDefinitions]);
+
+  const recentDefinitions = useMemo(() => filteredDefinitions
+    .filter((definition) => commandUsage[definition.typeId]?.count > 0)
+    .sort((left, right) => {
+      const leftUsage = commandUsage[left.typeId];
+      const rightUsage = commandUsage[right.typeId];
+      if ((leftUsage?.count ?? 0) !== (rightUsage?.count ?? 0)) {
+        return (rightUsage?.count ?? 0) - (leftUsage?.count ?? 0);
+      }
+      return (rightUsage?.lastUsedAt ?? 0) - (leftUsage?.lastUsedAt ?? 0);
+    })
+    .slice(0, 5), [commandUsage, filteredDefinitions]);
+
+  const categorizedDefinitions = useMemo(() => {
+    const groups = new Map<string, typeof filteredDefinitions>();
+    for (const definition of filteredDefinitions) {
+      const category = getNodeProductCategory(definition);
+      groups.set(category, [...(groups.get(category) ?? []), definition]);
+    }
+
+    return Array.from(groups.entries())
+      .sort(([left], [right]) => productCategoryOrder[left as keyof typeof productCategoryOrder] - productCategoryOrder[right as keyof typeof productCategoryOrder]);
+  }, [filteredDefinitions]);
 
   const recommendedDefinitions = useMemo(() => {
     if (!contextMenu) {
@@ -559,25 +726,25 @@ export default function FlowCanvas() {
     setPendingConnection(null);
   }, [getFlowPositionFromEvent, pendingConnection, resolveClientPoint]);
 
-  useEffect(() => {
-    const openAddMenuAtCenter = (connection?: PendingConnection | null) => {
-      const bounds = reactFlowWrapper.current?.getBoundingClientRect();
-      const clientX = bounds ? bounds.left + bounds.width / 2 : window.innerWidth / 2;
-      const clientY = bounds ? bounds.top + bounds.height / 2 : window.innerHeight / 2;
-      const position = getFlowPositionFromEvent({ clientX, clientY } as CanvasPointerEvent) ?? { x: 0, y: 0 };
-      const menuPosition = clampContextMenuPosition(clientX, clientY);
-      setContextMenu({
-        x: menuPosition.x,
-        y: menuPosition.y,
-        position,
-        filter: '',
-        pendingConnection: connection ?? null,
-        insertEdgeId: null,
-      });
-      setNodeContextMenu(null);
-      setEdgeContextMenu(null);
-    };
+  const openAddMenuAtCenter = useCallback((connection?: PendingConnection | null) => {
+    const bounds = reactFlowWrapper.current?.getBoundingClientRect();
+    const clientX = bounds ? bounds.left + bounds.width / 2 : window.innerWidth / 2;
+    const clientY = bounds ? bounds.top + bounds.height / 2 : window.innerHeight / 2;
+    const position = getFlowPositionFromEvent({ clientX, clientY } as CanvasPointerEvent) ?? { x: 0, y: 0 };
+    const menuPosition = clampContextMenuPosition(clientX, clientY);
+    setContextMenu({
+      x: menuPosition.x,
+      y: menuPosition.y,
+      position,
+      filter: '',
+      pendingConnection: connection ?? null,
+      insertEdgeId: null,
+    });
+    setNodeContextMenu(null);
+    setEdgeContextMenu(null);
+  }, [getFlowPositionFromEvent]);
 
+  useEffect(() => {
     const handleKeyDown = (event: globalThis.KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
       if (target?.closest('input, textarea, select, [contenteditable="true"]')) {
@@ -630,13 +797,13 @@ export default function FlowCanvas() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [autoLayout, duplicateNode, duplicateStickyNote, getFlowPositionFromEvent, selectedNode, selectedNodeId, selectedStickyNote]);
+  }, [autoLayout, duplicateNode, duplicateStickyNote, openAddMenuAtCenter, selectedNode, selectedNodeId, selectedStickyNote]);
 
   return (
     <div ref={reactFlowWrapper} className="flow-canvas">
       <ReactFlow
         nodes={renderedNodes}
-        edges={edges}
+        edges={renderedEdges}
         onNodesChange={onNodesChange as unknown as OnNodesChange<Node<FlowNodeData | StickyNoteData>>}
         onEdgesChange={onEdgesChange}
         onConnect={handleConnect}
@@ -679,6 +846,16 @@ export default function FlowCanvas() {
           }}
         />
       </ReactFlow>
+      <button
+        type="button"
+        className="flow-canvas__quick-add"
+        onClick={() => openAddMenuAtCenter()}
+        title="Adicionar passo (/ ou Ctrl+K)"
+      >
+        <span>+</span>
+        Adicionar passo
+        <kbd>/</kbd>
+      </button>
       {nodes.length === 0 && stickyNotes.length === 0 && (
         <div className="flow-empty-state" role="region" aria-label="Assistente de Automacao">
           <div className="flow-empty-state__eyebrow">Primeiro sucesso</div>
@@ -862,6 +1039,25 @@ export default function FlowCanvas() {
             </div>
           )}
 
+          {recentDefinitions.length > 0 && (
+            <div className="flow-context-menu__section">
+              <div className="flow-context-menu__section-title">Recentes e frequentes</div>
+              <div className="flow-context-menu__pills">
+                {recentDefinitions.map((definition) => (
+                  <button
+                    key={definition.typeId}
+                    type="button"
+                    className="flow-context-menu__pill"
+                    onClick={() => addNodeFromContext(definition.typeId)}
+                  >
+                    <span>{definition.displayName}</span>
+                    <small>{commandUsage[definition.typeId]?.count ?? 0} uso(s)</small>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {recommendedDefinitions.length > 0 && (
             <div className="flow-context-menu__section">
               <div className="flow-context-menu__section-title">Recomendados agora</div>
@@ -910,22 +1106,36 @@ export default function FlowCanvas() {
                 }
               }}
             />
+            <div className="flow-context-menu__section-title">Categorias</div>
+            <div className="flow-context-menu__category-strip" aria-label="Categorias de nodes filtradas">
+              {categorizedDefinitions.map(([category, definitions]) => (
+                <span key={category} className="flow-context-menu__category-chip">
+                  {category}
+                  <strong>{definitions.length}</strong>
+                </span>
+              ))}
+            </div>
             <div className="flow-context-menu__list">
               {filteredDefinitions.length === 0 ? (
                 <div className="flow-context-menu__empty">Nenhum node encontrado.</div>
-              ) : filteredDefinitions.map((definition) => (
-                <button
-                  key={definition.typeId}
-                  type="button"
-                  className="flow-context-menu__item"
-                  onClick={() => addNodeFromContext(definition.typeId)}
-                >
-                  <span className={`flow-context-menu__dot flow-context-menu__dot--${definition.category.toLowerCase()}`} />
-                  <span>
-                    <strong>{definition.displayName}</strong>
-                    <small>{definition.description}</small>
-                  </span>
-                </button>
+              ) : categorizedDefinitions.map(([category, definitions]) => (
+                <div key={category} className="flow-context-menu__group">
+                  <div className="flow-context-menu__group-title">{category}</div>
+                  {definitions.map((definition) => (
+                    <button
+                      key={definition.typeId}
+                      type="button"
+                      className="flow-context-menu__item"
+                      onClick={() => addNodeFromContext(definition.typeId)}
+                    >
+                      <span className={`flow-context-menu__dot flow-context-menu__dot--${definition.category.toLowerCase()}`} />
+                      <span>
+                        <strong>{definition.displayName}</strong>
+                        <small>{definition.description}</small>
+                      </span>
+                    </button>
+                  ))}
+                </div>
               ))}
             </div>
           </div>

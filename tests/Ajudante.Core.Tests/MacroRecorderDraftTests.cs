@@ -159,6 +159,52 @@ public sealed class MacroRecorderDraftTests
     }
 
     [Fact]
+    public void DraftBuilder_turns_pause_before_mira_context_into_guarded_wait()
+    {
+        var session = new MacroRecordingSession
+        {
+            SessionId = "session-guarded-wait",
+            StartedAt = DateTime.UtcNow,
+            Status = "stopped",
+            PrivacyMode = "redactSensitive"
+        };
+        var target = new RecorderElementContext
+        {
+            AutomationId = "send-button",
+            Name = "Enviar",
+            ControlType = "Button",
+            ProcessName = "msedge",
+            ProcessPath = "C:/Program Files/Microsoft/Edge/Application/msedge.exe",
+            WindowTitle = "WhatsApp - Microsoft Edge",
+            Bounds = new RecorderBounds { X = 120, Y = 240, Width = 88, Height = 34 },
+            WindowBounds = new RecorderBounds { X = 0, Y = 0, Width = 1280, Height = 900 },
+            RelativeX = 164,
+            RelativeY = 257,
+            NormalizedX = 0.128,
+            NormalizedY = 0.285,
+            CursorPixelColor = "#00A884",
+            DetectedText = "Enviar mensagem",
+            IsBrowserSurface = true,
+            BrowserUrl = "https://web.whatsapp.com/"
+        };
+
+        var draft = MacroDraftBuilder.BuildDraft(
+            session,
+            [
+                Click(30, 40, session.StartedAt.AddMilliseconds(100)),
+                Click(164, 257, session.StartedAt.AddMilliseconds(2800), target),
+            ],
+            new MacroRecorderOptions { IdlePauseMs = 1000 });
+
+        var wait = Assert.Single(draft.SuggestedNodes.Where(node => node.TypeId == "action.browserWaitElement"));
+        Assert.Equal("send-button", wait.Properties["automationId"]);
+        Assert.Equal("#00A884", wait.Properties["expectedPixelColor"]);
+        Assert.Equal(true, wait.Properties["requirePixelMatchBeforeFallback"]);
+        Assert.DoesNotContain(draft.SuggestedNodes, node => node.TypeId == "logic.delay");
+        Assert.Contains(draft.Warnings, warning => warning.Contains("Pausa convertida", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public void DraftBuilder_falls_back_to_absolute_click_with_warning_when_selector_is_missing()
     {
         var session = new MacroRecordingSession

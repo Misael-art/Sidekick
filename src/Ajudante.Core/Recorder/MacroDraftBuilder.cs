@@ -25,9 +25,11 @@ public static class MacroDraftBuilder
         var warnings = new List<string>();
 
         var stepIndex = 0;
-        foreach (var recorderEvent in events)
+        for (var index = 0; index < events.Count; index++)
         {
-            var node = BuildNodeForEvent(recorderEvent, ++stepIndex, warnings);
+            var recorderEvent = events[index];
+            var nextEvent = events.Skip(index + 1).FirstOrDefault(candidate => candidate.Kind != "pause");
+            var node = BuildNodeForEvent(recorderEvent, nextEvent, ++stepIndex, warnings);
             if (node is not null)
             {
                 suggestedNodes.Add(node);
@@ -81,6 +83,7 @@ public static class MacroDraftBuilder
 
     private static RecorderSuggestedNode? BuildNodeForEvent(
         RecorderEvent recorderEvent,
+        RecorderEvent? nextEvent,
         int stepIndex,
         ICollection<string> draftWarnings)
     {
@@ -90,7 +93,7 @@ public static class MacroDraftBuilder
             "mouseDrag" => BuildDragNode(recorderEvent, stepIndex),
             "textInput" or "redactedInput" => BuildTextNode(recorderEvent, stepIndex, draftWarnings),
             "keyPress" or "hotkey" => BuildKeyPressNode(recorderEvent, stepIndex),
-            "pause" => BuildPauseNode(recorderEvent, stepIndex),
+            "pause" => BuildPauseNode(recorderEvent, nextEvent, stepIndex, draftWarnings),
             "elementSnapshot" => BuildWaitNode(recorderEvent, stepIndex, draftWarnings),
             "windowFocus" => BuildWaitNode(recorderEvent, stepIndex, draftWarnings),
             _ => null
@@ -109,7 +112,7 @@ public static class MacroDraftBuilder
             return new RecorderSuggestedNode
             {
                 Id = $"draft-step-{stepIndex}",
-                TypeId = "action.desktopClickElement",
+                TypeId = recorderEvent.Element?.IsBrowserSurface == true ? "action.browserClick" : "action.desktopClickElement",
                 Position = new RecorderNodePosition { X = 360 + ((stepIndex - 1) * 260), Y = 120 },
                 Properties = properties,
                 Confidence = 0.9d
@@ -154,7 +157,7 @@ public static class MacroDraftBuilder
         return new RecorderSuggestedNode
         {
             Id = $"draft-step-{stepIndex}",
-            TypeId = "action.desktopWaitElement",
+            TypeId = recorderEvent.Element?.IsBrowserSurface == true ? "action.browserWaitElement" : "action.desktopWaitElement",
             Position = new RecorderNodePosition { X = 360 + ((stepIndex - 1) * 260), Y = 120 },
             Properties = BuildSelectorProperties(recorderEvent),
             Confidence = 0.9d
@@ -234,8 +237,29 @@ public static class MacroDraftBuilder
         };
     }
 
-    private static RecorderSuggestedNode BuildPauseNode(RecorderEvent recorderEvent, int stepIndex)
+    private static RecorderSuggestedNode BuildPauseNode(
+        RecorderEvent recorderEvent,
+        RecorderEvent? nextEvent,
+        int stepIndex,
+        ICollection<string> draftWarnings)
     {
+        if (nextEvent is not null && HasStrongSelector(nextEvent.Element, nextEvent.Window))
+        {
+            var properties = BuildSelectorProperties(nextEvent);
+            properties["timeoutMs"] = Math.Clamp(recorderEvent.Text?.Length ?? 5000, 1000, 30000);
+            properties["storeInVariable"] = "";
+            draftWarnings.Add("Pausa convertida em espera por alvo Mira. Revise o ponto de seguranca antes de executar.");
+            return new RecorderSuggestedNode
+            {
+                Id = $"draft-step-{stepIndex}",
+                TypeId = nextEvent.Element?.IsBrowserSurface == true ? "action.browserWaitElement" : "action.desktopWaitElement",
+                Position = new RecorderNodePosition { X = 360 + ((stepIndex - 1) * 260), Y = 120 },
+                Properties = properties,
+                Confidence = 0.88d,
+                Warnings = ["Substitui pausa fixa por espera de janela/elemento capturado."]
+            };
+        }
+
         return new RecorderSuggestedNode
         {
             Id = $"draft-step-{stepIndex}",
@@ -280,7 +304,13 @@ public static class MacroDraftBuilder
             ["absoluteX"] = elementAbsoluteX != 0 ? elementAbsoluteX : mouse?.X ?? bounds?.X + bounds?.Width / 2 ?? 0,
             ["absoluteY"] = elementAbsoluteY != 0 ? elementAbsoluteY : mouse?.Y ?? bounds?.Y + bounds?.Height / 2 ?? 0,
             ["capturedWindowBounds"] = FormatBounds(element?.WindowBounds),
-            ["capturedScreenBounds"] = FormatBounds(element?.Bounds)
+            ["capturedScreenBounds"] = FormatBounds(element?.Bounds),
+            ["expectedPixelColor"] = element?.CursorPixelColor ?? "",
+            ["requirePixelMatchBeforeFallback"] = !string.IsNullOrWhiteSpace(element?.CursorPixelColor),
+            ["pixelTolerance"] = 18,
+            ["recordedDetectedText"] = element?.DetectedText ?? "",
+            ["browserUrl"] = element?.BrowserUrl ?? "",
+            ["browserOrigin"] = element?.BrowserOrigin ?? ""
         };
     }
 
@@ -322,6 +352,11 @@ public static class MacroDraftBuilder
         }
 
         var hasStableElement = !string.IsNullOrWhiteSpace(element.AutomationId);
+        var hasBrowserContext = element.IsBrowserSurface &&
+            (!string.IsNullOrWhiteSpace(element.BrowserUrl)
+             || !string.IsNullOrWhiteSpace(element.Name)
+             || !string.IsNullOrWhiteSpace(element.ControlType)
+             || !string.IsNullOrWhiteSpace(element.DetectedText));
         var hasWindowScope = !string.IsNullOrWhiteSpace(element.WindowTitle)
             || !string.IsNullOrWhiteSpace(element.ProcessName)
             || !string.IsNullOrWhiteSpace(element.ProcessPath)
@@ -329,7 +364,7 @@ public static class MacroDraftBuilder
             || !string.IsNullOrWhiteSpace(window?.ProcessName)
             || !string.IsNullOrWhiteSpace(window?.ProcessPath);
 
-        return hasStableElement && hasWindowScope;
+        return (hasStableElement || hasBrowserContext) && hasWindowScope;
     }
 
     private static string FirstNonEmpty(params string?[] values)

@@ -485,8 +485,16 @@ public static class MacroRecorderEventCoalescer
                 NormalizedY = source.NormalizedY,
                 AbsoluteX = source.AbsoluteX,
                 AbsoluteY = source.AbsoluteY,
+                CursorPixelColor = source.CursorPixelColor,
+                DetectedText = source.DetectedText,
+                CurrentText = source.CurrentText,
+                PlaceholderText = source.PlaceholderText,
                 SelectorStrength = source.SelectorStrength,
-                SelectorStrategy = source.SelectorStrategy
+                SelectorStrategy = source.SelectorStrategy,
+                IsBrowserSurface = source.IsBrowserSurface,
+                BrowserUrl = source.BrowserUrl,
+                BrowserOrigin = source.BrowserOrigin,
+                BrowserDocumentTitle = source.BrowserDocumentTitle
             };
     }
 

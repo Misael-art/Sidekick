@@ -37,6 +37,8 @@ export default function PropertyPanel() {
   const { data } = selectedNode;
   const selectorPropertyIds = getInspectionSelectorPropertyIds(data.properties);
 
+  // Property values cross the bridge as heterogeneous JSON.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handleChange = (propertyId: string, value: any) => {
     updateNodeProperty(selectedNode.id, propertyId, value);
   };
@@ -156,7 +158,10 @@ export default function PropertyPanel() {
 
 interface PropertyFieldProps {
   definition: PropertyDefinition;
+  // Node property payloads are heterogeneous bridge values.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   value: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   onChange: (value: any) => void;
 }
 
@@ -814,6 +819,8 @@ function ImageTemplateField({ definition, value, onChange }: PropertyFieldProps)
   );
 
   useEffect(() => {
+    // OCR text is an edit draft tied to the selected Snip asset.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setOcrDraft(currentAsset?.content.ocrText ?? '');
   }, [currentAsset?.id, currentAsset?.content.ocrText]);
   const filteredAssets = useMemo(() => {

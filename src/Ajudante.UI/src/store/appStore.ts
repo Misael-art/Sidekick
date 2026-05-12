@@ -17,6 +17,7 @@ import {
   type LogEntry,
   type MacroRecordingSession,
   type NodeStatus,
+  type RuntimePhaseEvent,
   type RuntimeStatusSnapshot,
   type SecuritySettings,
   type SnipAsset,
@@ -78,6 +79,7 @@ function shouldKeepFlowRuntime(flow: FlowRuntimeSnapshot): boolean {
 const emptyRuntimeStatus = normalizeRuntimeStatusSnapshot(null);
 const MAX_LOGS = 1000;
 const MAX_EXECUTION_HISTORY = 50;
+const MAX_RUNTIME_PHASES = 24;
 
 export interface AppState {
   runtimeStatus: RuntimeStatusSnapshot;
@@ -97,7 +99,9 @@ export interface AppState {
   debugVisualEnabled: boolean;
   nodePulseUntil: Record<string, number>;
   nodeStatusTimeline: Array<{ at: string; nodeId: string; status: NodeStatus }>;
+  runtimePhases: RuntimePhaseEvent[];
   setNodeStatus: (nodeId: string, status: NodeStatus) => void;
+  addRuntimePhase: (phase: RuntimePhaseEvent) => void;
   clearNodeStatuses: () => void;
   setDebugVisualEnabled: (enabled: boolean) => void;
 
@@ -227,6 +231,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   debugVisualEnabled: false,
   nodePulseUntil: {},
   nodeStatusTimeline: [],
+  runtimePhases: [],
   setNodeStatus: (nodeId, status) =>
     set((state) => {
       const now = Date.now();
@@ -244,7 +249,11 @@ export const useAppStore = create<AppState>((set, get) => ({
         nodeStatusTimeline: nextTimeline,
       };
     }),
-  clearNodeStatuses: () => set({ nodeStatuses: {}, nodePulseUntil: {}, nodeStatusTimeline: [] }),
+  addRuntimePhase: (phase) =>
+    set((state) => ({
+      runtimePhases: [...state.runtimePhases, phase].slice(-MAX_RUNTIME_PHASES),
+    })),
+  clearNodeStatuses: () => set({ nodeStatuses: {}, nodePulseUntil: {}, nodeStatusTimeline: [], runtimePhases: [] }),
   setDebugVisualEnabled: (enabled) => set({ debugVisualEnabled: enabled }),
 
   logs: [],

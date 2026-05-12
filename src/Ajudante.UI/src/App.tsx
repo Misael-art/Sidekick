@@ -47,6 +47,10 @@ const requiredPublishedNodeMarkers = [
   'logic.conditionGroup',
 ] as const;
 
+if (typeof window !== 'undefined') {
+  (window as WebViewWindow).__sidekickRequiredNodes = [...requiredPublishedNodeMarkers];
+}
+
 function formatFlowLabel(flow: { flowName?: string | null; flowId?: string | null }): string {
   if (flow.flowName?.trim()) {
     return flow.flowName.trim();
@@ -56,8 +60,6 @@ function formatFlowLabel(flow: { flowName?: string | null; flowId?: string | nul
 }
 
 export default function App() {
-  (window as WebViewWindow).__sidekickRequiredNodes = [...requiredPublishedNodeMarkers];
-
   const setNodeDefinitions = useFlowStore((s) => s.setNodeDefinitions);
   const loadFlow = useFlowStore((s) => s.loadFlow);
   const isDirty = useFlowStore((s) => s.isDirty);
@@ -68,6 +70,7 @@ export default function App() {
   const removeFlowRuntime = useAppStore((s) => s.removeFlowRuntime);
   const setExecutionHistory = useAppStore((s) => s.setExecutionHistory);
   const upsertExecutionHistory = useAppStore((s) => s.upsertExecutionHistory);
+  const addRuntimePhase = useAppStore((s) => s.addRuntimePhase);
   const addLog = useAppStore((s) => s.addLog);
   const setInspectorMode = useAppStore((s) => s.setInspectorMode);
   const setCapturedElement = useAppStore((s) => s.setCapturedElement);
@@ -193,6 +196,7 @@ export default function App() {
     });
 
     const offRuntimePhase = onEvent<RuntimePhaseEvent>('engine', 'runtimePhaseChanged', (payload) => {
+      addRuntimePhase(payload);
       addLog({
         timestamp: payload.timestamp ?? new Date().toISOString(),
         level: 'info',
@@ -386,6 +390,7 @@ export default function App() {
     };
   }, [
     addLog,
+    addRuntimePhase,
     loadFlow,
     removeFlowRuntime,
     setExecutionHistory,

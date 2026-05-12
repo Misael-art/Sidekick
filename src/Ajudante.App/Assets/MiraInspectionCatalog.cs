@@ -229,6 +229,7 @@ public sealed class MiraInspectionCatalog
         {
             Id = id,
             SchemaVersion = 1,
+            Version = 3,
             CreatedAt = timestampUtc,
             UpdatedAt = timestampUtc,
             DisplayName = ResolveDisplayName(element, displayName),
@@ -309,7 +310,18 @@ public sealed class MiraInspectionCatalog
                 NormalizedWindowY = element.NormalizedWindowY,
                 NormalizedScreenX = element.NormalizedScreenX,
                 NormalizedScreenY = element.NormalizedScreenY
-            }
+            },
+            Browser = element.IsBrowserSurface
+                ? new MiraInspectionBrowserContext
+                {
+                    IsBrowserSurface = true,
+                    Url = NullIfWhiteSpace(element.BrowserUrl),
+                    Origin = NullIfWhiteSpace(element.BrowserOrigin),
+                    DocumentTitle = NullIfWhiteSpace(element.BrowserDocumentTitle),
+                    CaptureHint = NullIfWhiteSpace(element.BrowserCaptureHint),
+                    RecommendedNodes = ["action.browserWaitElement", "action.browserClick", "action.browserExtractText", "action.browserType"]
+                }
+                : null
         };
     }
 
@@ -379,6 +391,15 @@ public sealed class MiraInspectionCatalog
         if (element.OcrAttempted && !element.OcrAvailable)
         {
             tags.Add("fallback");
+        }
+
+        if (element.IsBrowserSurface)
+        {
+            tags.Add("browser");
+            if (!string.IsNullOrWhiteSpace(element.BrowserOrigin))
+            {
+                tags.Add(element.BrowserOrigin);
+            }
         }
 
         return tags
@@ -459,6 +480,7 @@ public sealed class MiraInspectionCatalog
     private void NormalizeManifest(MiraInspectionManifest manifest)
     {
         manifest.SchemaVersion = manifest.SchemaVersion <= 0 ? 1 : manifest.SchemaVersion;
+        manifest.Version = manifest.Version <= 0 ? 3 : manifest.Version;
         manifest.Kind = string.IsNullOrWhiteSpace(manifest.Kind) ? "inspection" : manifest.Kind;
         manifest.Tags = manifest.Tags
             .Where(tag => !string.IsNullOrWhiteSpace(tag))

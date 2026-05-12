@@ -22,6 +22,7 @@ vi.mock('@xyflow/react', async (importOriginal) => {
       onPaneContextMenu,
       onConnectStart,
       onConnectEnd,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     }: any) => {
       const paneRef = React.useRef<HTMLDivElement | null>(null);
       const rendererRef = React.useRef<HTMLDivElement | null>(null);
@@ -105,6 +106,18 @@ vi.mock('@xyflow/react', async (importOriginal) => {
             >
               connect-end-renderer
             </button>
+            {(edges ?? []).map((
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              edge: any,
+            ) => (
+              <span
+                key={edge.id}
+                data-testid="rendered-edge"
+                data-edge-id={edge.id}
+                data-animated={String(Boolean(edge.animated))}
+                className={edge.className ?? ''}
+              />
+            ))}
           </div>
           <div data-testid="connection-radius">{connectionRadius}</div>
         </div>
@@ -121,6 +134,7 @@ describe('FlowCanvas context menu', () => {
   beforeEach(async () => {
     vi.resetModules();
     document.body.innerHTML = '';
+    window.localStorage.clear();
     (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   });
 
@@ -608,6 +622,149 @@ describe('FlowCanvas context menu', () => {
     expect(state.edges).toHaveLength(2);
     expect(state.edges.some((edge) => edge.source === 'node-source' && edge.target === state.selectedNodeId)).toBe(true);
     expect(state.edges.some((edge) => edge.source === state.selectedNodeId && edge.target === 'node-target')).toBe(true);
+
+    act(() => {
+      root.unmount();
+    });
+  }, 15_000);
+
+  it('shows Blender-style categories plus recent nodes and records command usage', async () => {
+    const React = await import('react');
+    const { default: FlowCanvas } = await import('./FlowCanvas');
+    const { useFlowStore } = await import('../../store/flowStore');
+    const { getDevNodeDefinitions } = await import('../../devNodeDefinitions');
+
+    window.localStorage.setItem('sidekick.nodeCommandUsage', JSON.stringify({
+      'logic.delay': { count: 4, lastUsedAt: 1_800_000_000_000 },
+    }));
+
+    useFlowStore.setState({
+      flowId: 'flow-command-palette',
+      flowName: 'Command Palette Flow',
+      nodeDefinitions: getDevNodeDefinitions(),
+      nodes: [],
+      edges: [],
+      stickyNotes: [],
+      selectedNodeId: null,
+    });
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    act(() => {
+      root.render(React.createElement(FlowCanvas));
+    });
+
+    const pane = container.querySelector('[data-testid="flow-pane"]')!;
+    act(() => {
+      pane.dispatchEvent(new MouseEvent('contextmenu', {
+        bubbles: true,
+        clientX: 380,
+        clientY: 240,
+      }));
+    });
+
+    expect(container.textContent).toContain('Recentes e frequentes');
+    expect(container.textContent).toContain('Categorias');
+    expect(container.textContent).toContain('Logic');
+
+    const search = container.querySelector<HTMLInputElement>('.flow-context-menu__search');
+    expect(document.activeElement).toBe(search);
+
+    const recentDelayButton = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Delay')) as HTMLButtonElement | undefined;
+    expect(recentDelayButton).toBeTruthy();
+
+    act(() => {
+      recentDelayButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    const usage = JSON.parse(window.localStorage.getItem('sidekick.nodeCommandUsage') ?? '{}') as Record<string, { count: number }>;
+    expect(usage['logic.delay']?.count).toBe(5);
+
+    act(() => {
+      root.unmount();
+    });
+  }, 15_000);
+
+  it('marks active runtime edges so large flows keep an execution trail visible', async () => {
+    const React = await import('react');
+    const { default: FlowCanvas } = await import('./FlowCanvas');
+    const { useFlowStore } = await import('../../store/flowStore');
+    const { useAppStore } = await import('../../store/appStore');
+    const { getDevNodeDefinitions } = await import('../../devNodeDefinitions');
+
+    useFlowStore.setState({
+      flowId: 'flow-active-path',
+      flowName: 'Active Path Flow',
+      nodeDefinitions: getDevNodeDefinitions(),
+      nodes: [
+        {
+          id: 'start',
+          type: 'triggerNode',
+          position: { x: 50, y: 50 },
+          data: {
+            typeId: 'trigger.manualStart',
+            displayName: 'Start Manual',
+            nodeAlias: '',
+            nodeComment: '',
+            category: 'Trigger',
+            color: '#EF4444',
+            inputPorts: [],
+            outputPorts: [{ id: 'triggered', name: 'Triggered', dataType: 'Flow' }],
+            properties: [],
+            propertyValues: {},
+          },
+        },
+        {
+          id: 'wait',
+          type: 'logicNode',
+          position: { x: 340, y: 50 },
+          data: {
+            typeId: 'logic.delay',
+            displayName: 'Delay',
+            nodeAlias: '',
+            nodeComment: '',
+            category: 'Logic',
+            color: '#EAB308',
+            inputPorts: [{ id: 'in', name: 'In', dataType: 'Flow' }],
+            outputPorts: [{ id: 'out', name: 'Out', dataType: 'Flow' }],
+            properties: [],
+            propertyValues: {},
+          },
+        },
+      ],
+      edges: [
+        {
+          id: 'edge-start-wait',
+          source: 'start',
+          sourceHandle: 'triggered',
+          target: 'wait',
+          targetHandle: 'in',
+          type: 'smoothstep',
+        },
+      ],
+      stickyNotes: [],
+      selectedNodeId: null,
+    });
+    useAppStore.setState({
+      nodeStatuses: { start: 'Completed', wait: 'Running' },
+      debugVisualEnabled: true,
+    });
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    act(() => {
+      root.render(React.createElement(FlowCanvas));
+    });
+
+    const edge = container.querySelector('[data-edge-id="edge-start-wait"]') as HTMLElement | null;
+    expect(edge).toBeTruthy();
+    expect(edge?.className).toContain('flow-edge--active');
+    expect(edge?.dataset.animated).toBe('true');
 
     act(() => {
       root.unmount();

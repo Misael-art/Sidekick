@@ -69,4 +69,30 @@ describe('appStore runtime state', () => {
 
     expect(useAppStore.getState().flowRuntimes['flow-queued']).toBeUndefined();
   });
+
+  it('records recent runtime phases for pedagogical debug without unbounded growth', async () => {
+    const { useAppStore } = await import('./appStore');
+
+    for (let index = 0; index < 28; index += 1) {
+      useAppStore.getState().addRuntimePhase({
+        flowId: 'flow-debug',
+        flowName: 'Debug Flow',
+        nodeId: `node-${index}`,
+        phase: index === 27 ? 'waitingForSelector' : 'executing',
+        message: index === 27 ? 'Aguardando seletor de botao' : undefined,
+        detail: index === 27
+          ? { selector: '#send', fallback: 'Clique por coordenada bloqueado', nextStep: 'Reparar com Mira' }
+          : undefined,
+        timestamp: `2026-05-12T12:00:${String(index).padStart(2, '0')}.000Z`,
+      });
+    }
+
+    const state = useAppStore.getState();
+    expect(state.runtimePhases).toHaveLength(24);
+    expect(state.runtimePhases[0].nodeId).toBe('node-4');
+    expect(state.runtimePhases.at(-1)?.phase).toBe('waitingForSelector');
+
+    state.clearNodeStatuses();
+    expect(useAppStore.getState().runtimePhases).toHaveLength(0);
+  });
 });

@@ -1,6 +1,7 @@
 using System.Drawing;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Text.RegularExpressions;
 using System.Windows.Forms;
 using System.Windows.Automation;
 using Ajudante.Platform.Screen;
@@ -184,6 +185,19 @@ public static class ElementInspector
             ocr.Text,
             ocr.Attempted,
             ocr.Available);
+        var browser = ResolveBrowserContext(
+            processName,
+            windowTitle,
+            controlType,
+            className,
+            automationId,
+            name,
+            valueText,
+            textPatternText,
+            legacyName,
+            legacyValue,
+            helpText,
+            text.DetectedText);
 
         return new ElementInfo
         {
@@ -228,8 +242,122 @@ public static class ElementInspector
             NormalizedWindowX = ClampNormalized(normalizedWindowX),
             NormalizedWindowY = ClampNormalized(normalizedWindowY),
             NormalizedScreenX = ClampNormalized(normalizedScreenX),
-            NormalizedScreenY = ClampNormalized(normalizedScreenY)
+            NormalizedScreenY = ClampNormalized(normalizedScreenY),
+            IsBrowserSurface = browser.IsBrowserSurface,
+            BrowserUrl = browser.Url,
+            BrowserOrigin = browser.Origin,
+            BrowserDocumentTitle = browser.DocumentTitle,
+            BrowserCaptureHint = browser.CaptureHint
         };
+    }
+
+    private static BrowserContext ResolveBrowserContext(
+        string processName,
+        string windowTitle,
+        string controlType,
+        string className,
+        string automationId,
+        string name,
+        string valueText,
+        string textPatternText,
+        string legacyName,
+        string legacyValue,
+        string helpText,
+        string detectedText)
+    {
+        var browserProcess = IsKnownBrowserProcess(processName);
+        var browserSurface = browserProcess
+            || string.Equals(controlType, "Document", StringComparison.OrdinalIgnoreCase)
+            || className.Contains("Chrome_RenderWidgetHost", StringComparison.OrdinalIgnoreCase)
+            || className.Contains("Mozilla", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(automationId, "RootWebArea", StringComparison.OrdinalIgnoreCase);
+
+        var url = ExtractUrl(valueText, textPatternText, legacyValue, legacyName, helpText, detectedText, name, windowTitle);
+        var origin = ResolveOrigin(url);
+        var documentTitle = FirstNonEmpty(
+            CleanBrowserTitle(name, url),
+            CleanBrowserTitle(detectedText, url),
+            CleanBrowserTitle(windowTitle, url));
+
+        var hint = browserSurface
+            ? string.IsNullOrWhiteSpace(url)
+                ? "Browser detectado via processo/UIAutomation; URL/DOM completo nao foi exposto. Use Browser nodes, seletor Mira e fallback relativo."
+                : "Browser detectado; Mira salvou URL/origem expostas por UIAutomation. DOM interno completo ainda depende do navegador expor acessibilidade."
+            : "";
+
+        return new BrowserContext(browserSurface, url, origin, documentTitle, hint);
+    }
+
+    private static bool IsKnownBrowserProcess(string processName)
+    {
+        var normalized = processName.Trim();
+        if (normalized.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+        {
+            normalized = normalized[..^4];
+        }
+
+        return normalized.Equals("msedge", StringComparison.OrdinalIgnoreCase)
+            || normalized.Equals("chrome", StringComparison.OrdinalIgnoreCase)
+            || normalized.Equals("firefox", StringComparison.OrdinalIgnoreCase)
+            || normalized.Equals("brave", StringComparison.OrdinalIgnoreCase)
+            || normalized.Equals("opera", StringComparison.OrdinalIgnoreCase)
+            || normalized.Equals("vivaldi", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string ExtractUrl(params string[] candidates)
+    {
+        foreach (var candidate in candidates)
+        {
+            if (string.IsNullOrWhiteSpace(candidate))
+            {
+                continue;
+            }
+
+            var match = Regex.Match(
+                candidate,
+                @"\b((?:https?|devtools|edge|chrome|about|file)://[^\s""'<>]+|[a-z0-9.-]+\.[a-z]{2,}(?:/[^\s""'<>]*)?)",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            if (match.Success)
+            {
+                return match.Groups[1].Value.TrimEnd('.', ',', ';', ')');
+            }
+        }
+
+        return "";
+    }
+
+    private static string ResolveOrigin(string url)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            return "";
+        }
+
+        var candidate = url.Contains("://", StringComparison.Ordinal) ? url : $"https://{url}";
+        return Uri.TryCreate(candidate, UriKind.Absolute, out var uri)
+            ? uri.Host
+            : "";
+    }
+
+    private static string CleanBrowserTitle(string value, string url)
+    {
+        var title = CleanText(value);
+        if (string.IsNullOrWhiteSpace(title))
+        {
+            return "";
+        }
+
+        if (!string.IsNullOrWhiteSpace(url))
+        {
+            title = title.Replace(url, "", StringComparison.OrdinalIgnoreCase).Trim(' ', '-', '|', '\u2014');
+        }
+
+        return title.Length > 120 ? title[..120] : title;
+    }
+
+    private static string FirstNonEmpty(params string[] values)
+    {
+        return values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)) ?? "";
     }
 
     private static string TryReadValuePattern(AutomationElement element)
@@ -522,4 +650,11 @@ public static class ElementInspector
             return 0d;
         return Math.Max(0d, Math.Min(1d, value));
     }
+
+    private sealed record BrowserContext(
+        bool IsBrowserSurface,
+        string Url,
+        string Origin,
+        string DocumentTitle,
+        string CaptureHint);
 }

@@ -12,6 +12,7 @@ using Ajudante.App.TrayIcon;
 using Ajudante.Core;
 using Ajudante.Core.Engine;
 using Ajudante.Core.Registry;
+using Ajudante.Platform.Overlays;
 using Microsoft.Web.WebView2.Core;
 
 namespace Ajudante.App;
@@ -29,6 +30,8 @@ public partial class MainWindow : Window
     private SystemTrayManager? _trayManager;
     private bool _isCloseConfirmed;
     private bool _isHandlingCloseRequest;
+    private bool _debugOverlayEnabled;
+    private DateTime _lastDebugOverlayAt = DateTime.MinValue;
     private string ExecutionHistoryFilePath => Path.Combine(App.DataDirectory, "execution-history.json");
 
     public MainWindow()
@@ -93,6 +96,7 @@ public partial class MainWindow : Window
         var miraInspectionCatalog = new MiraInspectionCatalog(App.DataDirectory, App.InspectionAssetsDirectory, App.AssetManifestsDirectory);
         _router = new BridgeRouter(_bridge, _registry, _runtimeManager, flowsDirectory, App.DataDirectory, Dispatcher, snipAssetCatalog, miraInspectionCatalog);
         _router.LogMessage += OnLogMessage;
+        _router.DebugOverlayPreferenceChanged += OnDebugOverlayPreferenceChanged;
         _bridge.SetRouter(_router);
 
         // Push node definitions to the frontend once the page finishes loading
@@ -177,6 +181,8 @@ public partial class MainWindow : Window
     private void OnNodeStatusChanged(string nodeId, NodeStatus status)
     {
         if (_bridge == null) return;
+
+        ShowDebugOverlay($"Node {nodeId}", status.ToString());
 
         _ = ForwardBridgeEventAsync(
             BridgeMessage.Channels.Engine,
@@ -304,6 +310,12 @@ public partial class MainWindow : Window
 
     private void OnRuntimePhaseChanged(object? sender, RuntimePhaseEvent phaseEvent)
     {
+        ShowDebugOverlay(
+            $"{phaseEvent.FlowName} / {phaseEvent.NodeId}",
+            string.IsNullOrWhiteSpace(phaseEvent.Message)
+                ? phaseEvent.Phase
+                : $"{phaseEvent.Phase}: {LogRedactor.Redact(phaseEvent.Message)}");
+
         _ = ForwardBridgeEventAsync(
             BridgeMessage.Channels.Engine,
             "runtimePhaseChanged",
@@ -317,6 +329,47 @@ public partial class MainWindow : Window
                 phaseEvent.Detail,
                 phaseEvent.Timestamp
             });
+    }
+
+    private void OnDebugOverlayPreferenceChanged(bool enabled)
+    {
+        _debugOverlayEnabled = enabled;
+        ShowDebugOverlay("Debug", enabled ? "Overlay pedagogico ativado." : "Overlay pedagogico desativado.", force: true);
+    }
+
+    private void ShowDebugOverlay(string title, string message, bool force = false)
+    {
+        if (!_debugOverlayEnabled && !force)
+        {
+            return;
+        }
+
+        if (!force && (DateTime.UtcNow - _lastDebugOverlayAt).TotalMilliseconds < 450)
+        {
+            return;
+        }
+
+        _lastDebugOverlayAt = DateTime.UtcNow;
+        var text = string.IsNullOrWhiteSpace(message)
+            ? title
+            : $"{title}\n{message}";
+
+        _ = OverlayDisplayService.ShowTextAsync(new OverlayTextOptions
+        {
+            Text = text,
+            FontSize = 26,
+            TextColor = "#E2E8F0",
+            BackgroundColor = "#101827",
+            HorizontalAlign = "left",
+            VerticalAlign = "top",
+            DurationMs = 1600,
+            WaitForClose = false,
+            TopMost = true,
+            ClickThrough = true,
+            Opacity = 0.92,
+            FadeInMs = 80,
+            FadeOutMs = 120
+        }, CancellationToken.None);
     }
 
     private void UpdateTrayRunningState()
@@ -451,6 +504,12 @@ public partial class MainWindow : Window
 
     private void CleanupResources()
     {
+        if (_router is not null)
+        {
+            _router.DebugOverlayPreferenceChanged -= OnDebugOverlayPreferenceChanged;
+            _router.LogMessage -= OnLogMessage;
+        }
+
         _router?.Dispose();
         _runtimeManager?.Dispose();
         _bridge?.Dispose();

@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useAppStore } from '../../store/appStore';
 import { useFlowStore } from '../../store/flowStore';
-import type { FlowExecutionHistoryEntry, FlowRuntimeSnapshot } from '../../bridge/types';
+import type { FlowExecutionHistoryEntry, FlowRuntimeSnapshot, RuntimePhaseEvent } from '../../bridge/types';
 
 function formatTime(value?: string | null): string {
   if (!value) {
@@ -48,6 +48,51 @@ function formatHistoryResult(entry: FlowExecutionHistoryEntry): string {
   }
 }
 
+function getDetailString(detail: unknown, keys: string[]): string {
+  if (!detail || typeof detail !== 'object') {
+    return '';
+  }
+
+  const source = detail as Record<string, unknown>;
+  for (const key of keys) {
+    const value = source[key];
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim();
+    }
+    if (typeof value === 'number' || typeof value === 'boolean') {
+      return String(value);
+    }
+  }
+
+  return '';
+}
+
+function buildPhaseInsight(
+  phase: RuntimePhaseEvent | null,
+  latestStatus: { nodeId: string; status: string } | null,
+  currentRunName: string,
+) {
+  const nodeId = phase?.nodeId || latestStatus?.nodeId || 'aguardando';
+  const status = latestStatus?.status ?? 'Idle';
+  const expected = getDetailString(phase?.detail, ['expected', 'selector', 'action', 'target', 'message'])
+    || phase?.message
+    || (status === 'Running' ? 'Executando o passo atual.' : 'Aguardando o proximo evento do runtime.');
+  const fallback = getDetailString(phase?.detail, ['fallback', 'fallbackActive', 'fallbackReason']);
+  const errorOrWait = getDetailString(phase?.detail, ['error', 'wait', 'waitingFor', 'timeout']);
+  const nextStep = getDetailString(phase?.detail, ['nextStep', 'suggestion', 'recommendation'])
+    || (fallback || errorOrWait ? 'Revise o seletor, rode Dry-run e repare com Mira se necessario.' : 'Acompanhe a trilha ativa no canvas.');
+
+  return {
+    flowName: phase?.flowName || currentRunName,
+    nodeId,
+    phase: phase?.phase || status,
+    expected,
+    fallback,
+    errorOrWait,
+    nextStep,
+  };
+}
+
 export default function ExecutionStatus() {
   const runtimeStatus = useAppStore((s) => s.runtimeStatus);
   const currentRun = useAppStore((s) => s.currentRun);
@@ -64,6 +109,7 @@ export default function ExecutionStatus() {
   const validationResult = useFlowStore((s) => s.validationResult);
   const debugVisualEnabled = useAppStore((s) => s.debugVisualEnabled);
   const nodeStatusTimeline = useAppStore((s) => s.nodeStatusTimeline);
+  const runtimePhases = useAppStore((s) => s.runtimePhases);
   const flowHealthReport = useAppStore((s) => s.flowHealthReport);
 
   const currentEditorRuntime = flowRuntimes[flowId] ?? null;
@@ -89,14 +135,52 @@ export default function ExecutionStatus() {
   const latestRun = recentFlowRuns[0] ?? null;
   const timelineEntries = useMemo(
     () => nodeStatusTimeline
-      .filter(() => !flowId || latestRun?.flowId === flowId)
+      .filter(() => !flowId || currentRun?.flowId === flowId || latestRun?.flowId === flowId)
       .slice(-8)
       .reverse(),
-    [flowId, latestRun?.flowId, nodeStatusTimeline],
+    [currentRun?.flowId, flowId, latestRun?.flowId, nodeStatusTimeline],
   );
+  const latestDebugEntry = timelineEntries[0] ?? null;
+  const latestRuntimePhase = useMemo(
+    () => runtimePhases
+      .filter((phase) => !flowId || phase.flowId === flowId || currentRun?.flowId === phase.flowId)
+      .at(-1) ?? null,
+    [currentRun?.flowId, flowId, runtimePhases],
+  );
+  const debugInsight = buildPhaseInsight(
+    latestRuntimePhase,
+    latestDebugEntry,
+    currentRun?.flowName ?? flowName,
+  );
+  const hasRuntimeContext = runtimeStatus.isRunning
+    || runtimeStatus.queueLength > 0
+    || Boolean(currentRun)
+    || Boolean(currentEditorRuntime?.lastError)
+    || debugVisualEnabled;
+  const shouldShowSummary = isLogsExpanded || hasRuntimeContext;
+  const actionableNextStep = currentEditorRuntime?.lastError
+    ? 'Abra os logs, ajuste o passo com erro e rode Dry-run.'
+    : runtimeStatus.isRunning
+      ? debugInsight.nextStep
+      : flowHealthReport && flowHealthReport.issues.length > 0
+        ? 'Corrija o primeiro item de Saude antes de executar.'
+        : 'Grave uma automacao, use Receitas ou pressione / para adicionar um passo.';
 
   return (
     <div className={`exec-status ${isLogsExpanded ? 'exec-status--expanded' : ''}`}>
+      {debugVisualEnabled && (currentRun || latestDebugEntry) && (
+        <div className="exec-status__debug-overlay" role="status" aria-live="polite">
+          <strong>Debug pedagogico</strong>
+          <span><b>Flow</b> {debugInsight.flowName}</span>
+          <span><b>Node atual</b> {debugInsight.nodeId}</span>
+          <span><b>Fase</b> {debugInsight.phase}</span>
+          <span><b>Esperado</b> {debugInsight.expected}</span>
+          {debugInsight.fallback && <span><b>Fallback ativo</b> {debugInsight.fallback}</span>}
+          {debugInsight.errorOrWait && <span><b>Espera/erro</b> {debugInsight.errorOrWait}</span>}
+          <span><b>Proximo passo</b> {debugInsight.nextStep}</span>
+        </div>
+      )}
+
       <div className="exec-status__bar">
         <div className="exec-status__left">
           <span className="exec-status__flow-name">{flowName}</span>
@@ -106,17 +190,17 @@ export default function ExecutionStatus() {
 
         <div className="exec-status__center exec-status__center--runtime">
           <span className="exec-status__metric">
+            Monitorando:
+            {' '}
             <strong>{runtimeStatus.armedFlowCount}</strong>
-            {' '}
-            armed
           </span>
           <span className="exec-status__metric">
+            Fila:
+            {' '}
             <strong>{runtimeStatus.queueLength}</strong>
-            {' '}
-            queued
           </span>
           <span className="exec-status__metric">
-            Current:
+            Atual:
             {' '}
             <strong>{currentRun?.flowName ?? 'Idle'}</strong>
           </span>
@@ -127,6 +211,11 @@ export default function ExecutionStatus() {
               {currentRun.source}
             </span>
           )}
+          <span className="exec-status__metric exec-status__metric--action">
+            Proxima acao:
+            {' '}
+            <strong>{actionableNextStep}</strong>
+          </span>
         </div>
 
         <div className="exec-status__right">
@@ -181,6 +270,7 @@ export default function ExecutionStatus() {
         </div>
       )}
 
+      {shouldShowSummary && (
       <div className="exec-status__summary">
         <div className="exec-status__summary-card">
           <span className="exec-status__summary-label">Editor flow</span>
@@ -245,6 +335,7 @@ export default function ExecutionStatus() {
           </span>
         </div>
       </div>
+      )}
 
       {isLogsExpanded && (
         <div className="exec-status__logs">

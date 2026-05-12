@@ -192,6 +192,12 @@ public partial class MiraWindow : Window
         CurrentTextText.Text = string.IsNullOrEmpty(element.CurrentText) ? "(none)" : element.CurrentText;
         PlaceholderText.Text = string.IsNullOrEmpty(element.PlaceholderText) ? "(none)" : element.PlaceholderText;
         TextSourceText.Text = $"{element.TextSource} / {element.CaptureQuality}";
+        BrowserContextText.Text = string.IsNullOrWhiteSpace(element.BrowserUrl)
+            ? element.BrowserCaptureHint
+            : $"{element.BrowserOrigin} - {element.BrowserUrl}";
+        BrowserContextRow.Visibility = element.IsBrowserSurface
+            ? Visibility.Visible
+            : Visibility.Collapsed;
         OcrWarningText.Text = element.OcrWarning;
         OcrWarningText.Visibility = string.IsNullOrWhiteSpace(element.OcrWarning)
             ? Visibility.Collapsed

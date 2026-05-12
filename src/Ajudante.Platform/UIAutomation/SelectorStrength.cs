@@ -33,6 +33,12 @@ public static class SelectorStrengthEvaluator
         if (hasAutomationId && hasProcessScope && hasWindow)
             return SelectorStrength.Strong;
 
+        if (element.IsBrowserSurface && hasProcessScope && hasWindow &&
+            (!string.IsNullOrWhiteSpace(element.BrowserUrl) || (hasName && hasControlType)))
+        {
+            return SelectorStrength.Medium;
+        }
+
         if ((hasAutomationId && hasWindow) || (hasName && hasControlType && hasProcessScope))
             return SelectorStrength.Medium;
 
@@ -65,6 +71,8 @@ public static class SelectorStrengthEvaluator
         return Evaluate(element) switch
         {
             SelectorStrength.Strong => "Seletor forte: AutomationId com janela e processo conhecidos.",
+            SelectorStrength.Medium when element.IsBrowserSurface =>
+                "Seletor medio: superficie de navegador com janela/processo e contexto web; DOM completo depende da acessibilidade do navegador.",
             SelectorStrength.Medium when !string.IsNullOrWhiteSpace(element.AutomationId) =>
                 "Seletor medio: AutomationId disponivel; adicionar processPath aumenta a robustez.",
             SelectorStrength.Medium =>

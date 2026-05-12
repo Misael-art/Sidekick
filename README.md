@@ -62,7 +62,7 @@ Core nodes appear first for everyday desktop automation. Labs/advanced nodes, su
 Detect pixel colors, find images on screen, and react to window events in real-time.
 
 ### 🧭 Mira & Snip Assets
-Capture UI selectors with Mira, capture image templates with Snip, test selectors, score selector robustness, save thumbnails/tags/notes in Mira Lib, and create pre-filled nodes from the latest capture.
+Capture UI selectors with Mira, capture image templates with Snip, test selectors, score selector robustness, save thumbnails/tags/notes in Mira Lib, capture browser URL/origin when accessibility exposes it, and create pre-filled nodes from the latest capture.
 
 ### 📸 Screenshot & Recording
 Capture screenshots (desktop/monitor/region/window) and record desktop/camera video with explicit outputs for file path, dimensions, frame count, and runtime-safe cancellation.

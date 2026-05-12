@@ -113,6 +113,37 @@ public class MiraInspectionCatalogTests : IDisposable
     }
 
     [Fact]
+    public async Task SaveCaptureAsync_PersistsBrowserContextWhenCapturedFromBrowserSurface()
+    {
+        Directory.CreateDirectory(_root);
+        var dataDirectory = Path.Combine(_root, "data");
+        var inspectionAssetsDirectory = Path.Combine(dataDirectory, "assets", "inspections");
+        var assetManifestsDirectory = Path.Combine(dataDirectory, "assets", "manifests");
+        var catalog = new MiraInspectionCatalog(dataDirectory, inspectionAssetsDirectory, assetManifestsDirectory);
+
+        var asset = await catalog.SaveCaptureAsync(CreateElementInfo(
+            automationId: "",
+            name: "WhatsApp",
+            className: "Chrome_RenderWidgetHostHWND",
+            controlType: "Document",
+            processId: 42,
+            processName: "msedge",
+            windowTitle: "WhatsApp - Microsoft Edge",
+            detectedText: "https://web.whatsapp.com/",
+            isBrowserSurface: true,
+            browserUrl: "https://web.whatsapp.com/",
+            browserOrigin: "web.whatsapp.com",
+            browserDocumentTitle: "WhatsApp"));
+
+        Assert.NotNull(asset.Browser);
+        Assert.True(asset.Browser!.IsBrowserSurface);
+        Assert.Equal("https://web.whatsapp.com/", asset.Browser.Url);
+        Assert.Equal("web.whatsapp.com", asset.Browser.Origin);
+        Assert.Contains("browser", asset.Tags);
+        Assert.Contains("browserWaitElement", string.Join(" ", asset.Browser.RecommendedNodes), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task UpdateAndDuplicateAsync_EditLibraryMetadataWithoutLosingLocator()
     {
         Directory.CreateDirectory(_root);
@@ -158,10 +189,16 @@ public class MiraInspectionCatalogTests : IDisposable
         Rectangle? bounds = null,
         int processId = 0,
         string windowTitle = "",
+        string processName = "",
         string valueText = "",
         string helpText = "",
+        string detectedText = "",
         string textSource = "",
-        string captureQuality = "")
+        string captureQuality = "",
+        bool isBrowserSurface = false,
+        string browserUrl = "",
+        string browserOrigin = "",
+        string browserDocumentTitle = "")
     {
         return new ElementInfo
         {
@@ -171,14 +208,21 @@ public class MiraInspectionCatalogTests : IDisposable
             ControlType = controlType,
             BoundingRect = bounds ?? new Rectangle(0, 0, 10, 10),
             ProcessId = processId,
+            ProcessName = processName,
             WindowTitle = windowTitle,
             ValueText = valueText,
             HelpText = helpText,
-            DetectedText = string.IsNullOrWhiteSpace(name) ? valueText : name,
+            DetectedText = !string.IsNullOrWhiteSpace(detectedText)
+                ? detectedText
+                : string.IsNullOrWhiteSpace(name) ? valueText : name,
             CurrentText = valueText,
             PlaceholderText = helpText,
             TextSource = textSource,
-            CaptureQuality = captureQuality
+            CaptureQuality = captureQuality,
+            IsBrowserSurface = isBrowserSurface,
+            BrowserUrl = browserUrl,
+            BrowserOrigin = browserOrigin,
+            BrowserDocumentTitle = browserDocumentTitle
         };
     }
 }

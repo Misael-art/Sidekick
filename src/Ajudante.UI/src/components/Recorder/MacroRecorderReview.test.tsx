@@ -141,4 +141,193 @@ describe('MacroRecorderReview', () => {
       root.unmount();
     });
   }, 15_000);
+
+  it('summarizes consecutive pauses as a single time lapse in the review timeline', async () => {
+    const React = await import('react');
+    const { default: MacroRecorderReview } = await import('./MacroRecorderReview');
+    const { useAppStore } = await import('../../store/appStore');
+
+    const draft: GuidedAutomationDraft = {
+      id: 'draft-pauses',
+      sessionId: 'session-pauses',
+      displayName: 'Pausas agrupadas',
+      isDraft: true,
+      startedAt: new Date(0).toISOString(),
+      stoppedAt: new Date(6000).toISOString(),
+      events: [
+        {
+          id: 'pause-1',
+          kind: 'pause',
+          timestamp: new Date(1000).toISOString(),
+          label: 'Pausa',
+          text: { value: null, length: 1500, isRedacted: false },
+          privacy: { isRedacted: false, mode: 'default', reason: '' },
+        },
+        {
+          id: 'pause-2',
+          kind: 'pause',
+          timestamp: new Date(2600).toISOString(),
+          label: 'Pausa',
+          text: { value: null, length: 1700, isRedacted: false },
+          privacy: { isRedacted: false, mode: 'default', reason: '' },
+        },
+      ],
+      suggestedNodes: [],
+      suggestedConnections: [],
+      warnings: [],
+      limitations: [],
+      score: 84,
+    };
+
+    useAppStore.setState({ guidedDraft: draft, userMessage: null });
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    act(() => {
+      root.render(React.createElement(MacroRecorderReview));
+    });
+
+    expect(container.textContent).toContain('Time lapse');
+    expect(container.textContent).toContain('2 pausas');
+    expect(container.textContent).toContain('3200 ms');
+    expect(container.querySelectorAll('.macro-review__event')).toHaveLength(1);
+
+    act(() => {
+      root.unmount();
+    });
+  }, 15_000);
+
+  it('makes robustness, fragile signals, removal and restore explicit before applying', async () => {
+    const React = await import('react');
+    const { default: MacroRecorderReview } = await import('./MacroRecorderReview');
+    const { useAppStore } = await import('../../store/appStore');
+
+    const draft: GuidedAutomationDraft = {
+      id: 'draft-robustness',
+      sessionId: 'session-robustness',
+      displayName: 'Revisao robustez',
+      isDraft: true,
+      events: [
+        {
+          id: 'coord-click',
+          kind: 'mouseClick',
+          timestamp: new Date(100).toISOString(),
+          mouse: { x: 920, y: 540, button: 'left' },
+          privacy: { isRedacted: false, mode: 'default', reason: '' },
+          confidence: 0.35,
+          warnings: ['Usa coordenada absoluta'],
+        },
+        {
+          id: 'secret-input',
+          kind: 'redactedInput',
+          timestamp: new Date(200).toISOString(),
+          text: { value: null, length: 8, isRedacted: true },
+          privacy: { isRedacted: true, mode: 'redactSensitive', reason: 'Texto redigido para revisao' },
+          confidence: 0.92,
+          warnings: [],
+        },
+      ],
+      suggestedNodes: [],
+      suggestedConnections: [],
+      warnings: ['Seletor fraco em 1 passo'],
+      limitations: [],
+      score: 52,
+    };
+
+    useAppStore.setState({ guidedDraft: draft, userMessage: null });
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    act(() => {
+      root.render(React.createElement(MacroRecorderReview));
+    });
+
+    expect(container.textContent).toContain('Robustez 52/100');
+    expect(container.textContent).toContain('Coordenada absoluta');
+    expect(container.textContent).toContain('Texto redigido');
+    expect(container.textContent).toContain('Seletor fraco');
+
+    const removeFirst = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Remover')) as HTMLButtonElement | undefined;
+    expect(removeFirst).toBeTruthy();
+
+    act(() => {
+      removeFirst!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(container.textContent).toContain('1 passo removido');
+    const restoreButton = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Restaurar passo')) as HTMLButtonElement | undefined;
+    expect(restoreButton).toBeTruthy();
+
+    act(() => {
+      restoreButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(container.querySelectorAll('.macro-review__event')).toHaveLength(2);
+
+    act(() => {
+      root.unmount();
+    });
+  }, 15_000);
+
+  it('lets the user drag the review window away from the canvas area', async () => {
+    const React = await import('react');
+    const { default: MacroRecorderReview } = await import('./MacroRecorderReview');
+    const { useAppStore } = await import('../../store/appStore');
+
+    const draft: GuidedAutomationDraft = {
+      id: 'draft-drag',
+      sessionId: 'session-drag',
+      displayName: 'Mover painel',
+      isDraft: true,
+      events: [
+        {
+          id: 'evt-1',
+          kind: 'mouseClick',
+          timestamp: new Date(100).toISOString(),
+          mouse: { x: 10, y: 20, button: 'left' },
+          privacy: { isRedacted: false, mode: 'default', reason: '' },
+        },
+      ],
+      suggestedNodes: [],
+      suggestedConnections: [],
+      warnings: [],
+      limitations: [],
+      score: 90,
+    };
+
+    useAppStore.setState({ guidedDraft: draft, userMessage: null });
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    act(() => {
+      root.render(React.createElement(MacroRecorderReview));
+    });
+
+    const shell = container.querySelector('.macro-review') as HTMLElement | null;
+    const header = container.querySelector('.macro-review__header') as HTMLElement | null;
+    expect(shell).toBeTruthy();
+    expect(header).toBeTruthy();
+
+    act(() => {
+      header!.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, clientX: 600, clientY: 320 }));
+      window.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: 420, clientY: 180 }));
+      window.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+    });
+
+    expect(shell!.style.left).toBe('420px');
+    expect(shell!.style.top).toBe('180px');
+    expect(shell!.className).toContain('macro-review--free');
+
+    act(() => {
+      root.unmount();
+    });
+  }, 15_000);
 });

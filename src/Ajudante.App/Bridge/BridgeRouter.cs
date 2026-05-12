@@ -49,6 +49,7 @@ public class BridgeRouter : IDisposable
     };
 
     public event Action<string>? LogMessage;
+    public event Action<bool>? DebugOverlayPreferenceChanged;
 
     public BridgeRouter(
         WebBridge bridge,
@@ -1266,6 +1267,10 @@ if (-not $consentAccepted) {
                 await HandleConvertMacroDraftToFlowAsync(message);
                 break;
 
+            case "setDebugOverlayEnabled":
+                await HandleSetDebugOverlayEnabledAsync(message);
+                break;
+
             default:
                 await SendErrorIfRequested(message, $"Unknown platform action: {message.Action}");
                 break;
@@ -1479,6 +1484,18 @@ if (-not $consentAccepted) {
         }
     }
 
+    private async Task HandleSetDebugOverlayEnabledAsync(BridgeMessage message)
+    {
+        var enabled = GetPayloadBool(message.Payload, "enabled");
+        DebugOverlayPreferenceChanged?.Invoke(enabled);
+        Log(enabled ? "Debug overlay enabled" : "Debug overlay disabled");
+
+        if (message.RequestId != null)
+        {
+            await _bridge.SendResponseAsync(message.RequestId, new { enabled });
+        }
+    }
+
     private async Task HandleStartMiraAsync(BridgeMessage message)
     {
         Log("startMira requested");
@@ -1583,6 +1600,11 @@ if (-not $consentAccepted) {
                         normalizedWindowY = element.NormalizedWindowY,
                         normalizedScreenX = element.NormalizedScreenX,
                         normalizedScreenY = element.NormalizedScreenY,
+                        isBrowserSurface = element.IsBrowserSurface,
+                        browserUrl = element.BrowserUrl,
+                        browserOrigin = element.BrowserOrigin,
+                        browserDocumentTitle = element.BrowserDocumentTitle,
+                        browserCaptureHint = element.BrowserCaptureHint,
                         selectorStrength = SelectorStrengthEvaluator.ToPublicLabel(SelectorStrengthEvaluator.Evaluate(element)),
                         selectorStrategy = SelectorStrengthEvaluator.ToPublicStrategy(SelectorStrengthEvaluator.SuggestStrategy(element)),
                         asset,

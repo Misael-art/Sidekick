@@ -59,8 +59,16 @@ public sealed class RecorderElementContext
     public double NormalizedY { get; set; }
     public int AbsoluteX { get; set; }
     public int AbsoluteY { get; set; }
+    public string CursorPixelColor { get; set; } = "";
+    public string DetectedText { get; set; } = "";
+    public string CurrentText { get; set; } = "";
+    public string PlaceholderText { get; set; } = "";
     public string SelectorStrength { get; set; } = "";
     public string SelectorStrategy { get; set; } = "";
+    public bool IsBrowserSurface { get; set; }
+    public string BrowserUrl { get; set; } = "";
+    public string BrowserOrigin { get; set; } = "";
+    public string BrowserDocumentTitle { get; set; } = "";
 }
 
 public sealed class RecorderMousePayload

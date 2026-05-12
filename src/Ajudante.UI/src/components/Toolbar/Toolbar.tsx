@@ -504,6 +504,8 @@ export default function Toolbar() {
     }
 
     if (filteredFlows.length === 0) {
+      // Dialog selection mirrors the currently filtered list.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelectedFlowId(null);
       return;
     }
@@ -519,6 +521,8 @@ export default function Toolbar() {
     }
 
     if (marketplaceFlows.length === 0) {
+      // Dialog selection mirrors the currently filtered list.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelectedMarketplaceFlowId(null);
       return;
     }
@@ -530,6 +534,8 @@ export default function Toolbar() {
 
   useEffect(() => {
     if (queueLength === 0 && !isRunning) {
+      // Runtime dialog state follows the queue/run lifecycle.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsStopDialogOpen(false);
       setIsStoppingFlow(false);
     }
@@ -541,6 +547,8 @@ export default function Toolbar() {
     }
 
     if (filteredInspectionAssets.length === 0) {
+      // Dialog selection mirrors the currently filtered list.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelectedInspectionAssetId(null);
       return;
     }
@@ -551,10 +559,17 @@ export default function Toolbar() {
   }, [filteredInspectionAssets, isInspectionLibraryOpen, selectedInspectionAssetId]);
 
   useEffect(() => {
+    // Metadata fields are local drafts for the selected Mira asset.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setInspectionAssetNameDraft(selectedInspectionAsset?.displayName ?? '');
     setInspectionAssetNotesDraft(selectedInspectionAsset?.notes ?? '');
     setInspectionAssetTagsDraft((selectedInspectionAsset?.tags ?? []).join(', '));
-  }, [selectedInspectionAsset?.id]);
+  }, [
+    selectedInspectionAsset?.displayName,
+    selectedInspectionAsset?.id,
+    selectedInspectionAsset?.notes,
+    selectedInspectionAsset?.tags,
+  ]);
 
   const commitName = () => {
     const trimmed = editName.trim();
@@ -1313,27 +1328,54 @@ export default function Toolbar() {
     addStickyNote({ x: offsetX, y: offsetY });
   };
 
+  const handleToggleDebugVisual = async () => {
+    const next = !debugVisualEnabled;
+    setDebugVisualEnabled(next);
+
+    try {
+      await sendCommand('platform', 'setDebugOverlayEnabled', { enabled: next });
+      setUserMessage({
+        type: 'info',
+        text: next
+          ? 'Debug visual ativado com overlay em primeiro plano.'
+          : 'Debug visual desativado.',
+      });
+    } catch (error) {
+      const message = getErrorMessage(error, 'Nao foi possivel sincronizar o overlay de debug com o host.');
+      addLog({ timestamp: new Date().toISOString(), level: 'warning', message });
+    }
+  };
+
   return (
     <>
       <div className="toolbar">
         <div className="toolbar__group">
-          <button className="toolbar__btn" onClick={handleNew} title="Novo flow">
-            <span className="toolbar__btn-icon">&#x1F4C4;</span>
-            <span className="toolbar__btn-label">Novo</span>
-          </button>
-          <button className="toolbar__btn" onClick={handleSave} title="Salvar flow">
-            <span className="toolbar__btn-icon">&#x1F4BE;</span>
-            <span className="toolbar__btn-label">Salvar</span>
-          </button>
-          <button
-            className={`toolbar__btn ${isLoadingFlowList ? 'toolbar__btn--disabled' : ''}`}
-            onClick={handleLoad}
-            title="Carregar flow"
-            disabled={isLoadingFlowList}
-          >
-            <span className="toolbar__btn-icon">&#x1F4C2;</span>
-            <span className="toolbar__btn-label">{isLoadingFlowList ? 'Carregando...' : 'Carregar'}</span>
-          </button>
+          <details className="toolbar__more toolbar__file-menu">
+            <summary className="toolbar__file-summary" title="Novo, salvar e carregar flows">
+              <span className="toolbar__btn-icon">&#x25A3;</span>
+              <span className="toolbar__btn-label">Arquivo</span>
+            </summary>
+            <div className="toolbar__more-panel">
+              <button className="toolbar__btn" onClick={handleNew} title="Novo flow" type="button">
+                <span className="toolbar__btn-icon">&#x25A1;</span>
+                <span className="toolbar__btn-label">Novo</span>
+              </button>
+              <button className="toolbar__btn" onClick={handleSave} title="Salvar flow" type="button">
+                <span className="toolbar__btn-icon">&#x25A0;</span>
+                <span className="toolbar__btn-label">Salvar</span>
+              </button>
+              <button
+                className={`toolbar__btn ${isLoadingFlowList ? 'toolbar__btn--disabled' : ''}`}
+                onClick={handleLoad}
+                title="Carregar flow"
+                disabled={isLoadingFlowList}
+                type="button"
+              >
+                <span className="toolbar__btn-icon">&#x25B1;</span>
+                <span className="toolbar__btn-label">{isLoadingFlowList ? 'Carregando...' : 'Carregar'}</span>
+              </button>
+            </div>
+          </details>
           <button
             className={`toolbar__btn ${isLoadingFlowList ? 'toolbar__btn--disabled' : ''}`}
             onClick={() => { void handleOpenMarketplace(); }}
@@ -1401,38 +1443,23 @@ export default function Toolbar() {
           </button>
           <button
             className="toolbar__btn toolbar__btn--play"
-            onClick={handlePlay}
-            title="Executar este flow agora"
+            onClick={canStop ? () => { void handleStop(); } : handlePlay}
+            title={canStop ? 'Parar execucao atual' : 'Executar este flow agora'}
+            type="button"
           >
-            <span className="toolbar__btn-icon">&#9654;</span>
-            <span className="toolbar__btn-label">Executar</span>
+            <span className="toolbar__btn-icon">{canStop ? '■' : '▶'}</span>
+            <span className="toolbar__btn-label">{canStop ? 'Parar' : 'Executar'}</span>
           </button>
           <button
-            className={`toolbar__btn ${!canArmCurrentFlow || isCurrentFlowArmed ? 'toolbar__btn--disabled' : ''}`}
-            onClick={handleArm}
-            disabled={!canArmCurrentFlow || isCurrentFlowArmed}
-            title="Monitorar gatilhos deste flow"
+            className={`toolbar__btn ${(!canArmCurrentFlow && !isCurrentFlowArmed) ? 'toolbar__btn--disabled' : ''} ${isCurrentFlowArmed ? 'toolbar__btn--active' : ''}`}
+            onClick={isCurrentFlowArmed ? handleDisarm : handleArm}
+            disabled={!canArmCurrentFlow && !isCurrentFlowArmed}
+            title={isCurrentFlowArmed ? 'Desativar monitoramento deste flow' : 'Monitorar gatilhos deste flow'}
+            type="button"
+            aria-pressed={isCurrentFlowArmed}
           >
-            <span className="toolbar__btn-icon">&#128276;</span>
-            <span className="toolbar__btn-label">Monitorar</span>
-          </button>
-          <button
-            className={`toolbar__btn ${!isCurrentFlowArmed ? 'toolbar__btn--disabled' : ''}`}
-            onClick={handleDisarm}
-            disabled={!isCurrentFlowArmed}
-            title="Desativar monitoramento deste flow"
-          >
-            <span className="toolbar__btn-icon">&#128277;</span>
-            <span className="toolbar__btn-label">Desarmar</span>
-          </button>
-          <button
-            className={`toolbar__btn toolbar__btn--stop ${!canStop ? 'toolbar__btn--disabled' : ''}`}
-            onClick={() => { void handleStop(); }}
-            disabled={!canStop}
-            title="Parar execucao atual"
-          >
-            <span className="toolbar__btn-icon">&#9632;</span>
-            <span className="toolbar__btn-label">Parar</span>
+            <span className="toolbar__btn-icon">{isCurrentFlowArmed ? '◌' : '◉'}</span>
+            <span className="toolbar__btn-label">{isCurrentFlowArmed ? 'Desarmar' : 'Monitorar'}</span>
           </button>
         </div>
 
@@ -1544,32 +1571,33 @@ export default function Toolbar() {
                 <span className="toolbar__btn-icon">&#x1F4DD;</span>
                 <span className="toolbar__btn-label">Nota</span>
               </button>
+              <button
+                className={`toolbar__btn ${debugVisualEnabled ? 'toolbar__btn--active' : ''}`}
+                onClick={() => { void handleToggleDebugVisual(); }}
+                title="Ativar visual de debug"
+                type="button"
+                aria-pressed={debugVisualEnabled}
+              >
+                <span className="toolbar__btn-icon">&#x25C9;</span>
+                <span className="toolbar__btn-label">{debugVisualEnabled ? 'Debug visual ativo' : 'Debug visual'}</span>
+              </button>
+              <label
+                className="toolbar__btn toolbar__locale"
+                title={t('toolbar.languageSwitch')}
+                aria-label={t('toolbar.languageSwitch')}
+              >
+                <span className="toolbar__btn-icon">&#x25CE;</span>
+                <select
+                  className="toolbar__locale-select"
+                  value={locale}
+                  onChange={(event) => setLocale(event.target.value === 'en' ? 'en' : 'pt-BR')}
+                >
+                  <option value="pt-BR">PT-BR</option>
+                  <option value="en">English</option>
+                </select>
+              </label>
             </div>
           </details>
-          <button
-            className={`toolbar__btn ${debugVisualEnabled ? 'toolbar__btn--active' : ''}`}
-            onClick={() => setDebugVisualEnabled(!debugVisualEnabled)}
-            title="Ativar visual de debug (pulso em nodes em execução)"
-            type="button"
-          >
-            <span className="toolbar__btn-icon">&#x1F41E;</span>
-            <span className="toolbar__btn-label">{debugVisualEnabled ? 'Debug on' : 'Debug off'}</span>
-          </button>
-          <label
-            className="toolbar__btn toolbar__locale"
-            title={t('toolbar.languageSwitch')}
-            aria-label={t('toolbar.languageSwitch')}
-          >
-            <span className="toolbar__btn-icon">&#x1F310;</span>
-            <select
-              className="toolbar__locale-select"
-              value={locale}
-              onChange={(event) => setLocale(event.target.value === 'en' ? 'en' : 'pt-BR')}
-            >
-              <option value="pt-BR">PT-BR</option>
-              <option value="en">English</option>
-            </select>
-          </label>
         </div>
       </div>
 

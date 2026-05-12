@@ -30,11 +30,11 @@ function BaseNode({ id, data, selected }: BaseNodeProps) {
   const displayTitle = data.nodeAlias?.trim() || data.displayName;
   const hoverComment = data.nodeComment?.trim();
   const isDisabled = data.nodeDisabled === true;
-  const isPulsing = debugVisualEnabled && status === 'Running' && pulseUntil > Date.now();
+  const isPulsing = debugVisualEnabled && status === 'Running' && pulseUntil > 0;
 
   return (
     <div
-      className={`base-node ${selected ? 'base-node--selected' : ''} ${isDisabled ? 'base-node--disabled' : ''} ${isPulsing ? 'base-node--runtime-pulse' : ''}`}
+      className={`base-node base-node--status-${status.toLowerCase()} ${selected ? 'base-node--selected' : ''} ${isDisabled ? 'base-node--disabled' : ''} ${isPulsing ? 'base-node--runtime-pulse' : ''}`}
       title={hoverComment || undefined}
       style={{
         borderColor: selected ? headerColor : 'transparent',
@@ -48,11 +48,13 @@ function BaseNode({ id, data, selected }: BaseNodeProps) {
         <span className="base-node__category">{data.category}</span>
         <span className="base-node__title">{displayTitle}</span>
         {status !== 'Idle' && (
-          <span
-            className="base-node__status"
-            style={{ backgroundColor: statusColors[status] }}
-            title={statusLabels[status]}
-          />
+          <span className="base-node__status-chip" title={statusLabels[status]}>
+            <span
+              className="base-node__status"
+              style={{ backgroundColor: statusColors[status] }}
+            />
+            {statusLabels[status]}
+          </span>
         )}
         {isDisabled && <span className="base-node__disabled-badge">Off</span>}
       </div>

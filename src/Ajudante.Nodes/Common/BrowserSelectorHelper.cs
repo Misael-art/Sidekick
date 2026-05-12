@@ -31,7 +31,13 @@ internal sealed record DesktopSelector(
     AutomationElementLocator.TitleMatch fallbackAnchorElementNameMatch,
     string fallbackAnchorControlType,
     int fallbackAnchorOffsetX,
-    int fallbackAnchorOffsetY);
+    int fallbackAnchorOffsetY,
+    string expectedPixelColor,
+    bool requirePixelMatchBeforeFallback,
+    int pixelTolerance,
+    string recordedDetectedText,
+    string browserUrl,
+    string browserOrigin);
 
 internal static class BrowserSelectorHelper
 {
@@ -65,7 +71,13 @@ internal static class BrowserSelectorHelper
             fallbackAnchorElementNameMatch: AutomationElementLocator.ParseTitleMatch(NodeValueHelper.GetString(properties, "fallbackAnchorElementNameMatch")),
             fallbackAnchorControlType: context.ResolveTemplate(NodeValueHelper.GetString(properties, "fallbackAnchorControlType")),
             fallbackAnchorOffsetX: NodeValueHelper.GetInt(properties, "fallbackAnchorOffsetX", 0),
-            fallbackAnchorOffsetY: NodeValueHelper.GetInt(properties, "fallbackAnchorOffsetY", 0));
+            fallbackAnchorOffsetY: NodeValueHelper.GetInt(properties, "fallbackAnchorOffsetY", 0),
+            expectedPixelColor: context.ResolveTemplate(NodeValueHelper.GetString(properties, "expectedPixelColor")),
+            requirePixelMatchBeforeFallback: NodeValueHelper.GetBool(properties, "requirePixelMatchBeforeFallback", false),
+            pixelTolerance: Math.Clamp(NodeValueHelper.GetInt(properties, "pixelTolerance", 18), 0, 255),
+            recordedDetectedText: context.ResolveTemplate(NodeValueHelper.GetString(properties, "recordedDetectedText")),
+            browserUrl: context.ResolveTemplate(NodeValueHelper.GetString(properties, "browserUrl")),
+            browserOrigin: context.ResolveTemplate(NodeValueHelper.GetString(properties, "browserOrigin")));
     }
 
     private static string ExpandEnvironmentPath(string path)
@@ -121,7 +133,13 @@ internal static class BrowserSelectorHelper
             new() { Id = "fallbackAnchorElementNameMatch", Name = "Fallback Anchor Name Match", Type = PropertyType.Dropdown, DefaultValue = "equals", Description = "How to match the fallback anchor element name/text", Options = new[] { "equals", "contains", "regex" } },
             new() { Id = "fallbackAnchorControlType", Name = "Fallback Anchor Control Type", Type = PropertyType.String, DefaultValue = "", Description = "Optional UIAutomation control type for the fallback anchor" },
             new() { Id = "fallbackAnchorOffsetX", Name = "Fallback Anchor Offset X", Type = PropertyType.Integer, DefaultValue = 0, Description = "X offset from the fallback anchor top-left corner" },
-            new() { Id = "fallbackAnchorOffsetY", Name = "Fallback Anchor Offset Y", Type = PropertyType.Integer, DefaultValue = 0, Description = "Y offset from the fallback anchor top-left corner" }
+            new() { Id = "fallbackAnchorOffsetY", Name = "Fallback Anchor Offset Y", Type = PropertyType.Integer, DefaultValue = 0, Description = "Y offset from the fallback anchor top-left corner" },
+            new() { Id = "expectedPixelColor", Name = "Expected Pixel Color", Type = PropertyType.Color, DefaultValue = "", Description = "Optional safety check captured by Mira before coordinate fallback" },
+            new() { Id = "requirePixelMatchBeforeFallback", Name = "Require Pixel Match", Type = PropertyType.Boolean, DefaultValue = false, Description = "Block fallback clicks when the captured pixel color changed" },
+            new() { Id = "pixelTolerance", Name = "Pixel Tolerance", Type = PropertyType.Integer, DefaultValue = 18, Description = "Allowed RGB distance per channel for the pixel safety check" },
+            new() { Id = "recordedDetectedText", Name = "Recorded Detected Text", Type = PropertyType.String, DefaultValue = "", Description = "Diagnostic text captured by Mira at design time" },
+            new() { Id = "browserUrl", Name = "Browser URL", Type = PropertyType.String, DefaultValue = "", Description = "Browser context captured by Mira when available" },
+            new() { Id = "browserOrigin", Name = "Browser Origin", Type = PropertyType.String, DefaultValue = "", Description = "Browser origin captured by Mira when available" }
         };
     }
 

@@ -3,6 +3,7 @@ using Ajudante.Core.Engine;
 using Ajudante.Core.Interfaces;
 using Ajudante.Nodes.Common;
 using Ajudante.Platform.Input;
+using Ajudante.Platform.Screen;
 using Ajudante.Platform.UIAutomation;
 using Ajudante.Platform.Windows;
 using System.Drawing;
@@ -65,7 +66,7 @@ public class DesktopClickElementNode : IActionNode
             {
                 fallbackUsed = true;
                 context.EmitPhase(RuntimePhases.FallbackVisualActive, "relative fallback active");
-                if (!TryCoordinateClickWithinBounds(element, clickType))
+                if (!TryCoordinateClickWithinBounds(element, selector, clickType))
                 {
                     return Task.FromResult(NodeResult.Ok("notFound", new Dictionary<string, object?>
                     {
@@ -171,15 +172,17 @@ public class DesktopClickElementNode : IActionNode
 
         var x = (int)rect.Left + selector.fallbackAnchorOffsetX;
         var y = (int)rect.Top + selector.fallbackAnchorOffsetY;
-        return TryClickPoint(x, y, windowBounds: null, clickType);
+        return TryClickPoint(x, y, windowBounds: null, clickType, selector);
     }
 
-    private static bool TryCoordinateClickWithinBounds(AutomationElement element, string clickType)
+    private static bool TryCoordinateClickWithinBounds(AutomationElement element, DesktopSelector selector, string clickType)
     {
         var rect = element.Current.BoundingRectangle;
         var centerX = (int)(rect.Left + rect.Width / 2);
         var centerY = (int)(rect.Top + rect.Height / 2);
         if (!IsPointSafe(centerX, centerY))
+            return false;
+        if (!PixelSafetyMatches(centerX, centerY, selector))
             return false;
 
         MouseSimulator.MoveTo(centerX, centerY);
@@ -211,7 +214,7 @@ public class DesktopClickElementNode : IActionNode
         var windowRect = window.Current.BoundingRectangle;
         var x = (int)windowRect.Left + selector.relativeX;
         var y = (int)windowRect.Top + selector.relativeY;
-        return TryClickPoint(x, y, windowRect, clickType);
+        return TryClickPoint(x, y, windowRect, clickType, selector);
     }
 
     private static bool TryScaledFallbackClick(DesktopSelector selector, string clickType)
@@ -226,15 +229,15 @@ public class DesktopClickElementNode : IActionNode
 
         var x = union.Left + (int)Math.Round(union.Width * selector.normalizedX);
         var y = union.Top + (int)Math.Round(union.Height * selector.normalizedY);
-        return TryClickPoint(x, y, windowBounds: null, clickType);
+        return TryClickPoint(x, y, windowBounds: null, clickType, selector);
     }
 
     private static bool TryAbsoluteFallbackClick(DesktopSelector selector, string clickType)
     {
-        return TryClickPoint(selector.absoluteX, selector.absoluteY, windowBounds: null, clickType);
+        return TryClickPoint(selector.absoluteX, selector.absoluteY, windowBounds: null, clickType, selector);
     }
 
-    private static bool TryClickPoint(int x, int y, System.Windows.Rect? windowBounds, string clickType)
+    private static bool TryClickPoint(int x, int y, System.Windows.Rect? windowBounds, string clickType, DesktopSelector? selector = null)
     {
         if (!IsPointSafe(x, y))
             return false;
@@ -245,6 +248,9 @@ public class DesktopClickElementNode : IActionNode
             if (x < bounds.Left || y < bounds.Top || x > bounds.Right || y > bounds.Bottom)
                 return false;
         }
+
+        if (!PixelSafetyMatches(x, y, selector))
+            return false;
 
         MouseSimulator.MoveTo(x, y);
         Thread.Sleep(100);
@@ -265,6 +271,29 @@ public class DesktopClickElementNode : IActionNode
         }
 
         return false;
+    }
+
+    private static bool PixelSafetyMatches(int x, int y, DesktopSelector? selector)
+    {
+        if (selector is null || string.IsNullOrWhiteSpace(selector.expectedPixelColor))
+            return true;
+
+        if (!selector.requirePixelMatchBeforeFallback)
+            return true;
+
+        try
+        {
+            var expected = ColorTranslator.FromHtml(selector.expectedPixelColor);
+            var actual = PixelReader.GetPixelColor(x, y);
+            var tolerance = Math.Clamp(selector.pixelTolerance, 0, 255);
+            return Math.Abs(actual.R - expected.R) <= tolerance
+                && Math.Abs(actual.G - expected.G) <= tolerance
+                && Math.Abs(actual.B - expected.B) <= tolerance;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private static void TryRestoreWindow(DesktopSelector selector, CancellationToken ct)

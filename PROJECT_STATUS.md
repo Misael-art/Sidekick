@@ -129,6 +129,24 @@ Atualizacao Core vs Labs em `2026-05-11`:
 - Documentacao atualizada em `README.md`, `USER_GUIDE.md` e `ROADMAP_EXECUTION.md` para nao prometer OCR como produto pronto, marketplace remoto irrestrito nem runner single EXE.
 - Validado nesta rodada: `dotnet build Ajudante.sln --no-restore` (`0` erros, `0` avisos), `dotnet test Ajudante.sln --no-build` (`359/359`), `npm run test` (`83/83`), `npm run build`, verificacao visual em `http://127.0.0.1:5173` e `dotnet publish .\src\Ajudante.App\Ajudante.App.csproj -c Release -o .\src\Ajudante.App\bin\publish --no-restore`. O publish emitiu apenas o aviso conhecido de chunk Vite acima de 500 kB. O executavel publicado esta em `src/Ajudante.App/bin/publish/Sidekick.exe`.
 
+Atualizacao Recorder/Mira/debug em `2026-05-11`:
+
+- `MacroRecorderService` agora preserva no evento gravado mais contexto do Mira: cor sob o cursor, texto detectado/atual/placeholder e contexto de navegador quando a UIAutomation expõe superficie web.
+- `MacroDraftBuilder` deixou de transformar toda pausa em `logic.delay`: quando ha alvo seguinte com contexto Mira forte, a pausa vira espera por `Desktop/Browser Wait Element`, com timeout do periodo gravado e alerta de revisao. Cliques em superficies de navegador passam a sugerir nodes browser quando aplicavel.
+- Selectors desktop/browser ganharam propriedades formais de ponto de seguranca por pixel (`expectedPixelColor`, `requirePixelMatchBeforeFallback`, `pixelTolerance`) e diagnosticos de texto/browser (`recordedDetectedText`, `browserUrl`, `browserOrigin`). O fallback de `Desktop Click Element` bloqueia clique coordenado quando a cor capturada mudou e o guard esta ativo.
+- O painel `Revisar gravacao` passou a ser movel, agrega pausas consecutivas como `Time lapse` e mostra chips de pontos de seguranca capturados: seletor Mira, posicao relativa/fixa, cor, texto/elemento, janela/processo e navegador.
+- O toggle de debug visual agora sincroniza com o host por `platform/setDebugOverlayEnabled`: alem de pulso no canvas/status, o app projeta overlay WPF topmost com node/fase atual para depuracao pedagogica.
+- Mira salva contexto browser honesto em ativos (`Browser.Url`, `Origin`, titulo e recomendacao de nodes browser) quando detecta Edge/Chrome/Firefox/etc. Isso nao promete DOM completo; o texto/URL dependem do que o navegador expõe via acessibilidade.
+
+Atualizacao CX/UX/UI em `2026-05-12`:
+
+- A toolbar foi reorganizada para reduzir competicao visual: `Arquivo` concentra Novo/Salvar/Carregar, os comandos primarios ficam em Receitas, Saude, Dry-run, Executar/Parar, Monitorar, Recorder, Mira e Snip, e opcoes de risco/fila/runner/Mira Lib/notas/debug/idioma ficam em Avancado.
+- O menu `Adicionar passo` evoluiu para command palette estilo Blender: abre por `/`, `Ctrl+K`, botao flutuante, menu de contexto e fio solto; mostra busca focada, categorias, recomendacoes contextuais e recentes/frequentes persistidos em `localStorage`; ao criar por fio/edge segue conectando ou inserindo automaticamente apenas nodes compativeis.
+- O canvas ganhou trilha ativa nos edges e estados visuais mais fortes nos nodes em execucao/erro, melhorando leitura de flows grandes sem depender apenas do status pontual do node.
+- A revisao do Recorder agora destaca `Robustez`, sinais frageis (`Coordenada absoluta`, `Texto redigido`, `Seletor fraco`), passos removidos com restauracao individual, teste de seletores, reparo com Mira e aplicacao sempre como rascunho desarmado.
+- O debug/status inferior passou a consumir fases recentes do runtime no frontend e explicar node atual, fase, esperado, fallback ativo, espera/erro e proximo passo sugerido; em edicao fica compacto e so expande cards acionaveis em execucao/debug/logs.
+- Validado nesta rodada: `dotnet build Ajudante.sln --no-restore` (`0` erros, `0` avisos), `dotnet test Ajudante.sln --no-build` (`361/361`), `npm run lint`, `npm run test` (`93/93`), `npm run build` e inspecao local em `http://127.0.0.1:5173/`. O build Vite segue com o aviso conhecido de chunk principal acima de 500 kB.
+
 ## Estagio Atual Do Produto
 
 O produto esta em um estagio de `release candidate tecnico com foco de produto Core vs Labs validado automaticamente e por inspecao visual local`.
